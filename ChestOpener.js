@@ -15,7 +15,7 @@
   details.classList.add('chest-opener');
   details.style.background = '#ddd';
   const summary = document.createElement('summary');
-  summary.textContent = 'Chest Opener v1.2c改 ATK&DEF最大値Ver.';
+  summary.textContent = 'Chest Opener v1.2c改 ATK&DEF合算値Ver.';
 
   const fieldset = document.createElement('fieldset');
   fieldset.style.border = 'none';
@@ -65,12 +65,12 @@
     const div = document.createElement('div');
     const label = document.createElement('label');
     label.style.fontSize = '16px';
-  
+
     label.append(shouldNotRecycle, 'ロック・分解しないモード');
     div.append(label);
     details.append(div);
   })();
-  
+
   const form = document.createElement('form');
   const equipChestField = fieldset.cloneNode();
   if(isBattleChestPage) equipChestField.style.display = 'none';
@@ -90,7 +90,7 @@
     const p = document.createElement('p');
     p.textContent = '== 残すアイテム([錠]) ==';
     div.append(p);
-  
+
     const ranks = ['[UR]','[SSR]','[SR]','[R]','[N]'];
     const span = document.createElement('span');
     span.style.width = '64px';
@@ -109,29 +109,38 @@
     input.style.fontSize = '80%';
     input.classList.add('wishlist');
 
-    for(const v of ranks){
-      const label = document.createElement('label');
-      label.style.display = 'flex';
-      const span_ = span.cloneNode();
-      const chkbox_ = chkbox.cloneNode();
-      chkbox_.value = v;
-      span_.append(chkbox_,v);
+for(const v of ranks){
+  const label = document.createElement('label');
+  label.style.display = 'flex';
+  label.style.flexDirection = 'column'; // ここで縦に並べる
 
-      const input_ = input.cloneNode();
-      input_.dataset.rank = v;
+  const span_ = span.cloneNode();
+  const chkbox_ = chkbox.cloneNode();
+  chkbox_.value = v;
+  span_.append(chkbox_, v);
 
-      label.append(span_,input_);
-      div.append(label);
+  const input_1 = input.cloneNode();
+  input_1.dataset.rank = v + "_1"; // rankにユニークな識別子を追加
+  const input_2 = input.cloneNode();
+  input_2.dataset.rank = v + "_2"; // rankにユニークな識別子を追加
 
-      input_.addEventListener('input',()=>{
-        if(input_.value !== ''){
-          chkbox_.checked = true;
-        }
-      })
-    };
+  label.append(span_, input_1, input_2); // フォームを2つ追加
+  div.append(label);
+
+  input_1.addEventListener('input',()=>{
+    if(input_1.value !== ''){
+      chkbox_.checked = true;
+    }
+  });
+  input_2.addEventListener('input',()=>{
+    if(input_2.value !== ''){
+      chkbox_.checked = true;
+    }
+  });
+};
 
     const description = document.createElement('p');
-    description.innerHTML = 'さらなる条件を追加したプロ仕様 - ATK&DEF最大値Ver.<br>F5アタック:15 → ATK最大値15以上対象<br>F5アタック::25 → SPD25以上対象<br>F5アタック[火]:15 → 火属性でATK最大値15以上対象<br>F5アタック[火]:15:25 → 火属性でATK最大値15以上かつSPD25以上対象<br><br>硬化木の鎧:13 → DEF最大値13以上対象<br>硬化木の鎧::8 → WT8以上対象<br>硬化木の鎧[水]:13 → 水属性でDEF最大値13以上対象<br>硬化木の鎧[水]:13:8 → 水属性でDEF最大値13以上かつWT8以上対象';
+    description.innerHTML = 'さらなる条件を追加したプロ仕様 - ATK&DEF合算値Ver.<br>F5アタック:20 → ATK最小最大の合計20以上対象<br>F5アタック::25 → SPD25以上対象<br>F5アタック[火]:20 → 火属性でATK最小最大の合計20以上対象<br>F5アタック[火]:20:25 → 火属性でATK最小最大の合計20以上かつSPD25以上対象<br><br>硬化木の鎧:13 → DEF最小最大の合計13以上対象<br>硬化木の鎧::8 → WT8以上対象<br>硬化木の鎧[水]:13 → 水属性でDEF最小最大の合計13以上対象<br>硬化木の鎧[水]:13:8 → 水属性でDEF最小最大の合計13以上かつWT8以上対象';
     description.style.fontSize = '14px';
     div.append(description);
     equipChestField.append(div);
@@ -148,7 +157,7 @@
     div.append(p);
     loopNum.type = 'number';
     loopNum.style.width = '5em';
-  
+
     const loopConds = [
       {value:'max',item:'無制限',checked:true},
       {value:'num',item:loopNum,checked:false},
@@ -274,7 +283,6 @@
   pauseButton.addEventListener('click', ()=>{
     pausePressed = true;
   });
-
 
   const stats = document.createElement('div');
   const count = document.createElement('p');
@@ -439,13 +447,17 @@
     const results = [];
 
     itemInputs.forEach(input => {
-      const rank = input.dataset.rank;
+      const rank = input.dataset.rank.replace(/_.+$/, '');
       const rawValue = input.value.trim();
 
       if (!checkedRanks.includes(rank)) return;
 
-      const patterns = rawValue
-        ? rawValue.split(',').map(item => {
+ const patterns = rawValue
+   ? rawValue
+      .split(',')
+      .map(item => item.trim())
+      .filter(item => item !== '')
+      .map(item => {
             const parts = item.split(':').map(v => v.trim());
             const namePart = parts[0] ?? '';
             const minRangeSum = parts[1] !== undefined && parts[1] !== '' ? Number(parts[1]) : undefined;
@@ -462,6 +474,9 @@
             };
           })
         : null;
+      if (patterns && patterns.length === 0) {
+        patterns = null;
+      }
 
       itemLockLinks.forEach(link => {
         const row = link.closest('tr');
@@ -491,7 +506,7 @@
           if (pattern.minRangeSum !== undefined) {
             const m = rangeText.match(/^(\d+)\s*~\s*(\d+)$/);
             if (m) {
-              const sum = Number(m[2]);
+              const sum = Number(m[1]) + Number(m[2]);
               if (sum < pattern.minRangeSum) continue;
             }
             // 数値~数値でない場合はロック側に倒す（何もしない）
@@ -568,7 +583,7 @@
 
     const buffs = ['増幅された','強化された','加速した','高まった','力を増した','クリアになった','増幅された','固くなった','尖らせた'];
     const debuffs = ['静まった','薄まった','弱まった','減速した','減少した','砕けた','ぼやけた','制限された','緩んだ','鈍らせた','侵食された'];
-  
+
     while (loopCond === 'max' || chestCount < maxCount){
       const startTime = Date.now();
       let stat = 'initial';
@@ -591,10 +606,10 @@
           if (res.includes('どんぐりが見つかりませんでした。')){
             throw new Error('どんぐりが見つかりませんでした。');
           }
-          if (res.includes('too fast')) {
-           count.textContent = chestCount + ', too fast, Please wait...';
-           await new Promise(r => setTimeout(r, 10000));
-           continue;
+          if (res.includes('too fast')){
+            count.textContent = chestCount + ', Please wait...';
+            await new Promise(r => setTimeout(r, 10000));
+            continue;
           }
           if (res.includes('Left Not enough battle tokens')){
             throw new Error('Left Not enough battle tokens');
@@ -604,13 +619,13 @@
           }
           const parser = new DOMParser();
           const doc = parser.parseFromString(res, 'text/html');
-  
+
           const h1 = doc.querySelector('h1');
-  
+
           if (!h1.textContent.includes('アイテムバッグ')) {
             throw new Error('不明なエラー1');
           }
-  
+
           if(h1.textContent.includes('アイテムバッグ')){
             const necklaceTable = doc.querySelector('#necklaceTable');
             const lastItem = necklaceTable.rows.item(necklaceTable.rows.length - 1);
@@ -650,7 +665,7 @@
                 const [, type, value, effect] = match;
                 return [type, effect, value];
               });
-              
+
               const buffCount = itemEffects.filter(effects => buffs.includes(effects[1])).length;
               const debuffCount = itemEffects.filter(effects => debuffs.includes(effects[1])).length;
               // 分解
@@ -704,9 +719,13 @@
     const checkedRanks = Array.from(document.querySelectorAll('.keep-item:checked')).map(elm => elm.value);
     const itemInputs = document.querySelectorAll('.wishlist');
     const itemFilters = {};
-    itemInputs.forEach(input => {
-      itemFilters[input.dataset.rank] = input.value;
-    })
+      itemInputs.forEach(input => {
+       const rank = input.dataset.rank;
+        if (!itemFilters[rank]) {
+          itemFilters[rank] = [];
+        }
+       itemFilters[rank].push(input.value);
+      });
     const minBuffs = {};
     document.querySelectorAll('.min-buffs').forEach(elm => {
       const rank = elm.dataset.rank;
@@ -728,22 +747,41 @@
     }
     localStorage.setItem('chestOpener', JSON.stringify(data));
   }
-  function loadInputData(){
-    if(localStorage.hasOwnProperty('chestOpener')){
-      const data = JSON.parse(localStorage.getItem('chestOpener'));
-      if(data.shouldNotRecycle) shouldNotRecycle.checked = true;
-      data.ranks.forEach(rank => {
-        document.querySelector('.keep-item[value="'+rank+'"]').checked = true;
-      })
-      for(const [key,value] of Object.entries(data.itemFilters)){
-        document.querySelector('.wishlist[data-rank="'+key+'"]').value = value;
-      }
-      for(const [key,value] of Object.entries(data.minBuffs)){
-        document.querySelector('.min-buffs[data-rank="'+key+'"]').value = value;
-      }
-      for(const [key,value] of Object.entries(data.maxDebuffs)){
-        document.querySelector('.max-debuffs[data-rank="'+key+'"]').value = value;
-      }
+function loadInputData() {
+  if (localStorage.hasOwnProperty('chestOpener')) {
+    const data = JSON.parse(localStorage.getItem('chestOpener'));
+
+    // 「ロック・分解しないモード」のチェックを反映
+    if (data.shouldNotRecycle) shouldNotRecycle.checked = true;
+
+    // 「残すアイテム」のチェックを反映
+    data.ranks.forEach(rank => {
+      document.querySelector('.keep-item[value="' + rank + '"]').checked = true;
+    });
+
+    // 「アイテムフィルタ」の値を設定
+    for (const [key, value] of Object.entries(data.itemFilters)) {
+      const elements = document.querySelectorAll('.wishlist[data-rank="' + key + '"]');
+      elements.forEach((element) => {
+        element.value = value; // 一致するすべての要素に値を設定
+      });
+    }
+
+    // 「最小バフ数」の値を設定
+    for (const [key, value] of Object.entries(data.minBuffs)) {
+      const elements = document.querySelectorAll('.min-buffs[data-rank="' + key + '"]');
+      elements.forEach((element) => {
+        element.value = value; // 最小バフ数に対応するすべての要素に値を設定
+      });
+    }
+
+    // 「最大デバフ数」の値を設定
+    for (const [key, value] of Object.entries(data.maxDebuffs)) {
+      const elements = document.querySelectorAll('.max-debuffs[data-rank="' + key + '"]');
+      elements.forEach((element) => {
+        element.value = value; // 最大デバフ数に対応するすべての要素に値を設定
+      });
     }
   }
+}
 })();
