@@ -353,11 +353,11 @@ for(const v of ranks){
           if (res.includes('どんぐりが見つかりませんでした。')){
             throw new Error('どんぐりが見つかりませんでした。');
           }
-          if (res.includes('too fast')) {
-　　　　　 count.textContent = chestCount + ', too fast, Please wait...';
-　　　　　 await new Promise(r => setTimeout(r, 10000));
-　　　　　 continue;
-　　　　　}
+          if (res.includes('too fast')){
+            count.textContent = chestCount + ', Please wait...';
+            await new Promise(r => setTimeout(r, 10000));
+            continue;
+          }
           if (res.includes('Left Wrong chest')){
             throw new Error('宝箱がありません。*要不具合報告');
           }
