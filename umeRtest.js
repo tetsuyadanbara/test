@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         donguri arena assist tool
-// @version      1.2.2d改 Standard PRO
+// @version      1.2.2d改 ume Morning
 // @description  fix arena ui and add functions
 // @author       ぱふぱふ
 // @match        https://donguri.5ch.net/teambattle?m=hc
@@ -1117,7 +1117,7 @@
     (()=>{
       const link = document.createElement('a');
       link.style.color = '#333';
-      link.textContent = '1.2.2d改 Standard PRO';
+      link.textContent = '1.2.2d改 ume Morning';
       footer.append(link);
     })();
 
@@ -2520,6 +2520,26 @@
   async function autoJoin() {
     const dialog = document.querySelector('.auto-join');
 
+    function isMorningTime() {
+      const now = new Date(new Date().toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo' }));
+      const hour = now.getHours();
+      const minute = now.getMinutes();
+      return hour >= 3 && hour < 8;
+      // 以下コメントアウトで指定例（変える時は上の return hour >= 4 && hour < 8; を書き換え）
+      // 3:00～7:59
+      // return hour >= 3 && hour < 8;
+      // 4:00～7:59
+      // return hour >= 4 && hour < 8;
+      // 5:00～7:59
+      // return hour >= 5 && hour < 8;
+      // 3:20～7:59
+      // return (hour > 3 && hour < 8) || (hour === 3 && minute >= 20);
+      // 4:30～7:59
+      // return (hour > 4 && hour < 8) || (hour === 4 && minute >= 30);
+      // 5:45～7:59
+      // return (hour > 5 && hour < 8) || (hour === 5 && minute >= 45);
+    }
+
     const logArea = dialog.querySelector('.auto-join-log');
     const headers = { 'Content-Type': 'application/x-www-form-urlencoded' };
     let teamColor = settings.teamColor;
@@ -2693,12 +2713,8 @@
             let processType;
             let sleepTime = 1;
 
-            const now = new Date(new Date().toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo' }));
-            const hour = now.getHours();
-            const minute = now.getMinutes();
-
-            const isMorning = hour >= 3 && hour < 5;
-
+            const isMorning = isMorningTime();
+            // 255がumeのときの上限、7がstdPROのときの[ﾘﾄﾗｲ]上限
             const maxloop = isMorning ? 255 : 7;
 
             if (messageType === 'capitalAttack') {
@@ -2805,29 +2821,53 @@
             } else if (messageType in regions) {
               excludeSet.add(region.join(','));
               if (messageType === cellType) {
-                loop += 1;
-                message = '(' + loop + '発目) '+ lastLine;
-                processType = 'continue';
+                if (isMorning) {
+                  loop += 1;
+                  message = '(' + loop + '発目) '+ lastLine;
+                  processType = 'continue';
+                } else {
+                  processType = 'continue';
+                }
               } else if (messageType === 'nonAdjacent') {
-                cellType = 'nonAdjacent';
-                loop += 1;
-                message = '(' + loop + '発目) '+ lastLine;
-                processType = 'break';
+                if (isMorning) {
+                  cellType = 'nonAdjacent';
+                  loop += 1;
+                  message = '(' + loop + '発目) '+ lastLine;
+                  processType = 'break';
+                } else {
+                  cellType = 'nonAdjacent';
+                  processType = 'break';
+                }
               } else if (messageType === 'teamAdjacent') {
-                cellType = 'teamAdjacent';
-                loop += 1;
-                message = '(' + loop + '発目) '+ lastLine;
-                processType = 'break';
+                if (isMorning) {
+                  cellType = 'teamAdjacent';
+                  loop += 1;
+                  message = '(' + loop + '発目) '+ lastLine;
+                  processType = 'break';
+                } else {
+                  cellType = 'teamAdjacent';
+                  processType = 'break';
+                }
               } else if (messageType === 'capitalAdjacent') {
-                cellType = 'capitalAdjacent';
-                loop += 1;
-                message = '(' + loop + '発目) '+ lastLine;
-                processType = 'break';
+                if (isMorning) {
+                  cellType = 'capitalAdjacent';
+                  loop += 1;
+                  message = '(' + loop + '発目) '+ lastLine;
+                  processType = 'break';
+                } else {
+                  cellType = 'capitalAdjacent';
+                  processType = 'break';
+                }
               } else if (messageType === 'mapEdge') {
-                cellType = 'mapEdge';
-                loop += 1;
-                message = '(' + loop + '発目) '+ lastLine;
-                processType = 'break';
+                if (isMorning) {
+                  cellType = 'mapEdge';
+                  loop += 1;
+                  message = '(' + loop + '発目) '+ lastLine;
+                  processType = 'break';
+                } else {
+                  cellType = 'mapEdge';
+                  processType = 'break';
+                }
               }
               i++;
             }
@@ -2848,10 +2888,22 @@
                   nextProgress = 10;
                 }
               } else {
-                if (currentProgress < 50) {
-                  nextProgress = 52;
+                if (isMorning) {
+                  if (currentProgress < 50) {
+                    nextProgress = 52;
+                  } else {
+                    nextProgress = 2;
+                  }
                 } else {
-                  nextProgress = 2;
+                  if (currentProgress < 25) {
+                    nextProgress = Math.floor(Math.random() * 5) + 30; // 30~34 -1~+1
+                  } else if (currentProgress < 50) {
+                    nextProgress = Math.floor(Math.random() * 5) + 65; // 65~69 -1~+1
+                  } else if (currentProgress < 75) {
+                    nextProgress = Math.floor(Math.random() * 5) + 80; // 80~84 -1~+1
+                  } else {
+                    nextProgress = Math.floor(Math.random() * 5) + 15; // 15~19 -1~+1
+                  }
                 }
               }
               next = `→ ${nextProgress}±1%`;
@@ -2934,10 +2986,22 @@
                  nextProgress = 10;
               }
             } else {
-              if (currentProgress < 50) {
-                nextProgress = 52;
+              if (isMorning) {
+                if (currentProgress < 50) {
+                  nextProgress = 52;
+                } else {
+                  nextProgress = 2;
+                }
               } else {
-                nextProgress = 2;
+                if (currentProgress < 25) {
+                  nextProgress = Math.floor(Math.random() * 5) + 30; // 30~34 -1~+1
+                } else if (currentProgress < 50) {
+                  nextProgress = Math.floor(Math.random() * 5) + 65; // 65~69 -1~+1
+                } else if (currentProgress < 75) {
+                  nextProgress = Math.floor(Math.random() * 5) + 80; // 80~84 -1~+1
+                } else {
+                  nextProgress = Math.floor(Math.random() * 5) + 15; // 15~19 -1~+1
+                }
               }
             }
             const next = `→ ${nextProgress}±1%`;
@@ -3043,19 +3107,28 @@
         const mapEdgeCells = cells.filter(([r, c]) => {
           const key = `${r}-${c}`;
           return mapEdgeSet.has(key) && !capitalSet.has(key);
-        });
+        })
 
-        const now = new Date(new Date().toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo' }));
-        const hour = now.getHours();
+        function shuffle(arr) {
+          for (let i = arr.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [arr[i], arr[j]] = [arr[j], arr[i]];
+          }
+          return arr;
+        }
 
-        // 4～8時だけチームメンバー除外
-        const filteredCells = (cells) => cells.filter(([r, c]) => !teamColorSet.has(`${r}-${c}`));
+        const isMorning = isMorningTime();
+
+        //チームメンバーを除外するフィルタリング関数
+        const filteredCells = (cells) => {
+          return cells.filter(([r, c]) => !teamColorSet.has(`${r}-${c}`));
+        };
 
         const regions = {
-          nonAdjacent: (hour >= 3 && hour < 5) ? filteredCells(nonAdjacentCells) : nonAdjacentCells,
-          capitalAdjacent: (hour >= 3 && hour < 5) ? filteredCells(capitalAdjacentCells) : capitalAdjacentCells,
-          teamAdjacent: (hour >= 3 && hour < 5) ? filteredCells(teamAdjacentCells) : teamAdjacentCells,
-          mapEdge: (hour >= 3 && hour < 5) ? filteredCells(mapEdgeCells) : mapEdgeCells
+          nonAdjacent: isMorning ? shuffle(filteredCells(nonAdjacentCells)) : shuffle(nonAdjacentCells),
+          capitalAdjacent: isMorning ? shuffle(filteredCells(capitalAdjacentCells)) : shuffle(capitalAdjacentCells),
+          teamAdjacent: isMorning ? shuffle(filteredCells(teamAdjacentCells)) : shuffle(teamAdjacentCells),
+          mapEdge: isMorning ? shuffle(filteredCells(mapEdgeCells)) : shuffle(mapEdgeCells)
         };
         return regions;
       } catch (e) {
