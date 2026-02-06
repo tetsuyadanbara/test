@@ -1533,7 +1533,7 @@
     p.style.height = '28px';
 
     const equipSwitchButton = button.cloneNode();
-    equipSwitchButton.textContent = '▶武器';
+    equipSwitchButton.textContent = '?武器';
     equipSwitchButton.style.width = '4em';
     equipSwitchButton.style.height = '42px';
     equipSwitchButton.style.fontSize = '';
@@ -1544,17 +1544,17 @@
         weaponTable.style.display = 'none';
         armorTable.style.display = '';
         necklaceTable.style.display = 'none';
-        event.target.textContent = '▶防具';
+        event.target.textContent = '?防具';
       } else if (!armorTable.style.display) {
         weaponTable.style.display = 'none';
         armorTable.style.display = 'none';
         necklaceTable.style.display = '';
-        event.target.textContent = '▶首';
+        event.target.textContent = '?首';
       } else if (!necklaceTable.style.display) {
         weaponTable.style.display = '';
         armorTable.style.display = 'none';
         necklaceTable.style.display = 'none';
-        event.target.textContent = '▶武器';
+        event.target.textContent = '?武器';
       }
     });
 
@@ -1682,7 +1682,7 @@
         }
       }
 
-      equipSwitchButton.textContent = '▶武器';
+      equipSwitchButton.textContent = '?武器';
       weaponTable.style.display = '';
       armorTable.style.display = 'none';
       necklaceTable.style.display = 'none';
@@ -2105,7 +2105,7 @@
       })
     })
     const editEndButton = button.cloneNode();
-    editEndButton.textContent = '✓';
+    editEndButton.textContent = '?';
     editEndButton.style.display = 'none';
     editEndButton.addEventListener('click', ()=>{
       editButton.style.display = '';
@@ -2697,7 +2697,7 @@
             const hour = now.getHours();
             const minute = now.getMinutes();
 
-            const isMorning = hour >= 8 && hour < 9;
+            const isMorning = hour >= 3 && hour < 5;
 
             const maxloop = isMorning ? 255 : 7;
 
@@ -3052,10 +3052,10 @@
         const filteredCells = (cells) => cells.filter(([r, c]) => !teamColorSet.has(`${r}-${c}`));
 
         const regions = {
-          nonAdjacent: (hour >= 4 && hour < 8) ? filteredCells(nonAdjacentCells) : nonAdjacentCells,
-          capitalAdjacent: (hour >= 4 && hour < 8) ? filteredCells(capitalAdjacentCells) : capitalAdjacentCells,
-          teamAdjacent: (hour >= 4 && hour < 8) ? filteredCells(teamAdjacentCells) : teamAdjacentCells,
-          mapEdge: (hour >= 4 && hour < 8) ? filteredCells(mapEdgeCells) : mapEdgeCells
+          nonAdjacent: (hour >= 3 && hour < 5) ? filteredCells(nonAdjacentCells) : nonAdjacentCells,
+          capitalAdjacent: (hour >= 3 && hour < 5) ? filteredCells(capitalAdjacentCells) : capitalAdjacentCells,
+          teamAdjacent: (hour >= 3 && hour < 5) ? filteredCells(teamAdjacentCells) : teamAdjacentCells,
+          mapEdge: (hour >= 3 && hour < 5) ? filteredCells(mapEdgeCells) : mapEdgeCells
         };
         return regions;
       } catch (e) {
