@@ -3130,18 +3130,19 @@
           return arr;
         }
 
+        const filteredCells = (cells) => {
+          return cells.filter(([r, c]) => !teamColorSet.has(`${r}-${c}`));
+        };
+
         const isMorning = isMorningTime();
 
         if (isMorning) {
-          // チームメンバーを除外するフィルタリング関数
-          const filteredCells = (cells) => {
-            return cells.filter(([r, c]) => !teamColorSet.has(`${r}-${c}`));
-          };
           const regions = {
-            nonAdjacent: shuffle(filteredCells(nonAdjacentCells)),
-            capitalAdjacent: shuffle(filteredCells(capitalAdjacentCells)),
-            teamAdjacent: shuffle(filteredCells(teamAdjacentCells)),
-            mapEdge: shuffle(filteredCells(mapEdgeCells))
+            // 全てのセルから味方を除外
+            nonAdjacent: shuffle(filteredCells(cells)),
+            capitalAdjacent: [],
+            teamAdjacent: [],
+            mapEdge: []
           };
           return regions;
         } else {
