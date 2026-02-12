@@ -2524,26 +2524,26 @@
       const now = new Date(new Date().toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo' }));
       const hour = now.getHours();
       const minute = now.getMinutes();
-      return hour >= 3 && hour < 9;
-      // 以下指定例（変える時は上の return hour >= 4 && hour < 8; を書き換え、24:00をまたぐ指定のときは&&じゃなく||）
-      // 3:00～7:59
-      // return hour >= 3 && hour < 8;
-      // 5:00～7:59
-      // return hour >= 5 && hour < 8;
-      // 19:00～1:59
-      // return hour >= 19 || hour < 2;
-      // 22:00～4:59
-      // return hour >= 22 || hour < 5;
-      // 3:20～7:59
-      // return (hour > 3 && hour < 8) || (hour === 3 && minute >= 20);
-      // 4:30～7:59
-      // return (hour > 4 && hour < 8) || (hour === 4 && minute >= 30);
-      // 5:45～7:59
-      // return (hour > 5 && hour < 8) || (hour === 5 && minute >= 45);
-      // 19:55～1:59
-      // return (hour > 19 || hour < 2) || (hour === 19 && minute >= 55);
-      // 22:15～4:59
-      // return (hour > 22 || hour < 5) || (hour === 22 && minute >= 15);
+      return (hour > 3 && hour < 9) || (hour === 8 && minute >= 30) || (hour === 17 && minute === 0);
+      // 以下指定例その1（変える時は上の return hour >= 4 && hour <= 8; を書き換え、24:00をまたぐ指定はその2で）
+      // 4:00～8:00
+      // return hour >= 4 && hour <= 8;
+      // 4:00～8:30
+      // return (hour >= 4 && hour < 8) || (hour === 8 && minute <= 30);
+      // 4:30～8:00
+      // return (hour > 4 && hour < 8) || (hour === 4 && minute >= 30) || (hour === 8 && minute === 0);
+      // 4:30～8:30
+      // return (hour > 4 && hour < 8) || (hour === 4 && minute >= 30) || (hour === 8 && minute <= 30);
+      //
+      // 以下指定例その2（変える時は上の return hour >= 4 && hour <= 8; を書き換え、24:00をまたぐ指定のときは&&じゃなく||）
+      // 20:00～8:00
+      // return (hour >= 20 || hour <= 8);
+      // 20:00～8:30
+      // return (hour >= 20 || hour < 8) || (hour === 8 && minute <= 30);
+      // 20:30～8:00
+      // return (hour > 20 || hour < 8) || (hour === 20 && minute >= 30) || (hour === 8 && minute === 0);
+      // 20:30～8:30
+      // return (hour > 20 || hour < 8) || (hour === 20 && minute >= 30) || (hour === 8 && minute <= 30);
     }
 
     const logArea = dialog.querySelector('.auto-join-log');
@@ -2558,7 +2558,7 @@
       const time = date.toLocaleTimeString('sv-SE');
       const timestamp = document.createElement('div');
       const attackmode = isMorningTime() ? "umeR" : "stdPRO";
-      timestamp.innerText = `${ymd}\n${time}\n ${attackmode}`;
+      timestamp.innerText = `${ymd}\n${time}\n${attackmode}`;
 //      timestamp.innerText = `${ymd}\n${time}`;
       timestamp.style.fontSize = '90%';
       timestamp.style.color = '#666';
@@ -3316,3 +3316,4 @@ console.log('Current regions[cellType] length:', regions[cellType]?.length);
       attributeFilter: ['open']
     });
   })();
+})();
