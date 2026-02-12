@@ -2524,7 +2524,7 @@
       const now = new Date(new Date().toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo' }));
       const hour = now.getHours();
       const minute = now.getMinutes();
-      return (hour > 3 && hour < 9) || (hour === 8 && minute >= 30) || (hour === 17 && minute === 0);
+      return (hour >= 3 && hour < 8) || (hour === 8 && minute <= 30);
       // 以下指定例その1（変える時は上の return hour >= 4 && hour <= 8; を書き換え、24:00をまたぐ指定はその2で）
       // 4:00～8:00
       // return hour >= 4 && hour <= 8;
@@ -2698,8 +2698,7 @@
 
       while(dialog.open) {
         let success = false;
-console.log('Current cellType:', cellType);
-console.log('Current regions[cellType] length:', regions[cellType]?.length);
+        await new Promise(resolve => setTimeout(resolve, 0));
         isAutoJoinRunning = true;
 
         regions[cellType] = regions[cellType]
@@ -2986,6 +2985,8 @@ console.log('Current regions[cellType] length:', regions[cellType]?.length);
             i++;
           }
         }
+//除外する
+        regions[cellType] = regions[cellType].filter(e => !excludeSet.has(e.join(',')));
         
         if (!success && regions[cellType].length === 0) {
           if (location.href.includes('/teambattle?m=rb')) {
