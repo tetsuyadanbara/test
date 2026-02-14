@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Donguri Bag Enhancer
 // @namespace    https://donguri.5ch.net/
-// @version      8.15.1.31
+// @version      8.16.4.8
 // @description  5ちゃんねる「どんぐりシステム」の「アイテムバッグ」ページ機能改良スクリプト。
 // @author       福呼び草
 // @assistant    ChatGPT (OpenAI)
@@ -12,7 +12,6 @@
 // @match        https://donguri.5ch.net/bag
 // @match        https://donguri.5ch.net/chest
 // @match        https://donguri.5ch.net/battlechest
-// @match        https://donguri.5ch.net/transfer
 // @run-at       document-end
 // @grant        none
 // ==/UserScript==
@@ -23,7 +22,7 @@
   // ============================================================
   // スクリプト自身のバージョン（About 表示用）
   // ============================================================
-  const DBE_VERSION    = '8.15.1.31';
+  const DBE_VERSION    = '8.16.4.8';
 
   // ============================================================
   // 多重起動ガード（同一ページで DBE が複数注入される事故を防ぐ）
@@ -297,7 +296,7 @@
   // レジストリ（限定武器）
     ['カエルの拡声器',             { kana:'カエルノカクセイキ',           limited:true  }],
     ['カエルのメガホン',           { kana:'カエルノメガホン',             limited:true  }],
-    ['セミのソニックキャノン',     { kana:'セミのソニックキャノン',       limited:true  }],
+    ['セミのソニックキャノン',     { kana:'セミノソニックキャノン',       limited:true  }],
     ['花火',                       { kana:'ハナビ',                       limited:true  }],
     ['うちわ',                     { kana:'ウチワ',                       limited:true  }],
     ['練達のバット',               { kana:'レンタツノバット',             limited:true  }],
@@ -346,11 +345,11 @@
     ['ミイラ包帯',                 { kana:'ミイラホウタイ',               limited:true  }],
     ['霜鬼のマント',               { kana:'ソウキのマント',               limited:true  }],
     ['鏡棺',                       { kana:'キョウカン',                   limited:true  }],
-    ['灯守の外套',                 { kana:'トウマのガイトウ',             limited:true  }],
+    ['灯守の外套',                 { kana:'トウモリノガイトウ',             limited:true  }],
     ['段ボールの鎧R',              { kana:'ダンボールノヨロイR',          limited:true  }],
     ['プチプチ巻きR',              { kana:'プチプチマキR',                limited:true  }],
-    ['葉っぱの鎧R',                { kana:'ハッパのヨロイR',              limited:true  }],
-    ['木の鎧R',                    { kana:'キのヨロイR',                  limited:true  }],
+    ['葉っぱの鎧R',                { kana:'ハッパノヨロイR',              limited:true  }],
+    ['木の鎧R',                    { kana:'キノヨロイR',                  limited:true  }],
     ['SPF50+R',                    { kana:'SPF50プラスR',                 limited:true  }],
     ['デカすぎる兜R',              { kana:'デカスギルカブトR',            limited:true  }],
     ['どんぐりかたびらR',          { kana:'ドングリカタビラR',            limited:true  }],
@@ -859,7 +858,7 @@
       /* ==== Element badges ==== */
       .elem-badge{
         display: inline-block;
-        padding: 0px 4px;
+        padding: 2px 8px;
         border: 1px solid #666;
         border-radius: 6px;
         font-size: 0.9em;
@@ -960,6 +959,7 @@
         width: 97%;
         border-width: 3px;
         border-color: #999;
+        margin: 0.5em 0;
       }
       /* 《マリモ》行のテキストボックス専用クラス（どのブラウザでも効く） */
       .mrm-input{ width: 10em !important; }
@@ -1080,16 +1080,29 @@
         /* 基本デザイン（必要に応じてここを差し替え） */
         background-color: #F6FFFF;
         border: 6px solid #009300;
+        border-radius: 10px;
+        padding: 4px;
         color: #000;
         /* 視覚的な“注意枠”感を少しだけ足す */
         box-shadow: inset 0 0 0 3px rgba(153,0,0,0.2);
       }
       .dialogAlert{
         /* 目立つ注意喚起カラー。必要ならここで強調度を調整 */
-        background-color: #FFF5F5;
+        background-color: #FFF9F9;
         border: 6px solid #FF0000;
-        color: #300;
+        border-radius: 10px;
+        padding: 4px;
+        color: rgb(2, 2, 2);
         /* 視覚的な“注意枠”感を少しだけ足す */
+        box-shadow: inset 0 0 0 3px rgba(153,0,0,0.2);
+      }
+      /* “条件がすべて/不問のみ” 保存禁止アラート用（軽めの赤枠） */
+      .dialogAlertLite{
+        background-color: #FFF9F9;
+        border: 3px solid #B00000;
+        border-radius: 10px;
+        padding: 4px;
+        color: #300;
         box-shadow: inset 0 0 0 3px rgba(153,0,0,0.2);
       }
       /* === △ここまで△ ダイアログ共通スキン === */
@@ -3287,6 +3300,90 @@
     }
   }
 
+  // ☆ 追加：赤枠の Alert ダイアログ（条件なしカードの保存禁止などに使用）
+  // - タイトル「Alert:」は左寄せ
+  // - 本文は中央寄せ
+  // - OK ボタンは中央寄せ
+  // - OK で閉じた後、focusBack があればフォーカスを戻す
+  function dbeShowAlertDialog(message, focusBack){
+    try{
+      const wndID = 'dbe-Dialog-Alert';
+      const wnd = ensureWindowShell(wndID); // 共通殻
+      // “保存禁止”アラート専用の軽め赤枠デザイン
+      wnd.classList.remove('dialogCommon','dialogAlert','dialogAlertLite');
+      wnd.classList.add('dialogAlertLite');
+
+      // 先頭の「×」ボタンは非表示（OKのみで閉じる）
+      const closeBtn = wnd.firstElementChild;
+      if (closeBtn && closeBtn.tagName === 'BUTTON') {
+        closeBtn.style.display = 'none';
+        closeBtn.disabled = true;
+      }
+      // 既存の内容（閉じるボタン以外）をクリア
+      Array.from(wnd.children).forEach((ch,i)=>{ if(i>0) ch.remove(); });
+
+      const wrap = document.createElement('div');
+      Object.assign(wrap.style,{display:'grid',gap:'12px',minWidth:'320px',maxWidth:'64ch'});
+
+      // タイトル（左寄せ）
+      const line1 = document.createElement('div');
+      line1.textContent = 'Alert:';
+      Object.assign(line1.style,{
+        fontWeight:'700',
+        fontSize:'1.05em',
+        color:'#B00000',
+        textAlign:'left',
+        margin:'0.5em 0.75em 0 0.75em'
+      });
+
+      // 本文（中央寄せ）
+      const line2 = document.createElement('div');
+      line2.textContent = String(message||'').trim();
+      Object.assign(line2.style,{
+        whiteSpace:'pre-wrap',
+        wordBreak:'break-word',
+        lineHeight:'1.6',
+        textAlign:'center',
+        margin:'0.25em 0.75em 0.5em 0.75em'
+      });
+
+      // OK（中央寄せ）
+      const line3 = document.createElement('div');
+      const ok = document.createElement('button');
+      ok.textContent = 'OK';
+      Object.assign(ok.style,{
+        cursor:'pointer',
+        padding:'6px 20px',
+        border:'2px solid #B00000',
+        borderRadius:'6px',
+        background:'#FFE9E9',
+        display:'block',
+        margin:'0.25em auto 0.75em auto'
+      });
+      line3.appendChild(ok);
+
+      ok.addEventListener('click', ()=>{
+        wnd.style.display = 'none';
+        try{ dbeHideOverlay(); }catch(_){}
+        try{
+          if (focusBack && typeof focusBack.focus === 'function') focusBack.focus();
+        }catch(_){}
+      });
+
+      wrap.append(line1, line2, line3);
+      wnd.appendChild(wrap);
+      dbeBringDialogToFront(wnd);
+      wnd.style.display = 'block';
+      try{ setTimeout(()=> ok.focus(), 0); }catch(_){}
+    }catch(err){
+      console.error('[DBE] dbeShowAlertDialog failed:', err);
+      alert(String(message||''));
+      try{
+        if (focusBack && typeof focusBack.focus === 'function') focusBack.focus();
+      }catch(_){}
+    }
+  }
+
   // ☆ 追加：二択確認ダイアログ（共通デザイン）
   // 返り値: Promise<boolean> （true=Yes/OK, false=No/Cancel）
   function dbeConfirmCommon(title, message, yesLabel, noLabel){
@@ -3937,19 +4034,22 @@
     // △ここまで△ フィルタカード Export/Import ヘルパ群
     // ============================================================
 
-    function buildChestWindow(){
-      const wrap = document.createElement('div');
-      Object.assign(wrap.style,{display:'flex',flexDirection:'column',gap:'10px',minWidth:'min(70svw,560px)'});
+    // ============================================================
+    // フィルタカード（選別設定）ブロック（共通部品）
+    //   - 他のウィンドウ/機能からも呼び出せるように独立
+    //   - 生成要素に id="filtercard" を付与
+    // ============================================================
+    function buildFilterCardPanel(){
+      // 既に同IDが存在する場合は退避（重複IDの回避）
+      try{
+        const existing = document.getElementById('filtercard');
+        if (existing){
+          existing.id = 'filtercard--old-' + Date.now();
+        }
+      }catch(_){}
 
-      // ◇1段目：タイトル
-      const ttl = document.createElement('div');
-      ttl.textContent = '宝箱の開封と選別条件の設定';
-      ttl.style.fontSize = '1.15em';
-      ttl.style.fontWeight = 'bold';
-      wrap.appendChild(ttl);
-
-      // ◇2段目：フィルタカード（選別設定）ブロック
       const grp2 = document.createElement('div');
+      grp2.id = 'filtercard';
       Object.assign(grp2.style,{
         border:'1px solid #CCC',
         borderRadius:'8px',
@@ -3965,7 +4065,7 @@
 
       // 注記（説明文）
       const grp2Annot = document.createElement('div');
-      grp2Annot.textContent = '※ 獲得した装備を選別し、施錠・分解する条件';
+      grp2Annot.textContent = '※ 装備を施錠や分解または保留するための条件を、カード形式で設定します。';
       Object.assign(grp2Annot.style,{ fontSize:'0.9em', margin:'0', padding:'0 1em 0 3em' });
 
       // ボタン行
@@ -4003,7 +4103,25 @@
 
       grp2Btns.append(btnRules, btnBackup);
       grp2.append(grp2Title, grp2Annot, grp2Btns);
-      wrap.appendChild(grp2);
+      return grp2;
+    }
+    // ============================================================
+    // △ここまで△ フィルタカード（選別設定）ブロック（共通部品）
+    // ============================================================
+
+    function buildChestWindow(){
+      const wrap = document.createElement('div');
+      Object.assign(wrap.style,{display:'flex',flexDirection:'column',gap:'10px',minWidth:'min(70svw,560px)'});
+
+      // ◇1段目：タイトル
+      const ttl = document.createElement('div');
+      ttl.textContent = '宝箱の開封と選別条件の設定';
+      ttl.style.fontSize = '1.15em';
+      ttl.style.fontWeight = 'bold';
+      wrap.appendChild(ttl);
+
+      // ◇2段目：フィルタカード（選別設定）ブロック（共通部品）
+      wrap.appendChild(buildFilterCardPanel());
 
       // ◇3段目：テキスト＋宝箱3ボタン（枠内）
       const grp3 = document.createElement('div');
@@ -5169,15 +5287,20 @@
 
         for (const r of list){
 
-          // ─────────────────────────────────────────
+          // ============================================================
           // 武器/防具：指定仕様（カードを上から順に1枚ずつ処理）
           // (1) まず《武器名/防具名》でフィルタ（該当しないなら以降スキップ＝保留）
           // (2) 続いて《Rarity》でフィルタ（該当しないなら以降スキップ＝保留）
-          // (3) 《動作モード》は r.type（lock/del）として現状維持
-          // (4) 《ロジック》AND/OR を反映（r.fop）
-          // (5) 6条件 {SPD/WT, min, max, CRIT, Element, マリモ} を AND/OR 評価
-          // ─────────────────────────────────────────
+          // (3) 続いて《Element》でフィルタ（該当しないなら以降スキップ＝保留）
+          // (4) 《動作モード》は r.type（lock/del）として現状維持
+          // (5) 《ロジック》AND/OR を反映（r.fop）
+          // (6) 5条件 {SPD/WT, min, max, CRIT, マリモ} を AND/OR 評価（Element は必須フィルタ側）
+          // ============================================================
           if (rowInfo.kind==='wep' || rowInfo.kind==='amr'){
+            // 前段アクティブ判定（“完全に条件なしカード”の安全弁用）
+            let nameActive = false;
+            let rarityActive = false;
+            let elemActive = false;
             // (1) 名前で先にフィルタ
             if (r.name && r.name.mode==='spec'){
               const words = String(r.name.keywords||'')
@@ -5185,6 +5308,7 @@
                 .map(s=> normalizeItemName(s))
                 .filter(Boolean);
               const lhs = normalizeItemName(rowInfo.name);
+              nameActive = (words.length > 0);
               if (words.length && !words.some(wnd => lhs === wnd)) continue; // ← 名前不一致なら以降スキップ（保留）
             }
 
@@ -5211,7 +5335,26 @@
                   matched = true;
                 }
               }
+              rarityActive = !!active;
               // Rarity 不一致なら以降スキップ（保留）
+              if (active && !matched) continue;
+            }
+
+            // (3) Element でフィルタ（※「すべて」は非アクティブ＝判定スキップ）
+            {
+              let active = false;
+              let matched = true;
+              if (r.elm){
+                const picks = Array.isArray(r.elm.selected) ? r.elm.selected : [];
+                active = (!r.elm.all && picks.length>0);
+              } else if (r.elem){
+                active = (r.elem !== '不問' && r.elem !== 'すべて');
+              }
+              if (active){
+                matched = matchElementRule(r, rowInfo.elem);
+              }
+              elemActive = !!active;
+              // Element 不一致なら以降スキップ（保留）
               if (active && !matched) continue;
             }
 
@@ -5300,22 +5443,6 @@
               }
             }
 
-            // ── Element（「不問」（旧:すべて）は非アクティブ扱い：OR/AND で常時ヒットしないように）
-            {
-              let active = false;
-              if (r.elm){
-                const picks = Array.isArray(r.elm.selected) ? r.elm.selected : [];
-                active = (!r.elm.all && picks.length>0);
-              } else if (r.elem){
-                active = (r.elem !== '不問' && r.elem !== 'すべて');
-              }
-              let matched = true;
-              if (active){
-                matched = matchElementRule(r, rowInfo.elem);
-              }
-              apply(active, matched);
-            }
-
             // ── マリモ（mode==='spec' のときだけアクティブ）
             {
               const mm = r.mrm;
@@ -5330,13 +5457,22 @@
             }
 
             // ── AND/OR 判定
-            // AND/OR 共通：「すべて」は各項目ごとに非アクティブ（判定スキップ）。
-            // よって、アクティブ条件が1つも無いカードは、どちらのロジックでもヒットさせない（保留）。
-            if (!anyActive) continue;
-            if (useOr){
-              if (!anyMatch) continue;
-            } else {
-              if (!allMatch) continue;
+            // “完全に条件なしカード”はヒット禁止（安全弁）
+            //   - 前段（名前/Rarity/Element）が全部「すべて」
+            //   - かつ 5条件（SPD/WT/min/max/CRIT/マリモ）が全部「不問」
+            // の場合は、例外なくマッチさせない（保留）。
+            const frontAll = (!nameActive && !rarityActive && !elemActive);
+            if (frontAll && !anyActive) continue;
+
+            // 5条件がすべて非アクティブ（= 不問のみ）の場合は、
+            // 前段フィルタ（名前/Rarity/Element）を通過した時点でヒット扱いとする。
+            // 5条件にアクティブがある場合のみ、AND/OR 判定で最終評価する。
+            if (anyActive){
+              if (useOr){
+                if (!anyMatch) continue;
+              } else {
+                if (!allMatch) continue;
+              }
             }
 
             // ここまで到達でマッチ → 動作モードに従う
@@ -5865,8 +6001,10 @@
     // 新フォーム専用のモーダル内容を、単一スコープ内で完結して構築する。
     // 変数は「宣言 → 参照」の順序に統一し、同名の関数/変数衝突を廃止。
 
-    // === 保存完了ダイアログ：表示・クローズ ===
-    function __dbeShowSavedDialog(){
+    // === 保存完了ダイアログ：表示・クローズ（window に共通化） ===
+    // タブ切替等で buildNewFilterModalContent が再実行されても同じ関数を使う
+    if (typeof window.__dbeShowSavedDialog !== 'function'){
+      window.__dbeShowSavedDialog = function __dbeShowSavedDialog(){
       // 既に存在すればタイマーだけ更新
       let overlay = document.getElementById('dbe-save-overlay');
       if (!overlay){
@@ -5881,9 +6019,9 @@
           '</div>'
         );
         document.body.appendChild(overlay);
-        overlay.querySelector('#dbe-save-ok').addEventListener('click', __dbeCloseSavedDialog);
+        overlay.querySelector('#dbe-save-ok').addEventListener('click', window.__dbeCloseSavedDialog);
         // Escキーでも閉じる
-        overlay.addEventListener('keydown', function(ev){ if (ev.key==='Escape') __dbeCloseSavedDialog(); });
+        overlay.addEventListener('keydown', function(ev){ if (ev.key==='Escape') window.__dbeCloseSavedDialog(); });
         // フォーカスをOKへ
         setTimeout(()=> overlay.querySelector('#dbe-save-ok')?.focus(), 0);
       }
@@ -5910,50 +6048,114 @@
       }catch(_){}
       // 10秒で自動クローズ（再表示時は延長）
       clearTimeout(overlay.__dbe_timer);
-      overlay.__dbe_timer = setTimeout(__dbeCloseSavedDialog, 10000);
+      overlay.__dbe_timer = setTimeout(window.__dbeCloseSavedDialog, 10000);
+      };
     }
-    function __dbeCloseSavedDialog(){
+    if (typeof window.__dbeCloseSavedDialog !== 'function'){
+      window.__dbeCloseSavedDialog = function __dbeCloseSavedDialog(){
       const overlay = document.getElementById('dbe-save-overlay');
       if (!overlay) return;
       clearTimeout(overlay.__dbe_timer);
       overlay.remove();
+      };
     }
 
-    // === 保存フック：saveRulesToStorage をラップ（あれば）、なければボタン監視でフォールバック
+    // === 保存フック：saveRulesToStorage をラップ（あれば）。後から生えるケースがあるのでリトライする。
+    //     ※ 「保存しました」ダイアログは “実際に saveRulesToStorage が成功した時” かつ
+    //        “ユーザーが直前に「保存する」を押した意図がある時” のみに限定して誤表示を防ぐ
     (function __dbeInstallSaveHook(){
-      let wrapped = false;
+      // 多重インストール防止
+      if (window.__DBE_SAVE_HOOK_INSTALLED) return;
+      window.__DBE_SAVE_HOOK_INSTALLED = true;
+
+      // 「保存する」クリック意図（短時間だけ有効）
       try{
-        if (typeof window.saveRulesToStorage === 'function' && !window.saveRulesToStorage.__dbeWrapped){
-          const orig = window.saveRulesToStorage;
-          const wrappedFn = function(){
+        if (!window.__DBE_SAVE_INTENT_WATCH_INSTALLED){
+          window.__DBE_SAVE_INTENT_WATCH_INSTALLED = true;
+          window.__DBE_SAVE_DIALOG_INTENT = false;
+          window.__DBE_SAVE_DIALOG_BLOCK_ONCE = false;
+          window.__DBE_SAVE_INTENT_TIMER = null;
+          document.addEventListener('click', function(ev){
             try{
-              const ret = orig.apply(this, arguments);
-              // Promise/同期の両対応
-              Promise.resolve(ret).then(()=>{ __dbeShowSavedDialog(); }).catch(()=>{});
-              return ret;
-            }catch(_e){
-              // 失敗時は何もしない
-              throw _e;
-            }
-          };
-          wrappedFn.__dbeWrapped = true;
-          window.saveRulesToStorage = wrappedFn;
-          wrapped = true;
+              if (!ev || !ev.isTrusted) return;
+              const btn = ev.target && ev.target.closest && ev.target.closest('button');
+              if (!btn) return;
+              const txt = (btn.textContent || '').trim();
+              if (txt !== '保存する') return;
+              // ルールウィンドウ内の「保存する」だけを対象
+              const rulesWnd = document.getElementById('dbe-W-Rules');
+              if (!rulesWnd) return;
+              if (!btn.closest || !btn.closest('#dbe-W-Rules')) return;
+
+              window.__DBE_SAVE_DIALOG_INTENT = true;
+              // 2秒で自動解除（タブ切替などの別トリガー誤表示防止）
+              clearTimeout(window.__DBE_SAVE_INTENT_TIMER);
+              window.__DBE_SAVE_INTENT_TIMER = setTimeout(function(){
+                try{ window.__DBE_SAVE_DIALOG_INTENT = false; }catch(_){}
+              }, 2000);
+            }catch(_){}
+          }, true);
         }
       }catch(_){}
-      if (!wrapped){
-        // フォールバック：モーダル内の「保存する」ボタン押下後に表示
-        document.addEventListener('click', function(ev){
-          const btn = ev.target && ev.target.closest('button');
-          if (!btn) return;
-          const txt = (btn.textContent || '').trim();
-          if (txt === '保存する'){
-            // 保存処理が走った直後に表示（保存の同期完了を想定）
-            setTimeout(__dbeShowSavedDialog, 50);
+
+      function onSaved(){
+        try{
+          // 安全弁などで「保存禁止」を出した直後は、保存完了表示を1回だけ抑止
+          if (window.__DBE_SAVE_DIALOG_BLOCK_ONCE){
+            window.__DBE_SAVE_DIALOG_BLOCK_ONCE = false;
+            return;
           }
-        }, true);
+          // 直前にユーザーが「保存する」を押した時だけ出す
+          if (!window.__DBE_SAVE_DIALOG_INTENT) return;
+          window.__DBE_SAVE_DIALOG_INTENT = false;
+        }catch(_){}
+        try{ __dbeShowSavedDialog(); }catch(_){}
       }
-    })();
+
+      function tryWrap(){
+        let ok = false;
+        try{
+          if (typeof window.saveRulesToStorage === 'function' && !window.saveRulesToStorage.__dbeWrapped){
+            const orig = window.saveRulesToStorage;
+            const wrappedFn = function(){
+              try{
+                const ret = orig.apply(this, arguments);
+                // Promise/同期の両対応：成功時だけ表示
+                Promise.resolve(ret).then(onSaved).catch(()=>{});
+                return ret;
+              }catch(_e){
+                throw _e;
+              }
+            };
+            wrappedFn.__dbeWrapped = true;
+            window.saveRulesToStorage = wrappedFn;
+            ok = true;
+          }else if (typeof window.saveRulesToStorage === 'function' && window.saveRulesToStorage.__dbeWrapped){
+            ok = true; // 既にラップ済み
+          }
+        }catch(_){}
+        return ok;
+      }
+
+      // まず即時トライ
+      if (tryWrap()) return;
+
+      // 後から定義されるケースに備えて短時間リトライ（※フォールバックの click 監視で「保存完了」を出すのは禁止）
+      let tries = 0;
+      const maxTries = 50;      // 200ms * 50 = 約10秒
+      const interval = 200;
+      const timer = setInterval(function(){
+        tries++;
+        if (tryWrap()){
+          clearInterval(timer);
+          return;
+        }
+        if (tries >= maxTries){
+          clearInterval(timer);
+          // ここではフォールバック表示は行わない（誤表示の温床になるため）
+        }
+      }, interval);
+    })()
 
     // ラッパ（モーダルの body に入る中身）
     const wrap = document.createElement('div');
@@ -5973,9 +6175,8 @@
           <ul style="font-size:0.9em; margin:6px 0 0 1.2em; padding:0;">
             <li>フィルタカードを編集したら忘れず保存してください。保存しなかった情報は破棄されます。</li>
             <li>「保存する」ボタンは《動作モード（施錠／分解）》の区別なく、すべてのフィルタカード情報を保存します。</li>
-            <li>《動作モード》の選択に加え、各項目の設定が必須です。各項目は『不問』を選ぶか、具体的な条件を入力・選択してください。未設定の項目がある場合はカードを追加できません。</li>
+            <li>《動作モード》の選択に加え、各項目の設定が必須です。各項目について、「すべて」や「不問」を選ぶか、具体的な条件を入力・選択してください。未設定の項目がある場合はカードを追加できません。</li>
             <li>「不問」に設定された条件は装備の選別において判定がスキップされます。</li>
-            <li>《ロジック》が「OR」のとき、条件がすべて「不問」なら、強制的に保留の扱いとなります。（選別対象の装備がすべて施錠または分解されてしまうため）</li>
             <li>異常が生じた場合は「全データを消去」実施により改善する可能性があります。（その際、すべてのフィルタカードが消去されます。あらかじめご了承ください。）</li>
             <li>いかなる不利益が生じても補償等はできません。“永遠のβバージョン”と思ってください。</li>
           </ul>
@@ -6469,6 +6670,11 @@
         if (html) chunks.push('／' + html);
       }
 
+      // 「《...》すべて」を少し大きめに表示したい時だけ個別に適用する
+      function bigAll(html){
+        return `<span style="font-size:1.12em;">${html}</span>`;
+      }
+
       // 1) 施錠/分解
       chunks.push(typeBadge(card.type));
 
@@ -6479,22 +6685,43 @@
           //   「すべて」や「不問」でも常に《ロジック》の前（本来位置）に表示する
           const fallback = `《${kind==='wep'?'武器名':'防具名'}》すべて`;
           const nameTxt = namesText(kind, card.name) || fallback;
-          chunks.push('／' + wrapParamHead(nameTxt));
+          const nameHtml = wrapParamHead(nameTxt);
+          const isAllName = /^《(?:武器名|防具名)》\s*すべて$/.test(String(nameTxt || '').trim());
+          chunks.push('／' + (isAllName ? bigAll(nameHtml) : nameHtml));
         }
 
-        // 3) ロジック（AND/OR）
+         // 3) Rarity（バッジ）
+        {
+          // 「すべて」の場合：バッヂではなく「《Rarity》すべて」の文字列を表示（不問グループへは移動しない）
+          const isAll = (!card.rarity || rarityIsAll(card.rarity));
+          if (isAll){
+            chunks.push('／' + bigAll(wrapParamHead('《Rarity》すべて')));
+          } else {
+            chunks.push('／' + rarityBadgesHTML(card.rarity));
+          }
+        }
+
+        // 4) Element（バッジ・テーブル配色を反映／空なら出さない）
+        {
+          const ehtml = elemBadgesHTML(card.elm);
+          // 「すべて」の場合：バッヂではなく「《Element》すべて」の文字列を表示（不問グループへは移動しない）
+          const isAll = (!ehtml || ehtml === '《Element》すべて');
+          if (isAll){
+            chunks.push('／' + bigAll(wrapParamHead('《Element》すべて')));
+          } else {
+            // バッジHTMLならそのまま、テキスト（《...》形式）なら見出しだけ縮小
+            const out = (ehtml[0] === '《') ? wrapParamHead(ehtml) : ehtml;
+            chunks.push('／' + out);
+          }
+        }
+
+        // 5) ロジック（AND/OR）
         {
           const op = String(card.fop || 'AND').toUpperCase();
           chunks.push('／' + logicBadgeHTML(op));
         }
 
-        // 4) Rarity（バッジ）
-        {
-          const isUn = (!card.rarity || rarityIsAll(card.rarity));
-          pushOrUnasked(rarityBadgesHTML(card.rarity), 'Rarity', isUn);
-        }
-
-        // 5) SPD / WT.
+        // 6) SPD / WT.
         if (kind==='wep'){
           const s = statPretty('SPD', card.spd || card.SPD);
           pushOrUnasked(wrapParamHead(s), 'SPD', isUnaskedText(s));
@@ -6503,7 +6730,7 @@
           pushOrUnasked(wrapParamHead(wnd), 'WT.', isUnaskedText(wnd));
         }
 
-        // 6) minATK/maxATK or minDEF/maxDEF
+        // 7) minATK/maxATK or minDEF/maxDEF
         if (kind==='wep'){
           const mn = statPretty('minATK', card.minATK);
           pushOrUnasked(wrapParamHead(mn), 'minATK', isUnaskedText(mn));
@@ -6516,23 +6743,10 @@
           pushOrUnasked(wrapParamHead(mx), 'maxDEF', isUnaskedText(mx));
         }
 
-        // 7) CRIT
+        // 8) CRIT
         {
           const cr = statPretty('CRIT', card.crit || card.CRIT);
           pushOrUnasked(wrapParamHead(cr), 'CRIT', isUnaskedText(cr));
-        }
-
-        // 8) Element（バッジ・テーブル配色を反映／空なら出さない）
-        {
-          const ehtml = elemBadgesHTML(card.elm);
-          const isUn = (!ehtml || ehtml === '《Element》すべて');
-          if (isUn){
-            unasked.push('Element');
-          } else {
-            // バッジHTMLならそのまま、テキスト「《Element》すべて」なら見出しだけ縮小
-            const out = (ehtml[0] === '《') ? wrapParamHead(ehtml) : ehtml;
-            chunks.push('／' + out);
-          }
         }
 
         // 9) マリモ
@@ -6624,7 +6838,7 @@
         return;
       }
       list.forEach((card, idx)=>{
-        // 行コンテナ（武器/防具=4段：1段目=操作列 / 2段目=《武器名/防具名》 / 3段目=《Rarity》 / 4段目=《ロジック》+7条件+【不問】。ネックレスは従来通り）
+        // 行コンテナ（武器/防具=4段：1段目=操作列 / 2段目=《武器名/防具名》 / 3段目=《Rarity》+《Element》 / 4段目=《ロジック》+他条件+【不問】。ネックレスは従来通り）
         const row = document.createElement('div');
         // 種別ごとに背景色を変える（CSS変数で制御）
         row.classList.add('dbe-filter-card-row', `dbe-filter-card-row--${kind}`);
@@ -6632,7 +6846,7 @@
           display:'flex',
           flexDirection:'column',
           alignItems:'stretch',
-          gap:'0px',
+          gap:'12px',
           border:'1px solid #CCC', borderRadius:'12px', padding:'16px 8px', background:'var(--dbe-fc-bg, #FFF)',
           fontSize:'0.95em'
         });
@@ -6650,7 +6864,7 @@
         const badgeHTML  = (p>=0 ? html.slice(0, p) : html) || '';
         const paramsHTML = (p>=0 ? html.slice(p+1) : '') || '';
 
-        // params を「《武器名/防具名》」(2段目) / 《Rarity》(3段目) / それ以外(4段目) に分割（武器/防具のみ）
+        // params を「《武器名/防具名》」(2段目) / 《Rarity》+《Element》(3段目) / それ以外(4段目) に分割（武器/防具のみ）
         let nameHTML = '';
         let rarityHTML = '';
         let restHTML = '';
@@ -6660,14 +6874,19 @@
           const tail = parts.slice(1);
           const rIdx = tail.findIndex(s => {
             const t = String(s || '');
-            return t.includes('rar-badge');
+            // バッジ表示（rar-badge）だけでなく、「《Rarity》すべて」のテキスト表示も同段に拾う
+            return t.includes('rar-badge') || t.includes('《Rarity》');
           });
-          if (rIdx >= 0){
-            rarityHTML = tail[rIdx] || '';
-            restHTML = tail.filter((_, i)=>i !== rIdx).join('／') || '';
-          }else{
-            restHTML = tail.join('／') || '';
-          }
+          const eIdx = tail.findIndex(s => {
+            const t = String(s || '');
+            return t.includes('elem-badge') || t.includes('《Element》');
+          });
+          const picked = [];
+          if (rIdx >= 0) picked.push(tail[rIdx] || '');
+          if (eIdx >= 0 && eIdx !== rIdx) picked.push(tail[eIdx] || '');
+          // 《Rarity》／《Element》は同段で見せたいので、区切りは折り返しに馴染む span にする
+          rarityHTML = picked.filter(Boolean).join('<span style="margin:0 0.25em;">／</span>') || '';
+          restHTML = tail.filter((_, i)=>i !== rIdx && i !== eIdx).join('／') || '';
         }else{
           // ネックレスは従来通り（2段目=名称 / 3段目=残り）
           const q = paramsHTML.indexOf('／');
@@ -6873,20 +7092,28 @@
         if (btnEdit) headRow.appendChild(btnEdit); // col 3（武器/防具のみ）
         headRow.appendChild(btnDel);    // col 4（武器/防具） or col 3（ネックレス）
 
-        // [2段目] 《武器名》または《防具名》
+        // [2段目] 《武器名/防具名》 or ネックレス名
         const nameRow = document.createElement('div');
-        Object.assign(nameRow.style, { padding:'10px' });
+        Object.assign(nameRow.style, { padding:'0px' });
         nameRow.innerHTML = nameHTML || '';
 
         // [3段目] 《Rarity》（武器/防具のみ）
         let rarityRow = null;
-        if (kind === 'wep' || kind === 'amr'){
-          if (rarityHTML){
-            rarityRow = document.createElement('div');
-            Object.assign(rarityRow.style, { padding:'10px' });
-            rarityRow.innerHTML = rarityHTML;
+          if (kind === 'wep' || kind === 'amr'){
+            if (rarityHTML){
+              rarityRow = document.createElement('div');
+              // 《Rarity》と《Element》を同段に並べ、端で折り返す
+              Object.assign(rarityRow.style, {
+                padding:'0px',
+                display:'flex',
+                flexWrap:'wrap',
+                alignItems:'center',
+                gap:'0px',
+                whiteSpace:'normal'
+              });
+              rarityRow.innerHTML = rarityHTML;
+            }
           }
-        }
 
         // [4段目] 《ロジック》バッジ、6条件、【不問】グループ
         const bodyRow = document.createElement('div');
@@ -6909,6 +7136,13 @@
       const isEdit = !!opts.edit;
       const card = document.createElement('div');
       card.className = 'fc-card';
+      // 「フィルタカード」ビルダー/再編集 でID衝突を避ける（同時に存在しうるため分離）
+      const targetId = isEdit ? 'filtercard-editor' : 'filtercard-builder';
+      try{
+        const prev = document.getElementById(targetId);
+        if (prev && prev !== card) prev.removeAttribute('id');
+      }catch(_e){}
+      card.id = targetId;
       // ── 重要：武器/防具タブ用の入力状態・要素参照を外側スコープに用意して、
       // ⑦「カードを追加」ハンドラ（ブロック外）からも参照できるようにする
       let stateRarity, nameState, fopState, compState, elemState, mrmState, minStatState, maxStatState, critState;
@@ -6927,7 +7161,8 @@
       // タイトル
       const title = document.createElement('div');
       title.className = 'fc-title';
-      title.textContent = `「フィルタカード」ビルダー（${kind==='wep'?'武器':(kind==='amr'?'防具':'ネックレス')}${isEdit?'：再編集':''}）`;
+      const fcCaption = (card.id === 'filtercard-editor') ? 'エディター' : 'ビルダー';
+      title.textContent = `「フィルタカード」${fcCaption}（${kind==='wep'?'武器':(kind==='amr'?'防具':'ネックレス')}${isEdit?'：再編集':''}）`;
       card.appendChild(title);
       // グリッド本体
       const grid = document.createElement('div');
@@ -6985,7 +7220,7 @@
       // 武器/防具 共通（ネックレスでは非表示）
       if (kind==='wep' || kind==='amr') {
 
-      // ② 動作モード
+      // ① 動作モード
       {
         const leftCol = mkLeft('《動作モード》');
         const rightCol = mkRight();
@@ -7007,9 +7242,9 @@
         rightCol.appendChild(gp);
         addRow(leftCol,rightCol);
       }
-      addSep('a');
+      addSep('b');
 
-      // ① 名称（武器名/防具名）
+      // ② 名称（武器名/防具名）
       nameState = { all:false, text:'' }; nameInput = null;
       {
         const leftCol = mkLeft(`《${kind==='wep'?'武器名':'防具名'}》`);
@@ -7044,7 +7279,7 @@
         allWrap.classList.add('fc-all-label');
         Object.assign(allWrap.style,{ display:'inline-flex', alignItems:'center', gap:'0' });
         const ckAll = document.createElement('input'); ckAll.type='checkbox'; ckAll.id=`fc-${kind}-rar-all`;
-        const allTxt = document.createElement('span'); allTxt.textContent='不問';
+        const allTxt = document.createElement('span'); allTxt.textContent='すべて';
         allWrap.htmlFor=ckAll.id; allWrap.append(ckAll, allTxt);
         setLeftAll2Lines(leftCol, '《Rarity》', allWrap);
         const rightWrap = document.createElement('div');
@@ -7064,9 +7299,40 @@
         rightCol.appendChild(rightWrap);
         addRow(leftCol,rightCol);
       }
+      addSep('a');
+
+      // ④ Element
+      elemState = { all:false, picks:new Set() };
+      {
+        const leftCol = mkLeft('《Element》');
+        const rightCol = mkRight();
+        const allWrap = document.createElement('label');
+        allWrap.classList.add('fc-all-label');
+        Object.assign(allWrap.style,{ display:'inline-flex', alignItems:'center', gap:'0' });
+        const ckAll = document.createElement('input'); ckAll.type='checkbox'; ckAll.id=`fc-${kind}-elm-all`;
+        const allTxt = document.createElement('span'); allTxt.textContent='すべて';
+        allWrap.htmlFor=ckAll.id; allWrap.append(ckAll, allTxt);
+        setLeftAll2Lines(leftCol, leftCol.textContent.trim(), allWrap);
+        const rightWrap = document.createElement('div');
+        Object.assign(rightWrap.style,{ display:'flex', flexWrap:'wrap', gap:'0.7em', 'vertical-align':'top'});
+        ;['火','氷','雷','風','地','水','光','闇','なし'].forEach(n=>{
+          const pair = document.createElement('label');
+          Object.assign(pair.style,{ display:'inline-flex', alignItems:'center', gap:'0.1em' });
+          const c=document.createElement('input'); c.type='checkbox'; c.id=`fc-${kind}-elm-${n}`;
+          const lb=document.createElement('span'); lb.textContent=n;
+          pair.htmlFor=c.id; pair.append(c, lb);
+          rightWrap.append(pair);
+          c.addEventListener('change', ()=>{ if (c.checked) elemState.picks.add(n); else elemState.picks.delete(n); });
+        });
+        const sync = ()=>{ elemState.all = ckAll.checked; setDimmed(rightWrap, ckAll.checked); };
+        ckAll.addEventListener('change', sync);
+        sync();
+        rightCol.appendChild(rightWrap);
+        addRow(leftCol,rightCol);
+      }
       addSep('b');
 
-      // ④ ロジック（AND/OR）
+      // ⑤ ロジック（AND/OR）
       // 初期状態：どちらも未選択（ユーザーが選んだ時点で AND/OR の排他が効く）
       fopState = { op:null };
       {
@@ -7094,7 +7360,7 @@
       }
       addSep('a');
 
-      // ⑤ SPD/WT
+      // ⑥ SPD/WT
       compState = { all:false }; compInput = null; compSel = null; compWrap = null;
       {
         const leftCol = mkLeft(kind==='wep'?'《SPD》':'《WT.》');
@@ -7216,37 +7482,6 @@
           rightCol.appendChild(critWrap);
           addRow(leftCol,rightCol);
         }
-      }
-      addSep('a');
-
-      // ⑤ Element
-      elemState = { all:false, picks:new Set() };
-      {
-        const leftCol = mkLeft('《Element》');
-        const rightCol = mkRight();
-        const allWrap = document.createElement('label');
-        allWrap.classList.add('fc-all-label');
-        Object.assign(allWrap.style,{ display:'inline-flex', alignItems:'center', gap:'0' });
-        const ckAll = document.createElement('input'); ckAll.type='checkbox'; ckAll.id=`fc-${kind}-elm-all`;
-        const allTxt = document.createElement('span'); allTxt.textContent='不問';
-        allWrap.htmlFor=ckAll.id; allWrap.append(ckAll, allTxt);
-        setLeftAll2Lines(leftCol, leftCol.textContent.trim(), allWrap);
-        const rightWrap = document.createElement('div');
-        Object.assign(rightWrap.style,{ display:'flex', flexWrap:'wrap', gap:'0.7em', 'vertical-align':'top'});
-        ;['火','氷','雷','風','地','水','光','闇','なし'].forEach(n=>{
-          const pair = document.createElement('label');
-          Object.assign(pair.style,{ display:'inline-flex', alignItems:'center', gap:'0.1em' });
-          const c=document.createElement('input'); c.type='checkbox'; c.id=`fc-${kind}-elm-${n}`;
-          const lb=document.createElement('span'); lb.textContent=n;
-          pair.htmlFor=c.id; pair.append(c, lb);
-          rightWrap.append(pair);
-          c.addEventListener('change', ()=>{ if (c.checked) elemState.picks.add(n); else elemState.picks.delete(n); });
-        });
-        const sync = ()=>{ elemState.all = ckAll.checked; setDimmed(rightWrap, ckAll.checked); };
-        ckAll.addEventListener('change', sync);
-        sync();
-        rightCol.appendChild(rightWrap);
-        addRow(leftCol,rightCol);
       }
       addSep('a');
 
@@ -7769,6 +8004,32 @@
             try{ dbeShowOkDialog('案内', msg); }catch(_){ alert(msg); }
             btnAdd.disabled = false;
             return;
+          }
+
+          // ★ 安全弁： “完全に条件なしカード” は保存禁止
+          //   前段（武器名/防具名・Rarity・Element）が全部「すべて」
+          //   かつ 5条件（SPD/WT, min, max, CRIT, マリモ）が全部「不問」
+          //   → 意図せず大量ヒットを招くため、保存自体をブロックする
+          if (kind==='wep' || kind==='amr'){
+            const frontAll = !!(nameState?.all && stateRarity?.all && elemState?.all);
+            const fiveAllUnasked = !!(compState?.all && minStatState?.all && maxStatState?.all && critState?.all && mrmState?.all);
+            if (frontAll && fiveAllUnasked){
+              // ☆ 保存完了ダイアログ誤表示の抑止：
+              //   このケースでは保存は行われないため、
+              //   「保存する」意図フラグを落とし、次回の保存ダイアログ表示を1回抑止する
+              try{
+                window.__DBE_SAVE_DIALOG_INTENT = false;
+                window.__DBE_SAVE_DIALOG_BLOCK_ONCE = true;
+              }catch(_){}
+              try{
+                dbeShowAlertDialog('条件が「すべて」「不問」のみのフィルタカードは作成できません。', btnAdd);
+              }catch(_){
+                alert('条件が「すべて」「不問」のみのフィルタカードは作成できません。');
+                try{ btnAdd.focus(); }catch(_){}
+              }
+              btnAdd.disabled = false;
+              return;
+            }
           }
 
           // ② 保存健全性チェック（保存領域の存在保証＆例外安全化）
