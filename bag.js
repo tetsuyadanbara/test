@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Donguri Bag Enhancer
 // @namespace    https://donguri.5ch.net/
-// @version      8.16.4.8
+// @version      8.17.2.3
 // @description  5ちゃんねる「どんぐりシステム」の「アイテムバッグ」ページ機能改良スクリプト。
 // @author       福呼び草
 // @assistant    ChatGPT (OpenAI)
@@ -9,9 +9,12 @@
 // @license      BSD-3-Clause license
 // @updateURL    https://github.com/Fukuyobisou/Donguri_Bag_Enhancer/raw/main/Donguri_Bag_Enhancer.user.js
 // @downloadURL  https://github.com/Fukuyobisou/Donguri_Bag_Enhancer/raw/main/Donguri_Bag_Enhancer.user.js
+// @match        https://donguri.5ch.net/
+// @match        https://donguri.5ch.net
 // @match        https://donguri.5ch.net/bag
 // @match        https://donguri.5ch.net/chest
 // @match        https://donguri.5ch.net/battlechest
+// @match        https://donguri.5ch.net/itemwatch
 // @run-at       document-end
 // @grant        none
 // ==/UserScript==
@@ -22,7 +25,7 @@
   // ============================================================
   // スクリプト自身のバージョン（About 表示用）
   // ============================================================
-  const DBE_VERSION    = '8.16.4.8';
+  const DBE_VERSION    = '8.17.2.3';
 
   // ============================================================
   // 多重起動ガード（同一ページで DBE が複数注入される事故を防ぐ）
@@ -135,6 +138,84 @@
   chestDiag('BOOT: script loaded, DBE_VERSION=', DBE_VERSION, 'pathname=', location.pathname);
 
   // ============================================================
+  // トップページ（https://donguri.5ch.net/）での「どんぐりネーム / どんぐりID」取得・記憶
+  // - 左ペイン（.stats.header の最初の <div>）から抽出
+  // - どんぐりネーム：<div style="font-size:2em;">...</div> の textContent
+  // - どんぐりID：『ID: 』に続く半角英数字
+  // - 取得できた場合のみ localStorage を更新（変化があれば上書き）
+  // - トップページではこの処理のみ実行して return（他機能は走らせない）
+  // ============================================================
+  function dbeCaptureDonguriIdentityFromTop(){
+    try{
+      const root = (document.querySelector('.stats.header') || null);
+      if (!root) return false;
+
+      // 左ペイン：最初の <div>
+      const panes = root.querySelectorAll(':scope > div');
+      const leftPane = panes && panes.length ? panes[0] : null;
+      if (!leftPane) return false;
+
+      // どんぐりネーム：font-size:2em を含む div（なければ先頭divをフォールバック）
+      let name = '';
+      const nameDiv =
+        leftPane.querySelector('div[style*="font-size:2em"]') ||
+        leftPane.querySelector('div');
+      if (nameDiv){
+        name = (nameDiv.textContent || '').trim();
+      }
+
+      // どんぐりID：ID: に続く半角英数字
+      let did = '';
+      const idText = (leftPane.textContent || '');
+      const m = idText.match(/ID:\s*([0-9A-Za-z]+)/);
+      if (m) did = m[1];
+
+      // 取得できたものだけ更新（変化があれば上書き）
+      let updated = false;
+      if (name){
+        const prev = localStorage.getItem('donguri-name');
+        if (prev !== name){
+          localStorage.setItem('donguri-name', name);
+          updated = true;
+        }
+      }
+      if (did){
+        const prev = localStorage.getItem('donguri-id');
+        if (prev !== did){
+          localStorage.setItem('donguri-id', did);
+          updated = true;
+        }
+      }
+
+      if (updated){
+        try{
+          console.log('[DBE] donguri identity updated:', {
+            'donguri-name': localStorage.getItem('donguri-name') || '',
+            'donguri-id'  : localStorage.getItem('donguri-id')   || ''
+          });
+        }catch(_){}
+      } else {
+        try{
+          console.debug('[DBE] donguri identity unchanged:', {
+            'donguri-name': localStorage.getItem('donguri-name') || '',
+            'donguri-id'  : localStorage.getItem('donguri-id')   || ''
+          });
+        }catch(_){}
+      }
+      return true;
+    }catch(err){
+      console.warn('[DBE] failed to capture donguri identity from top:', err);
+      return false;
+    }
+  }
+
+  // トップページ判定（/ または空）
+  if (location && (location.pathname === '/' || location.pathname === '')){
+    dbeCaptureDonguriIdentityFromTop();
+    return;
+  }
+
+  // ============================================================
   // 設定キー
   // ============================================================
   const anchorKey   = 'donguriItemTableResetAnchor';
@@ -157,6 +238,9 @@
     baseFontSize:  { id:'dbe-prm-panel0-fontsize',                  legacy:null,                       def:getDefaultBaseFontSize() },
     displayItemId: { id:'dbe-prm-panel0-check-display-ItemID',      legacy:null,                       def:false                    },
     elemUnknownInc:{ id:'dbe-prm-elem-unknown-include',             legacy:null,                       def:false                    },
+    // トップページ取得値（localStorage 直読み用途にも使えるよう定義）
+    donguriName:   { id:'donguri-name',                             legacy:null,                       def:''                       },
+    donguriId:     { id:'donguri-id',                               legacy:null,                       def:''                       },
   };
 
   // ============================================================
@@ -557,6 +641,146 @@
         const input = document.getElementById('recipientid');
         if (input) input.value = 'bb97c8d2';
         localStorage.removeItem('donguriAutoTransfer');
+      }
+    });
+    return;
+  }
+
+  // ============================================================
+  // アイテムウォッチ（https://donguri.5ch.net/itemwatch）
+  // - header 直下の <p style="text-align:center;margin:0 auto;"></p> の「前」に
+  //   チェックボックス「自分だけ抽出」を挿入
+  // - ON のとき、表の「アイテム保持者の名前」列が localStorage['donguri-name'] と完全一致する行だけ表示
+  // - OFF のとき、デフォルト表示に戻す
+  // - チェック状態は localStorage に永続化
+  // ============================================================
+  if (location.pathname === '/itemwatch') {
+    window.addEventListener('load', ()=>{
+      try{
+        const KEY_SELFONLY = 'dbe-itemwatch-selfonly';
+
+        const header = document.querySelector('header');
+        if (!header) return;
+
+        // header 直下の <p style="text-align:center;margin:0 auto;"></p>
+        // （style の完全一致は避け、text-align:center を含む p を優先）
+        const pAfterHeader = header.nextElementSibling
+          && header.nextElementSibling.tagName === 'P'
+          ? header.nextElementSibling
+          : null;
+        const p = pAfterHeader || document.querySelector('header + p');
+        if (!p) return;
+
+        // donguri-name（保存値）が無い場合は、UIを出さず、機能も無効（＝表示をデフォルトへ）
+        const savedName = (localStorage.getItem('donguri-name') || '').trim();
+
+        // 対象テーブル（基本的に p の直下に table がある想定）
+        const table =
+          (p && p.querySelector && p.querySelector('table')) ||
+          document.querySelector('header + p table') ||
+          document.querySelector('table');
+        if (!table) return;
+
+        function findHolderNameColIndex(tbl){
+          try{
+            const ths = Array.from(tbl.querySelectorAll('thead th'));
+            if (!ths.length) return -1;
+            const idx = ths.findIndex(th => {
+              const t = (th.textContent || '').trim();
+              return t === 'アイテム保持者の名前';
+            });
+            return idx;
+          }catch(_){
+            return -1;
+          }
+        }
+
+        function applySelfOnly(on){
+          try{
+            const myName = (localStorage.getItem('donguri-name') || '').trim();
+            const idx = findHolderNameColIndex(table);
+            const body = table.tBodies && table.tBodies[0];
+            if (!body) return;
+
+            // myName が無い/列が無い場合でも、OFF は確実に復元
+            Array.from(body.rows).forEach(tr=>{
+              if (!tr) return;
+              if (!('dbeOrigDisplay' in tr.dataset)) {
+                tr.dataset.dbeOrigDisplay = tr.style.display || '';
+              }
+              if (!on) {
+                tr.style.display = tr.dataset.dbeOrigDisplay || '';
+                return;
+              }
+              if (idx < 0 || !myName) {
+                // 条件が満たせない場合は「何も隠さない」（ユーザー混乱防止）
+                tr.style.display = tr.dataset.dbeOrigDisplay || '';
+                return;
+              }
+              const td = tr.cells && tr.cells[idx];
+              const holder = (td ? (td.textContent || '') : '').trim();
+              tr.style.display = (holder === myName) ? (tr.dataset.dbeOrigDisplay || '') : 'none';
+            });
+          }catch(e){
+            console.warn('[DBE] itemwatch self-only filter failed:', e);
+          }
+        }
+
+        // 保存値が無いなら、UIは非表示（未生成）＆確実にデフォルト表示へ戻して終了
+        if (!savedName) {
+          const wrap0 = document.getElementById('dbe-itemwatch-selfonly-wrap');
+          if (wrap0) wrap0.style.display = 'none';
+          applySelfOnly(false);
+          return;
+        }
+
+        // すでに挿入済みなら二重挿入しない（ただし表示は復帰）
+        if (document.getElementById('dbe-itemwatch-selfonly-wrap')) {
+          const wrap1 = document.getElementById('dbe-itemwatch-selfonly-wrap');
+          if (wrap1) wrap1.style.display = 'flex';
+        } else {
+          const wrap = document.createElement('div');
+          wrap.id = 'dbe-itemwatch-selfonly-wrap';
+          wrap.style.cssText = [
+            'display:flex',
+            'justify-content:center',
+            'align-items:center',
+            'gap:8px',
+            'margin:0 auto',
+            'padding:6px 0',
+            'max-width:100%',
+          ].join(';');
+
+          const cb = document.createElement('input');
+          cb.type = 'checkbox';
+          cb.id = 'dbe-itemwatch-selfonly';
+
+          const label = document.createElement('label');
+          label.setAttribute('for', cb.id);
+          label.textContent = '自分だけ抽出';
+          label.style.cssText = 'cursor:pointer; user-select:none;';
+
+          wrap.appendChild(cb);
+          wrap.appendChild(label);
+
+          // 「header」と「p」の間に挿入
+          p.parentNode.insertBefore(wrap, p);
+        }
+
+        const cb = document.getElementById('dbe-itemwatch-selfonly');
+        if (!cb) return;
+
+        // 永続状態の復元
+        cb.checked = (localStorage.getItem(KEY_SELFONLY) === '1');
+        applySelfOnly(cb.checked);
+
+        cb.addEventListener('change', ()=>{
+          const on = !!cb.checked;
+          localStorage.setItem(KEY_SELFONLY, on ? '1' : '0');
+          applySelfOnly(on);
+        });
+      }catch(e){
+        console.warn('[DBE] init itemwatch failed:', e);
       }
     });
     return;
@@ -1264,6 +1488,7 @@
     // --- 関数呼び出し ---
     initLockToggle();
     tableIds.forEach(processTable);
+    initEquip();
     initRecycle();
     initMenu();          // 必要なセクションを各 dbe-W-* に直接生成
     initBulkRecycle();
@@ -3241,7 +3466,7 @@
       Array.from(wnd.children).forEach((ch,i)=>{ if(i>0) ch.remove(); });
       // 本文
       const wrap = document.createElement('div');
-      Object.assign(wrap.style,{display:'grid',gap:'10px',minWidth:'320px',maxWidth:'64ch'});
+      Object.assign(wrap.style,{display:'grid',gap:'10px',minWidth:'320px',maxWidth:'64ch',padding:'1em'});
       // 1行目：タイトル
       const line1 = document.createElement('div');
       line1.textContent = String(title||'');
@@ -3251,25 +3476,28 @@
         color:'#006600',
         letterSpacing:'1em',
         textAlign:'center',
-        margin:'0.5em'
+        margin:'0.5em auto 0 auto'
       });
       // 2行目以降：メッセージ（3行構成に分解して余白指定）
       const msg = String(message||'').trim();
       const parts = msg.split(/\r?\n/);
       // 既定のテキストスタイル
-      const baseTextStyle = { whiteSpace:'pre-wrap', wordBreak:'break-word', lineHeight:'1.5' };
+      const baseTextStyle = { whiteSpace:'pre-wrap', wordBreak:'break-word', lineHeight:'1.25' };
+      // ★ メッセージ行だけ、wrap(gap:10px)とは別のラッパーに入れて改行間隔を詰める
+      const msgWrap = document.createElement('div');
+      Object.assign(msgWrap.style,{ display:'grid', gap:'0px' });
       // A行（1段目のテキスト）
       const line2a = document.createElement('div');
       line2a.textContent = parts[0] ? parts[0] : '';
-      Object.assign(line2a.style, baseTextStyle, { margin:'0.5em' });
+      Object.assign(line2a.style, baseTextStyle, { margin:'0 auto 0 0' });
       // B行（未入力項目の列挙を中央狭めで）
       const line2b = document.createElement('div');
       line2b.textContent = parts[1] ? parts[1] : '';
-      Object.assign(line2b.style, baseTextStyle, { margin:'0.5em 3em' });
+      Object.assign(line2b.style, baseTextStyle, { margin:'0 auto' });
       // C行（3段目のテキスト。3行目以降があればまとめて出す）
       const line2c = document.createElement('div');
       line2c.textContent = parts.length > 2 ? parts.slice(2).join('\n') : '';
-      Object.assign(line2c.style, baseTextStyle, { margin:'0.5em' });
+      Object.assign(line2c.style, baseTextStyle, { margin:'0 auto 0 0.5em' });
       // 3行目：OKボタン
       const line3 = document.createElement('div');
       const ok = document.createElement('button');
@@ -3848,25 +4076,33 @@
       }catch(_){}
 
       // 2) 本体の saveRulesToStorage() が使えるなら最優先で永続化（= dbe-rules-v1 に保存）
+      //    ★「保存しました」ダイアログは window.saveRulesToStorage のラップで発火するため、
+      //      可能なら window 側を優先して呼ぶ（ローカル参照だけ先に return するとラップが走らないケースがある）
       try{
-        if (typeof saveRulesToStorage === 'function'){
-          const ok = saveRulesToStorage();
-          // 互換のために window 側も同期（他所が参照していても崩れないように）
-          try{ window._rulesData = _rulesData; }catch(_){}
-          try{ window.DBE_RULES  = _rulesData; }catch(_){}
-          if (ok) return true;
+        // 互換のために window 側も同期（他所が参照していても崩れないように）
+        try{ window._rulesData = _rulesData; }catch(_){}
+        try{ window.DBE_RULES  = _rulesData; }catch(_){}
+
+        let fn = null;
+        if (typeof window.saveRulesToStorage === 'function'){
+          fn = window.saveRulesToStorage; // ← ラップ対象なので最優先
+        }else if (typeof saveRulesToStorage === 'function'){
+          // window に無い環境では一応ぶら下げてから呼ぶ（後追いラップ/互換用）
+          try{ window.saveRulesToStorage = saveRulesToStorage; }catch(_){}
+          fn = saveRulesToStorage;
+        }
+
+        if (fn){
+          const ok = fn();
+          // 戻り値が true/false どちらでもない（undefined 等）実装もあるので、
+          // 例外が出ていなければ基本成功扱いにする
+          if (ok === false) {
+            // 明示的に false を返した時だけ失敗扱いで次へ
+          } else {
+            return true;
+          }
         }
       }catch(_){}
-
-      // 3) もし window.saveRulesToStorage が生えている環境ならそれも試す
-      if (typeof window.saveRulesToStorage === 'function'){
-        try{
-          try{ window._rulesData = _rulesData; }catch(_){}
-          try{ window.DBE_RULES  = _rulesData; }catch(_){}
-          window.saveRulesToStorage();
-          return true;
-        }catch(_){}
-      }
 
       // 4) フォールバック：互換キー＋本流キーにも保存（できる限りズレを無くす）
       try{
@@ -6078,14 +6314,21 @@
           document.addEventListener('click', function(ev){
             try{
               if (!ev || !ev.isTrusted) return;
-              const btn = ev.target && ev.target.closest && ev.target.closest('button');
+              const btn = ev.target && ev.target.closest && ev.target.closest('button, input[type="button"], input[type="submit"]');
               if (!btn) return;
-              const txt = (btn.textContent || '').trim();
-              if (txt !== '保存する') return;
-              // ルールウィンドウ内の「保存する」だけを対象
-              const rulesWnd = document.getElementById('dbe-W-Rules');
-              if (!rulesWnd) return;
-              if (!btn.closest || !btn.closest('#dbe-W-Rules')) return;
+              const txt = ((btn.tagName === 'INPUT' ? (btn.value || '') : (btn.textContent || ''))).trim();
+              // 「保存する」/「保存」クリック意図（短時間だけ有効）
+              if (txt !== '保存する' && txt !== '保存') return;
+              if (!btn.closest) return;
+              // 対象領域：
+              // - ルール一覧ウィンドウ（dbe-W-Rules）
+              // - 再編集ウィンドウ（dbe-W-RuleEdit）
+              // - フィルタカード ビルダー/エディター（filtercard-builder/editor）
+              const inRules   = !!btn.closest('#dbe-W-Rules');
+              const inEditWnd = !!btn.closest('#dbe-W-RuleEdit');
+              const inBuilder = !!btn.closest('#filtercard-builder');
+              const inEditor  = !!btn.closest('#filtercard-editor');
+              if (!inRules && !inEditWnd && !inBuilder && !inEditor) return;
 
               window.__DBE_SAVE_DIALOG_INTENT = true;
               // 2秒で自動解除（タブ切替などの別トリガー誤表示防止）
@@ -6115,8 +6358,25 @@
       function tryWrap(){
         let ok = false;
         try{
-          if (typeof window.saveRulesToStorage === 'function' && !window.saveRulesToStorage.__dbeWrapped){
-            const orig = window.saveRulesToStorage;
+          // 重要：window 経由だけでなく、同名の関数宣言バインディング（saveRulesToStorage）もラップする
+          const hasWin = (typeof window.saveRulesToStorage === 'function');
+          const hasLex = (typeof saveRulesToStorage === 'function');
+
+          const winFn = hasWin ? window.saveRulesToStorage : null;
+          const lexFn = hasLex ? saveRulesToStorage : null;
+
+          const alreadyWrapped = (fn)=> !!(fn && fn.__dbeWrapped);
+
+          // ラップ対象を決定（どちらかが未ラップならラップする）
+          let targetOrig = null;
+          if (hasLex && !alreadyWrapped(lexFn)){
+            targetOrig = lexFn;
+          }else if (hasWin && !alreadyWrapped(winFn)){
+            targetOrig = winFn;
+          }
+
+          if (targetOrig){
+            const orig = targetOrig;
             const wrappedFn = function(){
               try{
                 const ret = orig.apply(this, arguments);
@@ -6128,10 +6388,17 @@
               }
             };
             wrappedFn.__dbeWrapped = true;
-            window.saveRulesToStorage = wrappedFn;
+
+            // 両方に反映（存在する側だけ）
+            try{ if (hasWin) window.saveRulesToStorage = wrappedFn; }catch(_){}
+            try{ if (hasLex) saveRulesToStorage = wrappedFn; }catch(_){}
+
             ok = true;
-          }else if (typeof window.saveRulesToStorage === 'function' && window.saveRulesToStorage.__dbeWrapped){
-            ok = true; // 既にラップ済み
+          }else{
+            // 両方とも存在し、かつラップ済みならOK扱い
+            if ((hasWin && alreadyWrapped(winFn)) || (hasLex && alreadyWrapped(lexFn))){
+              ok = true;
+            }
           }
         }catch(_){}
         return ok;
@@ -8740,6 +9007,78 @@
     return row && row.cells && row.cells[0] || null;
   }
 
+  // --- 名称セルから「表示用のアイテム名」だけを抽出（装備ダイアログ用） ---
+  // 例）<span style="font-weight:600;">金ネックレス</span> の「金ネックレス」だけを拾う
+  function pickPrimaryItemNameFromNameTd(nameTd){
+    try{
+      if (!nameTd) return '';
+      // 1) 太字（font-weight:600 付近）の span を優先
+      const spans = Array.from(nameTd.querySelectorAll('span'));
+      for (const sp of spans){
+        // バッジ類は除外
+        if (sp.closest('.dbe-name-badges')) continue;
+        const styleText = String(sp.getAttribute('style')||'').replace(/\s+/g,'').toLowerCase();
+        const fw = String(sp.style && sp.style.fontWeight || '').toLowerCase();
+        if (styleText.includes('font-weight:600') || styleText.includes('font-weight:700') || fw === '600' || fw === '700' || fw === 'bold'){
+          const t = String(sp.textContent||'').trim();
+          if (t) return t;
+        }
+      }
+      // 2) 太字が取れない場合は、最初の span（バッジ以外）を採用
+      for (const sp of spans){
+        if (sp.closest('.dbe-name-badges')) continue;
+        const t = String(sp.textContent||'').trim();
+        if (t) return t;
+      }
+      // 3) 最終フォールバック：セルのテキスト（正規化）
+      return normalizeItemName(nameTd.textContent || '');
+    }catch(_){
+      try{ return normalizeItemName(nameTd ? nameTd.textContent : ''); }catch(_e){ return ''; }
+    }
+  }
+
+  // --- 名称セルからレアリティ（UR/SSR/SR/R/N）を抽出（武器・防具の装備ダイアログ用） ---
+  // 例）「【武器】[R]」「【防具】 [SR]」などの textContent から [R] / [SR] を拾う
+  function pickRarityFromNameTd(nameTd){
+    try{
+      const raw = String(nameTd ? nameTd.textContent : '');
+      const m = raw.match(/\[(UR|SSR|SR|R|N)\]/);
+      return m ? m[1] : '';
+    }catch(_){
+      return '';
+    }
+  }
+
+  // --- 名称セルから「表示用のアイテム名」だけを抽出（装備ダイアログ用） ---
+  // 例）<span style="font-weight:600;">金ネックレス</span> の「金ネックレス」だけを拾う
+  function pickPrimaryItemNameFromNameTd(nameTd){
+    try{
+      if (!nameTd) return '';
+      // 1) 太字（font-weight:600 付近）の span を優先
+      const spans = Array.from(nameTd.querySelectorAll('span'));
+      for (const sp of spans){
+        // バッジ類は除外
+        if (sp.closest('.dbe-name-badges')) continue;
+        const styleText = String(sp.getAttribute('style')||'').replace(/\s+/g,'').toLowerCase();
+        const fw = String(sp.style && sp.style.fontWeight || '').toLowerCase();
+        if (styleText.includes('font-weight:600') || styleText.includes('font-weight:700') || fw === '600' || fw === '700' || fw === 'bold'){
+          const t = String(sp.textContent||'').trim();
+          if (t) return t;
+        }
+      }
+      // 2) 太字が取れない場合は、最初の span（バッジ以外）を採用
+      for (const sp of spans){
+        if (sp.closest('.dbe-name-badges')) continue;
+        const t = String(sp.textContent||'').trim();
+        if (t) return t;
+      }
+      // 3) 最終フォールバック：セルのテキスト（正規化）
+      return normalizeItemName(nameTd.textContent || '');
+    }catch(_){
+      try{ return normalizeItemName(nameTd ? nameTd.textContent : ''); }catch(_e){ return ''; }
+    }
+  }
+
   function isUnknownElemCell(td){
     if (!td) return false;
     const raw = (td.textContent||'').trim();
@@ -9732,6 +10071,75 @@
           return;
         } finally {
           hideOverlay();
+        }
+      });
+    });
+  }
+
+  // --- 装備（/equip/）クリック：リロード抑止＋OKダイアログ ---
+  function initEquip(){
+    tableIds.forEach(id=>{
+      const table = document.getElementById(id);
+      if (!table) return;
+
+      // ★二重配線防止（patchBagFromDoc 後に再実行されるため）
+      try{
+        if (table.dataset && table.dataset.dbeEquipInit === '1') return;
+        if (table.dataset) table.dataset.dbeEquipInit = '1';
+      }catch(_){}
+
+      table.addEventListener('click', async e=>{
+        const a = e.target.closest('a[href*="/equip/"]');
+        if (!a) return;
+        const href = String(a.getAttribute('href') || a.href || '');
+        const m = href.match(/\/equip\/(\d+)/);
+        if (!m) return;
+
+        // ここに来たら「装備」リンク扱い：通常遷移（リロード）を抑止
+        e.preventDefault();
+        try{ e.stopPropagation(); }catch(_){}
+
+        const itemId = m[1];
+        const tr = a.closest('tr');
+
+        // 同一行の名称列からアイテム名（＋武器/防具のみレアリティ）を取得
+        let itemName = '';
+        try{
+          const nameTd = getNameCell(tr);
+          const baseName = pickPrimaryItemNameFromNameTd(nameTd);
+          // weaponTable / armorTable のみレアリティを付与
+          if (id === 'weaponTable' || id === 'armorTable'){
+            const rar = pickRarityFromNameTd(nameTd);
+            if (rar){
+              itemName = `【${rar}】${baseName || ''}`.trim();
+            } else {
+              itemName = baseName || '';
+            }
+          } else {
+            itemName = baseName || '';
+          }
+        }catch(_){
+          itemName = '';
+        }
+
+        // 装備実行（サーバーに /equip/{id} を叩く）
+        try{
+          await fetch(href, { credentials:'include', redirect:'follow' });
+        }catch(err){
+          console.error('[DBE] equip failed:', err);
+          try{
+            dbeShowAlertDialog(`装備に失敗しました。\nID：${itemId}`);
+          }catch(_e){
+            alert(`装備に失敗しました。\nID：${itemId}`);
+          }
+          return;
+        }
+
+        // OKダイアログ表示
+        try{
+          dbeShowOkDialog('装備', `${itemName || ''}\nID：${itemId}\nを装備しました。`.trim());
+        }catch(_e){
+          alert(`${itemName || ''}\nID：${itemId}\nを装備しました。`.trim());
         }
       });
     });
