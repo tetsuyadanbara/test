@@ -2524,7 +2524,7 @@
       const now = new Date(new Date().toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo' }));
       const hour = now.getHours();
       const minute = now.getMinutes();
-      return (hour > 2 && hour < 8) || (hour === 4 && minute >= 30) || (hour === 8 && minute <= 30);
+      return (hour >= 2 && hour < 8) || (hour === 8 && minute <= 30);
       // 以下指定例その1（変える時は上の return hour >= 4 && hour <= 8; を書き換え、24:00をまたぐ指定はその2で）
       // 4:00～8:00
       // return hour >= 4 && hour <= 8;
