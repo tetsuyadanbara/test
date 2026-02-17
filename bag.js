@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Donguri Bag Enhancer
 // @namespace    https://donguri.5ch.net/
-// @version      8.17.2.3
+// @version      8.18.5.2
 // @description  5ちゃんねる「どんぐりシステム」の「アイテムバッグ」ページ機能改良スクリプト。
 // @author       福呼び草
 // @assistant    ChatGPT (OpenAI)
@@ -25,7 +25,7 @@
   // ============================================================
   // スクリプト自身のバージョン（About 表示用）
   // ============================================================
-  const DBE_VERSION    = '8.17.2.3';
+  const DBE_VERSION    = '8.18.5.2';
 
   // ============================================================
   // 多重起動ガード（同一ページで DBE が複数注入される事故を防ぐ）
@@ -1037,6 +1037,110 @@
         font-size: 0.95em;
         font-weight: 400;
         padding: 1px 8px;              /* 要件：padding 1px 8px */
+      }
+      /* 武器名／防具名を定義済みリストから設定するボタン */
+      .fc-preset-btn{
+        font-size: 0.9em;
+        padding: 3px 8px;
+        margin: 0 0 4px 0;
+        justify-self: start;     /* 右ペインの左寄せ（境界側） */
+        align-self: start;
+        white-space: nowrap;
+      }
+      /* Name registry picker window */
+      .dbe-namepicker{
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        padding: 8px 10px 10px 10px;
+        min-width: min(520px, 92vw);
+      }
+      .dbe-namepicker-head{
+        display:flex;
+        align-items:flex-end;
+        justify-content:space-between;
+        gap: 10px;
+        padding-right: 6px; /* ×ボタン余白（sticky）に少し余裕 */
+      }
+      .dbe-namepicker-title{
+        font-weight: 700;
+        font-size: 1.05em;
+      }
+      .dbe-namepicker-ops{
+        display:flex;
+        align-items:center;
+        gap: 8px;
+      }
+      .dbe-namepicker-list{
+        border: 1px solid #CCC;
+        border-radius: 10px;
+        padding: 8px 10px;
+        max-height: min(60vh, 520px);
+        overflow: auto;
+        background: #FFF;
+      }
+      .dbe-namepicker-item{
+        display:flex;
+        align-items:center;
+        gap: 8px;
+        padding: 2px 0;
+        user-select:none;
+      }
+      .dbe-namepicker-item input{
+        flex: 0 0 auto;
+      }
+      .dbe-namepicker-foot{
+        display:flex;
+        justify-content:center;
+        padding-top: 2px;
+      }
+      .dbe-namepicker-foot button{
+        font-size: 0.95em;
+        padding: 4px 12px;
+      }
+      /* Name registry picker window: 未定義リスト */
+      .dbe-namepicker-undefTitle{
+        font-weight: 700;
+        font-size: 1.02em;
+        margin: 2px 0 0 2px;
+      }
+      .dbe-namepicker-undefList{
+        border: 1px solid #CCC;
+        border-radius: 10px;
+        padding: 8px 10px;
+        max-height: min(28vh, 220px);
+        overflow: auto;
+        background: #FFF;
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+      }
+      .dbe-namepicker-undefRow{
+        display:flex;
+        align-items:center;
+        gap: 8px;
+      }
+      .dbe-namepicker-undefInput{
+        width: 100%;
+        font-size: 0.95em;
+        padding: 2px 8px;
+        box-sizing: border-box;
+      }
+      .dbe-namepicker-undefDel{
+        flex: 0 0 auto;
+        font-size: 1.05em;
+        line-height: 1em;
+        padding: 2px 10px;
+        border-radius: 8px;
+      }
+      .dbe-namepicker-undefAdd{
+        align-self: stretch;
+        width: 100%;
+        box-sizing: border-box;
+        font-size: 1.05em;
+        line-height: 1em;
+        padding: 2px 10px;
+        border-radius: 8px;
       }
       /* パラメータ（名称／SPD／WT.／マリモ）だけ 0.9em に */
       .fc-param-text{
@@ -3246,6 +3350,279 @@
     if (Array.isArray(nodes)) nodes.forEach(add); else add(nodes);
     wnd.style.display = 'block';
     dbeBringToFront(wnd);
+  }
+
+  // ============================================================
+  //  武器名／防具名：定義済みリストから選択してテキストボックスへ転記
+  //   - kind: 'wep' / 'amr'
+  //   - nameInput: 右ペインのテキストボックス（textarea）
+  //   - ckAll: 「すべて」チェック（ONならOFFへ戻してから転記）
+  //  ※ウィンドウIDは役割が推測できる名称に固定
+  // ============================================================
+  function dbeOpenNameRegistryPicker(kind, nameInput, ckAll){
+    const wndID = (kind==='amr') ? 'dbe-W-ArmorNameRegistry' : 'dbe-W-WeaponNameRegistry';
+    const reg   = (kind==='amr') ? armorRegistry : weaponRegistry;
+    const title = (kind==='amr') ? '防具名（定義済みリスト）' : '武器名（定義済みリスト）';
+
+    // 既存テキストボックス内容を解析してチェック状態へ反映
+    // - 区切りは「;」「；」を主とし、改行/カンマ/読点も許容
+    // - 完全一致（trim は許容）で照合
+    const presetAll = !!(ckAll && ckAll.checked);
+
+    // raw → parts（順序維持）をまず作り、定義済み／未定義に分配
+    const parsed = (()=> {
+      try{
+        if (presetAll) return { parts:[], presetSet:null, undefParts:[] };
+        if (!nameInput) return { parts:[], presetSet:null, undefParts:[] };
+        const raw = String(nameInput.value || '');
+        if (!raw.trim()) return { parts:[], presetSet:null, undefParts:[] };
+        const parts = raw
+          .split(/[;；,，、\n\r]+/g)
+          .map(s=>String(s).trim())
+          .filter(Boolean);
+        if (!parts.length) return { parts:[], presetSet:null, undefParts:[] };
+
+        // reg(Map) に存在するかどうかで振り分け（順序は入力順のまま）
+        const preset = [];
+        const undef  = [];
+        parts.forEach((nm)=>{
+          try{
+            if (reg && typeof reg.has === 'function' && reg.has(nm)){
+              preset.push(nm);
+            } else {
+              undef.push(nm);
+            }
+          }catch(_){
+            undef.push(nm);
+          }
+        });
+
+        return { parts, presetSet: new Set(preset), undefParts: undef };
+      }catch(_){
+        return { parts:[], presetSet:null, undefParts:[] };
+      }
+    })();
+    const presetSet  = parsed.presetSet;
+    const undefParts = parsed.undefParts || [];
+
+    const root = document.createElement('div');
+    root.className = 'dbe-namepicker';
+
+    const head = document.createElement('div');
+    head.className = 'dbe-namepicker-head';
+    const h = document.createElement('div');
+    h.className = 'dbe-namepicker-title';
+    h.textContent = title;
+
+    const opsTop = document.createElement('div');
+    opsTop.className = 'dbe-namepicker-ops';
+    const btnAll = document.createElement('button'); btnAll.type='button'; btnAll.textContent='すべて選択';
+    const btnClr = document.createElement('button'); btnClr.type='button'; btnClr.textContent='すべて解除';
+    opsTop.append(btnAll, btnClr);
+
+    const list = document.createElement('div');
+    list.className = 'dbe-namepicker-list';
+
+    // 1件ずつチェックボックス化
+    const items = [];
+    try{
+      reg.forEach((_v, key)=>{ items.push(String(key)); });
+    }catch(_){}
+    // 並び順は weaponRegistry / armorRegistry の「記述順序」を踏襲する
+    // （Map の挿入順＝定義順を維持するため、ここでの sort は行わない）
+    // （文字列順で整列させる場合は下の一行のコメントアウトを解除する）
+    // items.sort((a,b)=>a.localeCompare(b,'ja'));
+    const boxes = [];
+    items.forEach((nm, i)=>{
+      const row = document.createElement('label');
+      row.className = 'dbe-namepicker-item';
+      const c = document.createElement('input'); c.type='checkbox';
+      // 既存入力からチェック状態を復元
+      try{
+        if (presetAll){
+          c.checked = true;
+        } else if (presetSet && presetSet.has(nm)){
+          c.checked = true;
+        }
+      }catch(_){}
+      const sp = document.createElement('span'); sp.textContent = nm;
+      row.append(c, sp);
+      list.appendChild(row);
+      boxes.push({nm, c});
+    });
+
+    btnAll.addEventListener('click', ()=>{
+      boxes.forEach(({c})=>{ c.checked = true; });
+    });
+    btnClr.addEventListener('click', ()=>{
+      boxes.forEach(({c})=>{ c.checked = false; });
+    });
+
+    // ──────────────────────────────────────────────────────────
+    // 未定義リスト（定義済みリスト風の UI：スクロール + 複数テキストボックス + 追加ボタン）
+    // ──────────────────────────────────────────────────────────
+    const undefTitle = document.createElement('div');
+    undefTitle.className = 'dbe-namepicker-undefTitle';
+    undefTitle.textContent = '未定義リスト';
+
+    const undefList = document.createElement('div');
+    undefList.className = 'dbe-namepicker-undefList';
+
+    const addUndefRow = (value='')=>{
+      const row = document.createElement('div');
+      row.className = 'dbe-namepicker-undefRow';
+      const ip = document.createElement('input');
+      ip.type = 'text';
+      ip.className = 'dbe-namepicker-undefInput';
+      ip.value = String(value || '');
+      ip.placeholder = '（未定義の装備名）';
+      const btnDel = document.createElement('button');
+      btnDel.type = 'button';
+      btnDel.className = 'dbe-namepicker-undefDel';
+      btnDel.textContent = '×';
+      btnDel.title = 'この行を削除';
+      btnDel.addEventListener('click', ()=>{
+        try{
+          row.remove();
+          // 仕様：最低 2 つは常設（削除で不足したら補充）
+          try{ ensureAtLeast(2); }catch(_){}
+        }catch(_){}
+      });
+      row.append(ip, btnDel);
+      undefList.appendChild(row);
+      return ip;
+    };
+
+    const ensureAtLeast = (n)=>{
+      const cur = undefList.querySelectorAll('input.dbe-namepicker-undefInput').length;
+      for (let i=cur; i<n; i++){
+        addUndefRow('');
+      }
+    };
+
+    // 初期：未定義が見つかったらその数だけ生成（1アイテム=1ボックス）
+    try{
+      if (Array.isArray(undefParts) && undefParts.length){
+        undefParts.forEach(v=> addUndefRow(v));
+      }
+    }catch(_){}
+    // 仕様：最低 2 つは常設
+    ensureAtLeast(2);
+
+    const btnAddUndef = document.createElement('button');
+    btnAddUndef.type = 'button';
+    btnAddUndef.className = 'dbe-namepicker-undefAdd';
+    btnAddUndef.textContent = '＋';
+    btnAddUndef.title = 'テキストボックスを追加';
+    btnAddUndef.addEventListener('click', ()=>{
+      try{
+        const ip = addUndefRow('');
+        try{ ip.scrollIntoView({block:'nearest'}); }catch(_){}
+        try{ ip.focus(); }catch(_){}
+      }catch(_){}
+    });
+    // 追加ボタンも「未定義リスト」フィールド内に設置する
+    try{ undefList.appendChild(btnAddUndef); }catch(_){}
+
+    const getUndefValues = ()=>{
+      try{
+        const ips = Array.from(undefList.querySelectorAll('input.dbe-namepicker-undefInput'));
+        const vals = ips
+          .map(ip=>String(ip.value||'').trim())
+          .filter(Boolean);
+        // 重複除去（順序維持）
+        const seen = new Set();
+        const out = [];
+        vals.forEach(v=>{
+          if (!seen.has(v)){
+            seen.add(v);
+            out.push(v);
+          }
+        });
+        return out;
+      }catch(_){
+        return [];
+      }
+    };
+
+    const foot = document.createElement('div');
+    foot.className = 'dbe-namepicker-foot';
+    const btnPut = document.createElement('button');
+    btnPut.type='button';
+    btnPut.textContent='テキストボックスに転記';
+    foot.append(btnPut);
+
+    btnPut.addEventListener('click', ()=>{
+      try{
+        const picked = boxes.filter(({c})=>c.checked).map(({nm})=>nm);
+        const undef = getUndefValues();
+
+        // 定義済み → 未定義 の順に連結（重複は除去）
+        const seen = new Set();
+        const merged = [];
+        picked.forEach(v=>{
+          if (!seen.has(v)){
+            seen.add(v);
+            merged.push(v);
+          }
+        });
+        undef.forEach(v=>{
+          if (!seen.has(v)){
+            seen.add(v);
+            merged.push(v);
+          }
+        });
+
+        // 区切りは「；」で統一（半角/全角どちらでもパーサ側で正規化される想定）
+        const text = merged.join('；');
+
+        if (ckAll && ckAll.checked){
+          ckAll.checked = false;
+          try{ ckAll.dispatchEvent(new Event('change', {bubbles:true})); }catch(_){}
+        }
+        if (nameInput){
+          nameInput.value = text;
+          try{ nameInput.dispatchEvent(new Event('input', {bubbles:true})); }catch(_){}
+          try{ nameInput.dispatchEvent(new Event('change', {bubbles:true})); }catch(_){}
+          // 追加機能：「転記」押下後にレジストリウィンドウを閉じ、元のビルダー／エディターを前面化してフォーカスを戻す
+          try{
+            const pickerWnd = document.getElementById(wndID);
+            if (pickerWnd){
+              pickerWnd.style.display = 'none';
+              if (pickerWnd.dataset.dbeFronted === '1') delete pickerWnd.dataset.dbeFronted;
+            }
+          }catch(_){}
+          try{
+            // 元の UI（filtercard-builder / dbe-W-RuleEdit）を特定し、可能ならその外側の dbe-W-* を前面化
+            let backBase = null;
+            try{
+              const inner = nameInput.closest('#filtercard-builder, #dbe-W-RuleEdit');
+              backBase = inner ? (inner.closest('[id^="dbe-W-"]') || inner) : null;
+            }catch(_e){ backBase = null; }
+            if (backBase){
+              try{
+                // dbe-W-* なら通常の前面化
+                if (backBase.id && backBase.id.startsWith('dbe-W-')){
+                  dbeBringToFront(backBase);
+                } else {
+                  // 念のため（dialog等）…ただし多くの場合は上の分岐で dbe-W-* が取れる
+                  dbeBringDialogToFront(backBase);
+                }
+              }catch(_){}
+            }
+          }catch(_){}
+          try{ nameInput.focus(); }catch(_){}        }
+      }catch(err){
+        console.warn('[DBE] transfer picked names failed:', err);
+      }
+    });
+
+    head.append(h, opsTop);
+    // 要望：定義済みリスト と 転記ボタン の間に未定義リストを設置
+    root.append(head, list, undefTitle, undefList, foot);
+
+    // 表示（常に前面）
+    openWindowWithContent(wndID, root);
   }
 
   // ──────────────────────────────────────────────────────────
@@ -7525,10 +7902,25 @@
         setLeftAll2Lines(leftCol, leftCol.textContent.trim(), allWrap);
         const rightWrap = document.createElement('div');
         rightWrap.style.display='grid';
+        rightWrap.style.rowGap='4px';
+        // ★ 定義済みリストから設定（右ペイン上部・左寄せ）
+        const btnPresetName = document.createElement('button');
+        btnPresetName.type='button';
+        btnPresetName.className='fc-preset-btn';
+        btnPresetName.textContent='定義済みリストから設定する';
+        btnPresetName.addEventListener('click', ()=>{
+          try{
+            dbeOpenNameRegistryPicker(kind, nameInput, ckAll);
+          }catch(err){
+            console.warn('[DBE] open name registry picker failed:', err);
+            try{ alert('定義済みリストの表示に失敗しました。'); }catch(_){}
+          }
+        });
         nameInput = document.createElement('textarea');
         nameInput.className='fc-textarea';
         nameInput.placeholder='完全一致で指定。セミコロン「；」で区切り。（半角も全角もOK）';
-        rightWrap.append(nameInput);
+        // 右ペイン：上=ボタン／下=テキストボックス
+        rightWrap.append(btnPresetName, nameInput);
         const sync = ()=>{ nameState.all = ckAll.checked; setDimmed(rightWrap, ckAll.checked); };
         ckAll.addEventListener('change', sync);
         sync();
