@@ -1533,7 +1533,7 @@
     p.style.height = '28px';
 
     const equipSwitchButton = button.cloneNode();
-    equipSwitchButton.textContent = '?武器';
+    equipSwitchButton.textContent = '▶武器';
     equipSwitchButton.style.width = '4em';
     equipSwitchButton.style.height = '42px';
     equipSwitchButton.style.fontSize = '';
@@ -1544,17 +1544,17 @@
         weaponTable.style.display = 'none';
         armorTable.style.display = '';
         necklaceTable.style.display = 'none';
-        event.target.textContent = '?防具';
+        event.target.textContent = '▶防具';
       } else if (!armorTable.style.display) {
         weaponTable.style.display = 'none';
         armorTable.style.display = 'none';
         necklaceTable.style.display = '';
-        event.target.textContent = '?首';
+        event.target.textContent = '▶首';
       } else if (!necklaceTable.style.display) {
         weaponTable.style.display = '';
         armorTable.style.display = 'none';
         necklaceTable.style.display = 'none';
-        event.target.textContent = '?武器';
+        event.target.textContent = '▶武器';
       }
     });
 
@@ -1682,7 +1682,7 @@
         }
       }
 
-      equipSwitchButton.textContent = '?武器';
+      equipSwitchButton.textContent = '▶武器';
       weaponTable.style.display = '';
       armorTable.style.display = 'none';
       necklaceTable.style.display = 'none';
@@ -2105,7 +2105,7 @@
       })
     })
     const editEndButton = button.cloneNode();
-    editEndButton.textContent = '?';
+    editEndButton.textContent = '✓';
     editEndButton.style.display = 'none';
     editEndButton.addEventListener('click', ()=>{
       editButton.style.display = '';
@@ -2524,7 +2524,7 @@
     const headers = { 'Content-Type': 'application/x-www-form-urlencoded' };
     let teamColor = settings.teamColor;
     let teamName = settings.teamName;
-
+    let forceOnceMore = false;
 
     function logMessage(region, message, next) {
       const date = new Date();
@@ -2657,10 +2657,11 @@
       let regions = await getRegions();
       const excludeSet = new Set();
       let loop = 0;
-      let forceOnceMore = false;
 
       let cellType;
-      if (regions.nonAdjacent.length > 0) {
+      if (forceOnceMore && regions.onceMore.length > 0) {
+        cellType = 'onceMore';
+      } else if (regions.nonAdjacent.length > 0) {
         cellType = 'nonAdjacent';
       } else if (regions.teamAdjacent.length > 0) {
         cellType = 'teamAdjacent';
@@ -2710,21 +2711,9 @@
                 i++;
               }
             } else if (text.startsWith('アリーナチャレンジ開始')||text.startsWith('リーダーになった')) {
-              if (forceOnceMore) {
+              if (forceOnceMore && text.startsWith('リーダーになった')) {
                 forceOnceMore = false;
-                regions = await getRegions();
-                  if (regions.nonAdjacent.length > 0) {
-                    cellType = 'nonAdjacent';
-                  } else if (regions.teamAdjacent.length > 0) {
-                    cellType = 'teamAdjacent';
-                  } else if (regions.capitalAdjacent.length > 0) {
-                    cellType = 'capitalAdjacent';
-                  } else {
-                    cellType = 'mapEdge';
-                  }
-                processType = 'reload';
-                i++;
-                continue;
+                cellType = 'teamAdjacent';
               }
               if (loop < 255){
                 loop += 1;
@@ -2739,11 +2728,13 @@
               }
               i++;
             } else if (messageType === 'onemoretime') {
-              sleepTime = 100;
+              sleepTime = 90;
               forceOnceMore = true;
               cellType = 'onceMore';
+              excludeSet.delete(region.join(','));
+              //excludeSet.clear();
+              message = lastLine;
               processType = 'reload';
-              i++;
             } else if (messageType === 'breaktime') {
               success = true;
               message = lastLine;
@@ -2816,15 +2807,15 @@
             if (success) {
               if (location.href.includes('/teambattle?m=rb')) {
                 if (currentProgress < 16) {
-                  nextProgress = 18;
+                  nextProgress = 19;
                 } else if (currentProgress < 33) {
-                  nextProgress = 35;
+                  nextProgress = 36;
                 } else if (currentProgress < 50) {
                   nextProgress = 52;
                 } else if (currentProgress < 66) {
-                  nextProgress = 68;
+                  nextProgress = 69;
                 } else if (currentProgress < 83) {
-                  nextProgress = 85;
+                  nextProgress = 86;
                 } else {
                   nextProgress = 2;
                 }
@@ -2904,15 +2895,15 @@
         if (!success && regions[cellType].length === 0) {
           if (location.href.includes('/teambattle?m=rb')) {
             if (currentProgress < 16) {
-               nextProgress = 18;
+               nextProgress = 19;
               } else if (currentProgress < 33) {
-               nextProgress = 35;
+               nextProgress = 36;
               } else if (currentProgress < 50) {
                nextProgress = 52;
               } else if (currentProgress < 66) {
-               nextProgress = 68;
+               nextProgress = 69;
               } else if (currentProgress < 83) {
-               nextProgress = 85;
+               nextProgress = 86;
               } else {
                nextProgress = 2;
               }
