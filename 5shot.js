@@ -89,7 +89,8 @@
       toolbar.style.right = distance;
     }
   })();
-  header.querySelector('h4').style.display = 'none';
+  const h4 = header.querySelector('h4');
+  if (h4) h4.style.display = 'none';
   header.append(toolbar);
   const progressBarContainer = document.createElement('div');
   const progressBar = document.createElement('div');
@@ -1552,7 +1553,7 @@
     p.style.height = '28px';
 
     const equipSwitchButton = button.cloneNode();
-    equipSwitchButton.textContent = '▶武器';
+    equipSwitchButton.textContent = '?武器';
     equipSwitchButton.style.width = '4em';
     equipSwitchButton.style.height = '42px';
     equipSwitchButton.style.fontSize = '';
@@ -1563,17 +1564,17 @@
         weaponTable.style.display = 'none';
         armorTable.style.display = '';
         necklaceTable.style.display = 'none';
-        event.target.textContent = '▶防具';
+        event.target.textContent = '?防具';
       } else if (!armorTable.style.display) {
         weaponTable.style.display = 'none';
         armorTable.style.display = 'none';
         necklaceTable.style.display = '';
-        event.target.textContent = '▶首';
+        event.target.textContent = '?首';
       } else if (!necklaceTable.style.display) {
         weaponTable.style.display = '';
         armorTable.style.display = 'none';
         necklaceTable.style.display = 'none';
-        event.target.textContent = '▶武器';
+        event.target.textContent = '?武器';
       }
     });
 
@@ -1701,7 +1702,7 @@
         }
       }
 
-      equipSwitchButton.textContent = '▶武器';
+      equipSwitchButton.textContent = '?武器';
       weaponTable.style.display = '';
       armorTable.style.display = 'none';
       necklaceTable.style.display = 'none';
@@ -1893,8 +1894,8 @@ async function refreshArenaInfo() {
 
     const text = await res.text();
     const doc = new DOMParser().parseFromString(text, 'text/html');
-    const h1 = doc?.querySelector('h1')?.textContent;
-    if (h1 !== 'どんぐりチーム戦い') throw new Error('title.ng info');
+    const headerText = doc?.querySelector('header')?.textContent || '';
+    if (!headerText.includes('どんぐりチーム戦い')) throw new Error('title.ng info');
 
     const currentCells = grid.querySelectorAll('.cell');
     const scriptContent = doc.querySelector('.grid > script')?.textContent || '';
@@ -2012,10 +2013,10 @@ async function fetchSingleArenaInfo(elm) {
     if(!res.ok) throw new Error(res.status + ' res.ng');
     const text = await res.text();
     const doc = new DOMParser().parseFromString(text, 'text/html');
-    const h1 = doc?.querySelector('h1')?.textContent;
-    if(h1 !== 'どんぐりチーム戦い') throw new Error(`title.ng [${row}][${col}][${h1}]`);
+    const headerText = doc?.querySelector('header')?.textContent || '';
+    if(!headerText.includes('どんぐりチーム戦い')) throw new Error(`title.ng [${row}][${col}]`);
     const rank = doc.querySelector('small')?.textContent || '';
-    if(!rank) return Promise.reject(`rank.ng [${row}][${col}][${h1}]`);
+    if(!rank) return Promise.reject(`rank.ng [${row}][${col}]`);
     const leader = doc.querySelector('strong')?.textContent || '';
     const shortenRank = rank.replace('[エリート]','e').replace('[警備員]だけ','警').replace('から','-').replace(/(まで|\[|\]|\||\s)/g,'');
     const teamname = doc.querySelector('table').rows[1]?.cells[2].textContent;
@@ -2117,7 +2118,7 @@ async function fetchSingleArenaInfo(elm) {
       })
     })
     const editEndButton = button.cloneNode();
-    editEndButton.textContent = '✓';
+    editEndButton.textContent = '?';
     editEndButton.style.display = 'none';
     editEndButton.addEventListener('click', ()=>{
       editButton.style.display = '';
@@ -2204,8 +2205,8 @@ async function fetchSingleArenaInfo(elm) {
       if(!res.ok) throw new Error('res.ng');
       const text = await res.text();
       const doc = new DOMParser().parseFromString(text,'text/html');
-      const h1 = doc?.querySelector('h1')?.textContent;
-      if(h1 !== 'どんぐりチーム戦い') return Promise.reject(`title.ng`);
+      const headerText = doc?.querySelector('header')?.textContent || '';
+      if(!headerText.includes('どんぐりチーム戦い')) return Promise.reject(`title.ng`);
       const table = doc.querySelector('table');
       if(!table) throw new Error('table.ng');
       showArenaTable(table);
@@ -3084,8 +3085,8 @@ async function fetchSingleArenaInfo(elm) {
         if(!res.ok) throw new Error(`[${res.status}] /teambattle?r=${row}&c=${col}}`);
         const text = await res.text();
         const doc = new DOMParser().parseFromString(text,'text/html');
-        const h1 = doc?.querySelector('h1')?.textContent;
-        if(h1 !== 'どんぐりチーム戦い') return Promise.reject(`title.ng`);
+        const headerText = doc?.querySelector('header')?.textContent || '';
+        if (!headerText.includes('どんぐりチーム戦い')) throw new Error('title.ng info');
         const table = doc.querySelector('table');
         if(!table) throw new Error('table.ng');
         const equipCond = table.querySelector('td small').textContent;
