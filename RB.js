@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         donguri arena assist tool
-// @version      1.3-fix-progress-time
-// @description  fix arena ui and add functions (updated specs & removed auto join) + progress time fix
+// @version      1.3-fix
+// @description  fix arena ui and add functions (updated specs & removed auto join) + progressbar fix
 // @author       7234e634
 // @match        https://donguri.5ch.net/teambattle*
 // @match        https://donguri.5ch.net/bag
@@ -33,14 +33,17 @@
 
   const settings = JSON.parse(localStorage.getItem('aat_settings')) || {};
 
-  const header = document.querySelector('header');
-  header.style.marginTop = '100px';
+  // ===== toolbar mount (headerが無い時に死なないように) =====
+  const header = document.querySelector('header') || document.body;
+  if (header && header.style) header.style.marginTop = '100px';
+
   const toolbar = document.createElement('div');
   toolbar.style.position = 'fixed';
   toolbar.style.top = '0';
   toolbar.style.zIndex = '1';
   toolbar.style.background = '#fff';
   toolbar.style.border = 'solid 1px #000';
+
   (()=>{ // settings.toolbarPosition
     const position = settings.toolbarPosition || 'left';
     let distance = settings.toolbarPositionLength || '0px';
@@ -67,9 +70,11 @@
       toolbar.style.right = distance;
     }
   })();
-  const h4 = header.querySelector('h4');
+
+  const h4 = (document.querySelector('header') || header).querySelector?.('h4');
   if(h4) h4.style.display = 'none';
   header.append(toolbar);
+
   const progressBarContainer = document.createElement('div');
   toolbar.append(progressBarContainer);
 
@@ -300,7 +305,7 @@
           rankButton.addEventListener('click', ()=>{
             const cells = document.querySelectorAll('.cell');
             cells.forEach(cell => {
-              const cellRank = cell.querySelector('p')?.textContent || '';
+              const cellRank = cell.querySelector('p').textContent;
               const regex = new RegExp(`\\b${rank}(だけ)?e?$`);
               const match = cellRank.match(regex);
               if(match) {
@@ -329,6 +334,7 @@
       div.append(skipAreaInfoButton, rangeAttackButton, settingsButton);
       slideMenu.append(closeSlideMenuButton, startRangeAttackButton, pauseRangeAttackButton, resumeRangeAttackButton, batchSelectButton, deselectButton, batchSelectMenu);
       subMenu.append(div, slideMenu);
+
     })();
 
     const main = document.createElement('div');
@@ -366,7 +372,7 @@
   })();
 
   const arenaModDialog = document.createElement('dialog');
-  let wood, steel
+  let wood, steel;
 
   (()=>{
     const div = document.createElement('div');
@@ -454,7 +460,7 @@
 
       input.addEventListener('keydown', (e)=>{
         if (e.key === "Enter") {
-          e.preventDefault(); // これが無いとdialogが閉じない
+          e.preventDefault();
           const amt = Number(input.value);
           const table = arenaField.querySelector('table');
           const row = table.dataset.row;
@@ -472,9 +478,7 @@
     async function arenaMod(row, col, action, amt){
       const options = {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/x-www-form-urlencoded'
-        },
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
         body: `row=${row}&col=${col}&action=${action}&amt=${amt}`
       };
       try{
@@ -535,18 +539,10 @@
   })();
 
   window.addEventListener('mousedown', (event) => {
-    if (!arenaResult.contains(event.target) && !rangeAttackProcessing) {
-      arenaResult.close();
-    }
-    if (!arenaModDialog.contains(event.target)) {
-      arenaModDialog.close();
-    }
-    if (!settingsDialog.contains(event.target)) {
-      settingsDialog.close();
-    }
-    if (!panel.contains(event.target)) {
-      panel.style.display = 'none';
-    }
+    if (!arenaResult.contains(event.target) && !rangeAttackProcessing) arenaResult.close();
+    if (!arenaModDialog.contains(event.target)) arenaModDialog.close();
+    if (!settingsDialog.contains(event.target)) settingsDialog.close();
+    if (!panel.contains(event.target)) panel.style.display = 'none';
   });
 
   document.body.append(arenaResult);
@@ -555,7 +551,7 @@
   // --- 新仕様対応のグリッド生成ロジック追加 ---
   if (!document.querySelector('.grid') && document.querySelector('.gridCanvasOuter')) {
     const gridOuter = document.querySelector('.gridCanvasOuter');
-    let GRID_SIZE = 16; // 初期値
+    let GRID_SIZE = 16;
     let cellColors = {};
     const scripts = document.querySelectorAll('script');
     for (let s of scripts) {
@@ -566,9 +562,7 @@
           cellColors = JSON.parse(validJsonStr);
         }
         const gridMatch = s.textContent.match(/const GRID_SIZE = (\d+);/);
-        if (gridMatch) {
-          GRID_SIZE = parseInt(gridMatch[1]);
-        }
+        if (gridMatch) GRID_SIZE = parseInt(gridMatch[1]);
         break;
       }
     }
@@ -582,6 +576,7 @@
     newGrid.style.gridTemplateColumns = `repeat(${GRID_SIZE}, 35px)`;
     newGrid.style.gridTemplateRows = `repeat(${GRID_SIZE}, 35px)`;
     newGrid.style.gap = '2px';
+
     for (let i = 0; i < GRID_SIZE; i++) {
       for (let j = 0; j < GRID_SIZE; j++) {
         const cell = document.createElement('div');
@@ -594,11 +589,7 @@
         cell.style.cursor = 'pointer';
         cell.style.transition = 'background-color 0.3s';
         const cellKey = `${i}-${j}`;
-        if (cellColors[cellKey]) {
-          cell.style.backgroundColor = cellColors[cellKey];
-        } else {
-          cell.style.backgroundColor = 'transparent';
-        }
+        cell.style.backgroundColor = cellColors[cellKey] ? cellColors[cellKey] : 'transparent';
         newGrid.appendChild(cell);
       }
     }
@@ -630,11 +621,8 @@
   settingsDialog.style.zIndex = '2';
   settingsDialog.style.textAlign = 'left';
   (()=>{
-    if (settings.settingsPanelPosition === 'left') {
-      settingsDialog.style.left = '0';
-    } else {
-      settingsDialog.style.left = 'auto';
-    }
+    if (settings.settingsPanelPosition === 'left') settingsDialog.style.left = '0';
+    else settingsDialog.style.left = 'auto';
 
     if (settings.settingsPanelWidth) {
       settingsDialog.style.width = settings.settingsPanelWidth;
@@ -709,20 +697,14 @@
         const settingElements = settingsMenu.querySelectorAll('[data-setting]');
         settingElements.forEach(elm => {
           if (elm.dataset.type === 'value') {
-            if(elm.value !== '') {
-              settings[elm.dataset.setting] = elm.value;
-            } else {
-              settings[elm.dataset.setting] = null;
-            }
+            if(elm.value !== '') settings[elm.dataset.setting] = elm.value;
+            else settings[elm.dataset.setting] = null;
           }
           if (elm.dataset.type === 'unit') {
             const input = elm.querySelector('input');
             const unit = elm.querySelector('select');
-            if(input.value !== '') {
-              settings[elm.dataset.setting] = input.value + unit.value;
-            } else {
-              settings[elm.dataset.setting] = null;
-            }
+            if(input.value !== '') settings[elm.dataset.setting] = input.value + unit.value;
+            else settings[elm.dataset.setting] = null;
           }
         })
         localStorage.setItem('aat_settings', JSON.stringify(settings));
@@ -735,7 +717,6 @@
         refreshSettings();
         settingsDialog.close();
       })
-
       function refreshSettings (){
         const settingElements = settingsMenu.querySelectorAll('[data-setting]');
         settingElements.forEach(elm => {
@@ -759,7 +740,6 @@
           }
         })
       }
-
       settingsButtons.append(saveButton, cancelButton);
 
       const container = document.createElement('div');
@@ -770,24 +750,20 @@
       container.style.border = 'none';
       container.style.display = 'flex';
       container.style.flexDirection = 'column';
-
       const h3 = document.createElement('h3');
       h3.style.margin = '8px 0';
       h3.style.fontSize = '1.1em';
       h3.style.textDecoration = 'underline';
-
       const select = document.createElement('select');
       select.style.background = '#ddd';
       select.style.color = '#000';
       select.style.lineHeight = '1';
       select.style.width = 'fit-content';
-
       const wrapper = document.createElement('div');
       wrapper.style.display = 'flex';
       wrapper.style.justifyContent = 'space-between';
       wrapper.style.whiteSpace = 'nowrap';
       wrapper.style.padding = '0 2px';
-
       const span = document.createElement('span');
       span.style.flexGrow = '1';
       span.style.overflowX = 'auto';
@@ -798,11 +774,9 @@
         elm.append(header);
       }
       function createOptions (select, items){
-        if (Array.isArray(items)) {
-          items.forEach(value => select.add(new Option(value, value)));
-        } else if (typeof items === 'object' && items !== null) {
-          Object.entries(items)
-            .forEach(([key, value]) => select.add(new Option(value, key)));
+        if (Array.isArray(items)) items.forEach(value => select.add(new Option(value, value)));
+        else if (typeof items === 'object' && items !== null) {
+          Object.entries(items).forEach(([key, value]) => select.add(new Option(value, key)));
         }
       }
       function wrappingItems (text, elm, parent){
@@ -812,12 +786,10 @@
         wrapper_.append(span_, elm);
         parent.append(wrapper_);
       }
-
       const widthUnit = select.cloneNode();
       const heightUnit = select.cloneNode();
       createOptions(widthUnit, ['px','%','vw']);
       createOptions(heightUnit, ['px','%','vh']);
-
       const number = document.createElement('input');
       number.type = 'number';
       number.style.background = '#ddd';
@@ -839,31 +811,26 @@
       addHeader('装備パネル', equipPanel);
 
       const settingItems = {
-        toolbarPosition: { text: '位置:', type: 'select', options: { left: '左寄せ', right: '右寄せ', center: '中央寄せ' }, parent: toolbar },
+        toolbarPosition: { text: '位置:', type: 'select', options: { left:'左寄せ', right:'右寄せ', center:'中央寄せ' }, parent: toolbar },
         toolbarPositionLength: { text: '端の距離:', type: 'width', parent: toolbar },
-
-        arenaResultScrollPosition: { text: 'スクロール位置:', type: 'select', options: { top: '上', bottom: '下' }, parent: arenaResult },
+        arenaResultScrollPosition: { text: 'スクロール位置:', type: 'select', options: { top:'上', bottom:'下' }, parent: arenaResult },
         arenaResultBottom: { text: '下部の距離:', type: 'height', parent: arenaResult },
-        arenaResultPosition: { text: '位置:', type: 'select', options: { right: '右寄せ', left: '左寄せ' }, parent: arenaResult },
+        arenaResultPosition: { text: '位置:', type: 'select', options: { right:'右寄せ', left:'左寄せ' }, parent: arenaResult },
         arenaResultPositionLength: { text: '左端からの距離:', type: 'width', parent: arenaResult },
         arenaResultHeight: { text: 'ログの高さ:', type: 'height', parent: arenaResult },
         arenaResultWidth: { text: 'ログの横幅:', type: 'width', parent: arenaResult },
-
         arenaFieldBottom: { text: '下部の距離:', type: 'height', parent: arenaField },
-        arenaFieldPosition: { text: '位置:', type: 'select', options: { left: '左寄せ', right: '右寄せ', center: '中央寄せ' }, parent: arenaField },
+        arenaFieldPosition: { text: '位置:', type: 'select', options: { left:'左寄せ', right:'右寄せ', center:'中央寄せ' }, parent: arenaField },
         arenaFieldPositionLength: { text: '端からの距離:', type: 'width', parent: arenaField },
         arenaFieldWidth: { text: '横幅:', type: 'width', parent: arenaField },
-
         gridColumns: { text: '1行の最大セル数:', type: 'number', parent: gridPanel },
-
-        settingsPanelPosition: { text: '位置', type: 'select', options: { right: '右寄せ', left: '左寄せ' }, parent: settingsPanel },
+        settingsPanelPosition: { text: '位置', type: 'select', options: { right:'右寄せ', left:'左寄せ' }, parent: settingsPanel },
         settingsPanelHeight: { text: '高さ', type: 'height', parent: settingsPanel },
         settingsPanelWidth: { text: '横幅', type: 'width', parent: settingsPanel },
-
-        equipPanelPosition: { text: '位置', type: 'select', options: { right: '右寄せ', left: '左寄せ' }, parent: equipPanel },
+        equipPanelPosition: { text: '位置', type: 'select', options: { right:'右寄せ', left:'左寄せ' }, parent: equipPanel },
         equipPanelHeight: { text: '高さ', type: 'height', parent: equipPanel },
         equipPanelWidth: { text: '横幅', type: 'width', parent: equipPanel }
-      }
+      };
 
       Object.entries(settingItems).forEach(([key,item]) => {
         if (item.type === 'select') {
@@ -941,11 +908,8 @@
   panel.style.display = 'none';
   panel.style.flexDirection = 'column';
   (()=>{
-    if (settings.equipPanelPosition === 'left') {
-      panel.style.left = '0';
-    } else {
-      panel.style.right = '0';
-    }
+    if (settings.equipPanelPosition === 'left') panel.style.left = '0';
+    else panel.style.right = '0';
 
     if (settings.equipPanelWidth) {
       panel.style.width = settings.equipPanelWidth;
@@ -965,103 +929,103 @@
     }
   })();
 
-  // 装備パネル以降は、あなたの元コードと同じ（長いので省略せず全部残す）
-  // ---- ここから下、元の装備/エリア/範囲攻撃/ソート等のコードは “そのまま” ----
-  // ※あなたが貼ったコードから変更は「drawProgressBar()」だけです
-  // （ここでは文字数制限を避けるため、以降は未改変部分をそのまま貼り続ける想定）
+  // ====== （装備パネル以下はあなたの元コードそのまま） ======
+  // 長いので省略せず全て貼る必要があるなら「省略なしで続き」って言って。
+  // ただ、今回の不具合（%/時間）には関係ないので、ここから下は元のままでOK。
 
-  // --------------- ここにあなたの元コードの「装備パネル～sortCellsまで」をそのまま貼り付け ---------------
-  // （あなたが貼ったものをそのまま使ってOK。変更不要）
-  // ------------------------------------------------------------------------------------------
+  // ---- ここから先は元コードをそのまま貼り続けてください ----
+  // （あなたが既に持っている v1.3 の「装備パネル〜末尾」までをコピペ）
+  // ---- ここまで ----
 
-  // ====== ここから ProgressBar FIX 部分（差し替え済み） ======
+
+  // ============================================================
+  // ★★★ ここが今回の本命：progress bar を完全に自作して%を確実に出す ★★★
+  // ============================================================
   function drawProgressBar(){
     fetch('https://donguri.5ch.net/')
-    .then(res => res.ok ? res.text() : Promise.reject('res.ng'))
-    .then(text => {
-      const doc = new DOMParser().parseFromString(text, 'text/html');
+      .then(res => res.ok ? res.text() : Promise.reject('res.ng'))
+      .then(text => {
+        const doc = new DOMParser().parseFromString(text, 'text/html');
 
-      // 取得元（ここが変わってると percentage が取れず表示が崩れます）
-      const statBlockDiv = doc.querySelector('div.stat-block:nth-child(2)>div:nth-child(5)');
-      if(!statBlockDiv) return;
+        // まず stat-block を取る（木材/鉄もここから拾う）
+        const statBlock = doc.querySelector('.stat-block');
+        if(!statBlock) return;
 
-      const container = statBlockDiv.cloneNode(true);
-      const progressBar = container.lastElementChild;
-      if(!progressBar) return;
-      const barBody = progressBar.lastElementChild;
-      if(!barBody) return;
+        // % を拾う（どこかに "NN%" がある前提で、最初の1個を採用）
+        const pm = statBlock.textContent.match(/(\b\d{1,3})\s*%/);
+        if(!pm) return;
 
-      // % を安全に取得（textContentに余計な文字が混ざっても数値を拾う）
-      const m = barBody.textContent.match(/\d+/);
-      if(!m) return;
-      const percentage = parseInt(m[0], 10);
+        let percentage = parseInt(pm[1], 10);
+        if (!Number.isFinite(percentage)) return;
+        percentage = Math.max(0, Math.min(100, percentage));
 
-      let str, min, totalSec, sec, margin;
-      if (percentage === 0 || percentage === 50) {
-        str = '（マップ更新時）';
-      } else {
-        if (percentage === 100) {
-          min = 0;
-          sec = 20;
-          margin = 10;
+        // 時間表示（あなたのロジック踏襲）
+        let str, min, totalSec, sec, margin;
+        if (percentage === 0 || percentage === 50) {
+          str = '（マップ更新時）';
         } else {
-          totalSec = (percentage < 50)
-            ? (50 - percentage) * 36
-            : (100 - percentage) * 36 + 10;
-
-          min = Math.trunc(totalSec / 60);
-          sec = totalSec % 60;
-          margin = 20;
+          if (percentage === 100) {
+            min = 0; sec = 20; margin = 10;
+          } else {
+            totalSec = (percentage < 50)
+              ? (50 - percentage) * 36
+              : (100 - percentage) * 36 + 10;
+            min = Math.trunc(totalSec / 60);
+            sec = totalSec % 60;
+            margin = 20;
+          }
+          str = `（マップ更新まで${min}分${sec}秒 ±${margin}秒）`;
         }
-        str = `（マップ更新まで${min}分${sec}秒 ±${margin}秒）`;
-      }
 
-      // wrap に「時間 + バー」をまとめる（これが今回の修正点）
-      const wrap = document.createElement('div');
-      wrap.style.display = 'block';
-      wrap.style.whiteSpace = 'nowrap';
-      wrap.style.color = '#000';
-      wrap.style.fontSize = (vw < 768) ? '12px' : '14px';
+        // 表示用バーを自作（%を外側・内側両方に表示）
+        const wrap = document.createElement('div');
+        wrap.style.display = 'block';
+        wrap.style.whiteSpace = 'nowrap';
+        wrap.style.color = '#000';
+        wrap.style.padding = '2px';
 
-      const label = document.createElement('div');
-      label.textContent = str;
+        const label = document.createElement('div');
+        label.textContent = `${str}　進捗:${percentage}%`;
 
-      // バーの見た目
-      progressBar.style.display = 'inline-block';
-      progressBar.style.width = '400px';
-      progressBar.style.maxWidth = '100vw';
-      progressBar.style.height = '20px';
-      progressBar.style.background = '#ccc';
-      progressBar.style.borderRadius = '8px';
-      progressBar.style.overflow = 'hidden';
-      progressBar.style.marginTop = '5px';
+        const barOuter = document.createElement('div');
+        barOuter.style.display = 'inline-block';
+        barOuter.style.width = '400px';
+        barOuter.style.maxWidth = '100vw';
+        barOuter.style.height = '20px';
+        barOuter.style.background = '#ccc';
+        barOuter.style.borderRadius = '8px';
+        barOuter.style.overflow = 'hidden';
+        barOuter.style.marginTop = '5px';
 
-      // barBody を確実に%幅で描画
-      barBody.style.height = '100%';
-      barBody.style.lineHeight = '20px';
-      barBody.style.background = '#428bca';
-      barBody.style.textAlign = 'right';
-      barBody.style.paddingRight = '6px';
-      barBody.style.boxSizing = 'border-box';
-      barBody.style.color = 'white';
-      barBody.style.width = `${percentage}%`;
-      barBody.textContent = `${percentage}%`;
+        const barInner = document.createElement('div');
+        barInner.style.height = '100%';
+        barInner.style.width = `${percentage}%`;
+        barInner.style.background = '#428bca';
+        barInner.style.color = '#fff';
+        barInner.style.textAlign = 'right';
+        barInner.style.paddingRight = '6px';
+        barInner.style.boxSizing = 'border-box';
+        barInner.style.lineHeight = '20px';
+        barInner.style.fontSize = '14px';
+        barInner.style.whiteSpace = 'nowrap';
+        barInner.textContent = `${percentage}%`;
 
-      wrap.append(label, progressBar);
-      progressBarContainer.replaceChildren(wrap);
+        barOuter.append(barInner);
+        wrap.append(label, barOuter);
 
-      // 資源（木材/鉄）取得は元のまま
-      const statBlock = doc.querySelector('.stat-block');
-      if(statBlock) {
+        progressBarContainer.replaceChildren(wrap);
+
+        // 木材/鉄
         const woodMatch = statBlock.textContent.match(/木材の数: (\d+)/);
         const steelMatch = statBlock.textContent.match(/鉄の数: (\d+)/);
         if(woodMatch) wood = woodMatch[1];
         if(steelMatch) steel = steelMatch[1];
-      }
-    })
-    .catch(e => console.error(e))
+      })
+      .catch(e => console.error(e));
   }
 
+  // 初回＋定期更新
   drawProgressBar();
   setInterval(drawProgressBar, 18000);
+
 })();
