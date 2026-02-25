@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         donguri arena assist tool
-// @version      1.2.2d改 Red vs Blue (autojoin fixed)
+// @version      1.2.2d改 Red vs Blue
 // @description  fix arena ui and add functions
 // @author       ぱふぱふ
 // @match        https://donguri.5ch.net/teambattle?m=hc
@@ -279,7 +279,7 @@ var settings = typeof settings !== 'undefined' ? settings : {};
       autoJoinSettingsDialog.style.textAlign = 'left';
       autoJoinDialog.append(autoJoinSettingsDialog);
 
-      (()=>{
+      (()=>{ // autoJoinSettingsDialog
         const div = document.createElement('div');
         const input = document.createElement('input');
         const label = document.createElement('label');
@@ -326,6 +326,7 @@ var settings = typeof settings !== 'undefined' ? settings : {};
         autoJoinSettingsDialog.append(div);
       })();
 
+      //autoJoin
       (()=>{
         const container = document.createElement('div');
         container.style.display = 'flex';
@@ -353,7 +354,9 @@ var settings = typeof settings !== 'undefined' ? settings : {};
         closeButton.addEventListener('click', ()=>{
           autoJoinDialog.close();
         })
+        //closeButton.autofocus = true; // inputへのオートフォーカス阻止
         const p = document.createElement('p');
+        //p.textContent = 'この画面を開いたままにしておくこと。最短600秒';
         p.textContent = 'この画面を開いたままにしておくこと';
         p.style.margin = '0';
 
@@ -633,7 +636,7 @@ var settings = typeof settings !== 'undefined' ? settings : {};
 
       input.addEventListener('keydown', (e)=>{
         if (e.key === "Enter") {
-          e.preventDefault();
+          e.preventDefault(); // これが無いとdialogが閉じない
           const amt = Number(input.value);
           const table = arenaField.querySelector('table');
           const { row, col } = table.dataset;
@@ -741,13 +744,13 @@ var settings = typeof settings !== 'undefined' ? settings : {};
   });
   document.body.append(arenaResult, arenaField, helpDialog);
 
-  const grid = document.querySelector('.grid');
-  if (grid) {
+const grid = document.querySelector('.grid');
+  if (grid) { //
     grid.parentNode.style.height = null;
     grid.style.maxWidth = '100%';
   }
 
-  const targetTable = document.querySelector('table');
+const targetTable = document.querySelector('table');
   if (targetTable) {
     targetTable.parentNode.style.maxWidth = '100%';
     targetTable.parentNode.style.overflow = 'auto';
@@ -957,6 +960,8 @@ var settings = typeof settings !== 'undefined' ? settings : {};
       addHeader('アリーナログ', arenaResult);
       const arenaField = container.cloneNode();
       addHeader('アリーナ情報', arenaField);
+      //const grid = container.cloneNode();
+      //addHeader('グリッド', grid);
       const settingsPanel = container.cloneNode();
       addHeader('設定パネル', settingsPanel);
       const equipPanel = container.cloneNode();
@@ -1166,18 +1171,1384 @@ var settings = typeof settings !== 'undefined' ? settings : {};
     }
   })();
 
-  // ----（中略：装備パネル・エリア情報取得など、あなたの原文そのまま）----
-  // ここから下は “あなたが貼った全文” と同一で、autoJoin周りだけ修正済み
-  // ※メッセージ長制限対策のため、途中省略せず全文が必要なら「続きも全部貼って」と言ってください。
-  // ただし、あなたの要件（自動参戦が動く）は autoJoin内getRegions修正だけで満たします。
+  (()=>{
+    const input = document.createElement('input');
+    const button = document.createElement('button');
+    // input.style.width = '100%';
+    // input.style.boxSizing = 'border';
+    // input.style.background = '#eee';
+    // input.style.color = '#000';
+    // input.style.borderRadius = 'unset';
+    // input.placeholder = 'フィルタ…';
+    button.type = 'button';
+    button.style.borderRadius = 'unset';
+    button.style.border = 'solid 1px #000';
+    button.style.background = '#ccc';
+    button.style.color = '#000';
+    button.style.margin = '2px';
+    button.style.width = '6em';
+    button.style.fontSize = '65%';
+    button.style.whiteSpace = 'nowrap';
+    button.style.overflow = 'hidden';
+    button.style.lineHeight = '1';
 
-  // ======================================================================
-  // 重要：ここから「自動参戦（autoJoin）」部分のみ、あなたの原文に対して修正済み
-  // ======================================================================
+    let currentMode = 'equip';
+    let currentRank = '';
+    let autoEquipMode = 'normal';
+    const presetList = document.createElement('ul');
+    presetList.style.listStyle = 'none';
+    presetList.style.margin = '0';
+    presetList.style.padding = '0';
+    presetList.style.borderTop = 'solid 1px #000';
+    presetList.style.height = '100%';
+    presetList.style.overflowY = 'auto';
+    presetList.style.flexGrow = '1';
+    showEquipPreset();
 
-  // （…中略…：あなたの原文のまま続いている前提）
+    const resetCurrentEquip = document.createElement('div');
+    resetCurrentEquip.textContent = '装備情報をリセット';
+    resetCurrentEquip.style.borderTop = 'solid 1px #000';
+    resetCurrentEquip.style.cursor = 'pointer';
+    resetCurrentEquip.style.color = '#a62';
+    resetCurrentEquip.style.whiteSpace = 'nowrap';
+    resetCurrentEquip.style.overflow = 'hidden';
+    resetCurrentEquip.addEventListener('click', ()=>{
+      localStorage.removeItem('current_equip');
+      const stat = document.querySelector('.equip-preset-stat');
+      stat.textContent = '現在の装備情報を初期化';
+      weaponTable = null;
+      armorTable = null;
+      necklaceTable = null;
+    })
 
-  // -------- autoJoin() 以降はあなたの原文 + 修正適用済み --------
+    presetList.addEventListener('click', (event)=>{
+      const presetLi = event.target.closest('li');
+      if(!presetLi) return;
+      const presetName = presetLi.querySelector('span').textContent;
+      if(currentMode === 'equip') {
+        setPresetItems(presetName);
+        const skipAutoEquipButton = document.querySelector('.skip-auto-equip');
+        skipAutoEquipButton.style.background = '#888';
+        shouldSkipAutoEquip = true;
+        settings.skipAutoEquip = true;
+        localStorage.setItem('aat_settings', JSON.stringify(settings));
+      } else if (currentMode === 'remove') {
+        removePresetItems(presetName);
+      } else if (currentMode === 'auto') {
+        selectAutoEquipItems(presetLi, presetName, currentRank);
+      } else if (currentMode === 'edit') {
+        alert('未実装');
+      }
+    });
+
+    (()=>{
+      const div = document.createElement('div');
+      div.style.marginTop = '2px';
+      div.style.lineHeight = 'normal';
+      const buttonsContainer = document.createElement('div');
+      buttonsContainer.style.display = 'flex';
+
+      button.style.flex = '0 0 auto';
+
+      /*
+      const closeButton = button.cloneNode();
+      closeButton.textContent = '×';
+      closeButton.style.marginLeft = 'auto';
+      closeButton.style.background = 'none';
+      closeButton.style.border = 'none';
+      //closeButton.style.height = '40px';
+      closeButton.style.width = '40px';
+      closeButton.style.fontSize = '32px';
+      closeButton.style.lineHeight = '1';
+      closeButton.addEventListener('click', ()=>{
+        panel.style.display = 'none';
+      })
+      */
+
+      const addButton = button.cloneNode();
+      addButton.textContent = '追加';
+      addButton.addEventListener('click', async()=>{
+        selectedEquips = {id:[], rank:[]};
+        addButton.disabled = true;
+        await showEquipList();
+        addButton.disabled = false;
+      })
+
+      const removeButton = button.cloneNode();
+      removeButton.textContent = '削除';
+      removeButton.dataset.text = '削除';
+      removeButton.dataset.mode = 'remove';
+      /*
+      const editButton = button.cloneNode();
+      editButton.textContent = '編集';
+      editButton.dataset.text = '編集';
+      editButton.dataset.mode = 'edit';
+      */
+
+      const equipSettingsButton = button.cloneNode();
+      equipSettingsButton.textContent = '装備登録';
+      equipSettingsButton.dataset.text = '装備登録';
+      equipSettingsButton.dataset.mode = 'auto';
+
+      const equipSettingsDialog = document.createElement('dialog');
+      equipSettingsDialog.style.background = '#fff';
+      equipSettingsDialog.style.color = '#000';
+      equipSettingsDialog.style.padding = '1px';
+      equipSettingsDialog.style.maxWidth = '280px';
+      (()=>{
+        const div = document.createElement('div');
+        div.style.display = 'grid';
+        div.style.gap = '2px';
+        div.style.gridTemplateColumns = 'repeat(2, 4em)';
+        div.style.justifyContent = 'center';
+
+        const ranks = ['N', 'Ne', 'R', 'Re', 'SR', 'SRe', 'SSR', 'SSRe', 'UR', 'URe'];
+        ranks.forEach(rank => {
+          const rankButton = button.cloneNode();
+          rankButton.style.width = '100px';
+          rankButton.textContent = rank;
+          rankButton.addEventListener('click',()=>{
+            currentRank = rank;
+            currentMode = 'auto';
+            setMode('auto', equipSettingsButton);
+
+            const target = autoEquipMode === 'autojoin' ? 'autoEquipItemsAutojoin' : 'autoEquipItems';
+            const items = JSON.parse(localStorage.getItem(target)) || {};
+            if(items[rank]) {
+              const li = [...presetList.querySelectorAll('li')];
+              const registeredItems = li.filter(elm => {
+                const name = elm.querySelector('span').textContent;
+                return items[rank].includes(name);
+              })
+              for(const e of registeredItems) {
+                e.style.color = 'rgb(202, 139, 66)';
+              }
+            }
+            equipSettingsDialog.close();
+          })
+          div.append(rankButton);
+        })
+
+        const closeButton = button.cloneNode();
+        closeButton.style.width = '100px';
+        closeButton.style.background = '#caa';
+        closeButton.textContent = '×';
+        closeButton.addEventListener('click',()=>{
+          equipSettingsDialog.close();
+        })
+
+        const div2 = document.createElement('div');
+        div2.style.textAlign = 'center';
+        const toggleButton = button.cloneNode();
+        toggleButton.textContent = '対戦用';
+        toggleButton.style.width = '7em';
+        toggleButton.style.background = '#acc';
+        toggleButton.addEventListener('click',()=>{
+          if (autoEquipMode === 'normal') {
+            autoEquipMode = 'autojoin';
+            toggleButton.textContent = '自動参加用';
+          } else {
+            autoEquipMode = 'normal';
+            toggleButton.textContent = '対戦用';
+          }
+        })
+
+        const label = document.createElement('label');
+        label.style.fontSize = '80%';
+        const checkRandom = document.createElement('input');
+        checkRandom.type = 'checkbox';
+        if (settings.autoEquipRandomly) checkRandom.checked = true;
+        checkRandom.addEventListener('change', ()=>{
+          settings.autoEquipRandomly = checkRandom.checked;
+          localStorage.setItem('aat_settings', JSON.stringify(settings));
+        })
+        label.append(checkRandom, 'ランダム装備');
+
+        div.append(closeButton);
+        div2.append(toggleButton,label);
+
+        const description = document.createElement('div');
+        description.innerText = '対戦に使用する装備を選択してください。バトル開始前に自動的に装備を変更します。複数登録した場合は開始時に装備するものを選択します。\nヒント: メインとなる1つのセットを使うことがほとんどなら1つのみ登録／複数の装備を使い分けることが多いなら複数登録しておくと切り替えの手間が少なくなる。\nまたは、ランダム装備にチェックを入れると、登録してある中から自動でランダムに選択\n\n自動参加用を登録しておくと、通常の対戦用とは別の装備を使用する。登録していない場合は対戦用装備を使用。';
+        description.style.fontSize = '70%';
+
+        equipSettingsDialog.append(div, div2, description);
+      })();
+
+      const backupButton = button.cloneNode();
+      backupButton.innerText = 'バック\nアップ';
+
+      const backupDialog = document.createElement('dialog');
+      backupDialog.style.background = '#fff';
+      backupDialog.style.color = '#000';
+      backupDialog.style.left = 'auto';
+      (()=>{
+        const textarea = document.createElement('textarea');
+        textarea.style.background = '#fff';
+        textarea.style.color = '#000';
+        textarea.style.whiteSpace = 'nowrap';
+        textarea.style.width = '70vw';
+        textarea.style.height = '50vh';
+        textarea.style.overflowX = 'auto';
+
+        const div = document.createElement('div');
+        const saveButton = button.cloneNode();
+        saveButton.textContent = '保存';
+        saveButton.addEventListener('click', ()=>{
+          const isSuccess = importEquipPresets(textarea.value);
+          if(isSuccess) {
+            backupDialog.close();
+            const equipPresets = JSON.parse(localStorage.getItem('equipPresets')) || {};
+            const autoEquipItems = JSON.parse(localStorage.getItem('autoEquipItems')) || {};
+            const autoEquipItemsAutojoin = JSON.parse(localStorage.getItem('autoEquipItemsAutojoin')) || {};
+
+            const validKeys = new Set(Object.keys(equipPresets));
+
+            for (const target of [autoEquipItems, autoEquipItemsAutojoin]) {
+              for (const key of Object.keys(target)) {
+                target[key] = target[key].filter(v => validKeys.has(v))
+              }
+            }
+            localStorage.setItem('autoEquipItems', JSON.stringify(autoEquipItems));
+            localStorage.setItem('autoEquipItemsAutojoin', JSON.stringify(autoEquipItemsAutojoin));
+          }
+        });
+        const copyButton = button.cloneNode();
+        copyButton.textContent = 'コピー';
+        copyButton.addEventListener('click', ()=>{navigator.clipboard.writeText(textarea.value).then(alert('copy'));})
+        const closeButton = button.cloneNode();
+        closeButton.textContent = '閉じる';
+        closeButton.addEventListener('click', ()=>{backupDialog.close()})
+        div.append(saveButton, copyButton, closeButton);
+        backupDialog.append(textarea, div);
+        backupButton.addEventListener('click', ()=>{
+          const data = localStorage.getItem('equipPresets');
+          if(data) {
+            const json = JSON.parse(data);
+            const formattedString = Object.entries(json)
+              .map(([key, value]) => {return `  "${key.replace(/"/g,'\\"')}": ${JSON.stringify(value)}`;})
+              .join(',\n');
+            textarea.value = `{\n${formattedString}\n}`;
+          }
+          backupDialog.showModal();
+        })
+      })();
+
+      [removeButton].forEach(button => {
+        button.addEventListener('click', () => {
+          const mode = button.dataset.mode;
+          if (currentMode === mode) {
+            resetMode();
+            return;
+          }
+          setMode(mode, button);
+        })
+      });
+
+      equipSettingsButton.addEventListener('click',()=>{
+        equipSettingsDialog.showModal();
+        resetMode();
+      })
+      function setMode(mode, button) {
+        resetMode();
+        currentMode = mode;
+        button.textContent = '完了';
+        button.classList.add('active');
+        if(mode === 'remove') stat.textContent = '削除したいものを選択';
+        else if (mode === 'edit') stat.textContent = 'クリックで編集';
+        else if (mode === 'auto') stat.textContent = 'クリックで選択(複数選択可)';
+      }
+
+      function resetMode() {
+        if (currentMode) {
+          const activeButton = document.querySelector('.active');
+          if (activeButton) {
+            activeButton.textContent = activeButton.dataset.text;
+            activeButton.classList.remove('active');
+          }
+          if (currentMode === 'auto') {
+            for(const li of presetList.querySelectorAll('li')) {
+              li.style.color = 'rgb(66, 139, 202)';
+            }
+          }
+        }
+        currentMode = 'equip';
+        stat.textContent = '';
+      }
+
+      const stat = document.createElement('p');
+      stat.style.margin = '0';
+      stat.style.height = '24px';
+      stat.style.fontSize = '16px';
+      stat.style.whiteSpace = 'nowrap';
+      stat.style.overflow = 'hidden';
+      stat.classList.add('equip-preset-stat');
+
+      (()=>{
+        const div = document.createElement('div');
+        div.style.display = 'flex';
+        div.style.flexWrap = 'nowrap';
+        div.style.overflowX = 'auto';
+        div.style.width = 'max-content';
+        div.append(addButton, removeButton, equipSettingsButton, backupButton);
+        buttonsContainer.append(div);
+      })();
+      div.append(buttonsContainer, equipSettingsDialog, backupDialog, stat);
+      panel.append(div);
+    })();
+
+    panel.append(resetCurrentEquip, presetList);
+    document.body.append(panel);
+
+    // equip item table dialog
+    const equipField = document.createElement('dialog');
+    equipField.style.background = '#fff';
+    equipField.style.color = '#000';
+    equipField.style.maxWidth = '90vw';
+    equipField.style.height = '95vh';
+    const closeButton = button.cloneNode();
+    closeButton.textContent = '×';
+    closeButton.style.position = 'absolute';
+    closeButton.style.background = 'none';
+    closeButton.style.border = 'none';
+    closeButton.style.height = '40px';
+    closeButton.style.width = '40px';
+    closeButton.style.fontSize = '32px';
+    closeButton.style.top = '2px';
+    closeButton.style.right = '2px';
+    closeButton.style.lineHeight = '1';
+    closeButton.addEventListener('click', ()=>{equipField.close()});
+    const tableContainer = document.createElement('div');
+    tableContainer.style.height = '75vh';
+    tableContainer.style.overflow = 'auto';
+    const rankSelect = document.createElement('select');
+    rankSelect.style.maxWidth = '64px';
+    const ranks = ['N','R','SR','SSR','UR'];
+    ranks.forEach(rank => {
+      const option = document.createElement('option');
+      option.textContent = rank;
+      option.value = rank;
+      rankSelect.append(option);
+    })
+    rankSelect.addEventListener('change', ()=>{filterItemsByRank(rankSelect.value)});
+    const bar = document.createElement('div');
+    bar.style.textAlign = 'center';
+    const p = document.createElement('p');
+    p.classList.add('equip-preset-selected');
+    p.style.background = '#fff';
+    p.style.color = '#000';
+    p.style.margin = '2px';
+    p.style.height = '28px';
+
+    const equipSwitchButton = button.cloneNode();
+    equipSwitchButton.textContent = '?武器';
+    equipSwitchButton.style.width = '4em';
+    equipSwitchButton.style.height = '42px';
+    equipSwitchButton.style.fontSize = '';
+
+    equipSwitchButton.style.whiteSpace = 'nowrap';
+    equipSwitchButton.addEventListener('click', (event)=>{
+      if(!weaponTable.style.display) {
+        weaponTable.style.display = 'none';
+        armorTable.style.display = '';
+        necklaceTable.style.display = 'none';
+        event.target.textContent = '?防具';
+      } else if (!armorTable.style.display) {
+        weaponTable.style.display = 'none';
+        armorTable.style.display = 'none';
+        necklaceTable.style.display = '';
+        event.target.textContent = '?首';
+      } else if (!necklaceTable.style.display) {
+        weaponTable.style.display = '';
+        armorTable.style.display = 'none';
+        necklaceTable.style.display = 'none';
+        event.target.textContent = '?武器';
+      }
+    });
+
+    // register
+    const registerButton = button.cloneNode();
+    registerButton.textContent = '登録';
+    registerButton.style.width = '4em';
+    registerButton.style.height = '42px';
+    registerButton.style.fontSize = '';
+
+    (()=>{
+      const dialog = document.createElement('dialog');
+      dialog.style.background = '#fff';
+      dialog.style.border = 'solid 1px #000';
+      dialog.style.color = '#000';
+      dialog.style.textAlign = 'center';
+      const presetNameInput = document.createElement('input');
+      presetNameInput.placeholder = 'プリセット名';
+      presetNameInput.style.background = '#fff';
+      presetNameInput.style.color = '#000';
+      const p = document.createElement('p');
+      p.textContent = '同名のプリセットが存在する場合は上書きされます。';
+      p.style.margin = '0';
+      const confirmButton = button.cloneNode();
+      confirmButton.textContent = '保存';
+      confirmButton.addEventListener('click', ()=>{
+        if(presetNameInput.value.trim() === '') return;
+        saveEquipPreset(presetNameInput.value.substring(0,32), selectedEquips);
+        dialog.close();
+        presetNameInput.value = '';
+      })
+      presetNameInput.addEventListener('keydown', (e)=>{
+        if (e.key === "Enter") {
+          e.preventDefault(); // これが無いとdialogが閉じない
+          if(presetNameInput.value.trim() === '') return;
+          saveEquipPreset(presetNameInput.value.substring(0,32), selectedEquips);
+          dialog.close();
+          presetNameInput.value = '';
+        }
+      })
+      const cancelButton = button.cloneNode();
+      cancelButton.textContent = 'キャンセル';
+      cancelButton.addEventListener('click', ()=>{dialog.close()});
+      dialog.append(presetNameInput, confirmButton, cancelButton, p);
+      equipField.append(dialog);
+      registerButton.addEventListener('click', ()=>{
+        if(!selectedEquips.id[0] && !selectedEquips.id[1] && !selectedEquips.id[2]) {
+          alert('装備が未選択です');
+          return;
+        }
+        dialog.showModal();
+      });
+    })();
+
+    bar.append(rankSelect, equipSwitchButton, registerButton, p);
+    equipField.append(bar, tableContainer, closeButton);
+    panel.append(equipField);
+
+    let weaponTable, armorTable, necklaceTable;
+    let selectedEquips = {id:[], rank:[]};
+
+    function sortTable(table){
+      const tbody = table.querySelector('tbody');
+      const rows = Array.from(tbody.rows);
+      rows.sort((a,b) => {
+        const nameA = a.cells[0].textContent;
+        const nameB = b.cells[0].textContent;
+        return nameA.localeCompare(nameB);
+      })
+      rows.forEach(row => tbody.appendChild(row));
+    }
+
+    async function showEquipList(){
+      if(!weaponTable || !armorTable || !necklaceTable) {
+        try {
+          const res = await fetch('https://donguri.5ch.net/bag');
+          if(!res.ok) throw new Error('bag response error');
+          const text = await res.text();
+          const doc = new DOMParser().parseFromString(text, 'text/html');
+          const h1 = doc.querySelector('h1');
+          if(h1?.textContent !== 'アイテムバッグ') throw new Error(text);
+          weaponTable = doc.querySelector('#weaponTable');
+          armorTable = doc.querySelector('#armorTable');
+          necklaceTable = doc.querySelector('#necklaceTable');
+          if(!weaponTable || !armorTable || !necklaceTable) throw new Error('failed to find weapon/armor table');
+
+          [weaponTable,armorTable,necklaceTable].forEach((table,index) => {
+            sortTable(table);
+            table.style.color = '#000';
+            table.style.margin = '0';
+            const rows = table.querySelectorAll('tr');
+            rows.forEach(row => {
+              const id = row.cells[1].querySelector('a')?.href.replace('https://donguri.5ch.net/equip/','');
+              row.cells[0].style.textDecorationLine = 'underline';
+              row.cells[0].style.cursor = 'pointer';
+              row.cells[0].dataset.id = id;
+              row.cells[1].style.display = 'none';
+              row.cells[2].style.display = 'none';
+              if(index !== 2) {
+                const modLink = row.cells[7].querySelector('a');
+                if(modLink) modLink.target = '_blank';
+                row.cells[9].style.display = 'none';
+              } else if (index === 2) {
+                row.cells[3].style.whiteSpace = 'nowrap';
+                const ul = row.cells[3].querySelector('ul');
+                if(ul) ul.style.padding = '0';
+                row.cells[5].style.display = 'none';
+              }
+              row.cells[0].addEventListener('click', (event)=>{
+                if(!event.target.closest('td')) return;
+                const target = event.target.closest('td');
+                const itemName = target.textContent;
+                const rank = itemName.match(/\[(.+?)\]/)[1];
+                const id = target.dataset.id;
+                selectedEquips.id[index] = id;
+                selectedEquips.rank[index] = rank;
+                document.querySelector('.equip-preset-selected').textContent = selectedEquips.id;
+              })
+            })
+          })
+          tableContainer.append(weaponTable, armorTable, necklaceTable);
+        } catch(e) {
+          console.error(e);
+          return;
+        }
+      }
+
+      equipSwitchButton.textContent = '?武器';
+      weaponTable.style.display = '';
+      armorTable.style.display = 'none';
+      necklaceTable.style.display = 'none';
+      filterItemsByRank(rankSelect.value);
+      document.querySelector('.equip-preset-selected').textContent = '';
+      equipField.showModal();
+    }
+    function filterItemsByRank (rank){
+      [weaponTable, armorTable].forEach(table => {
+        table.querySelectorAll('tbody > tr').forEach(row => {
+          const itemName = row.cells[0].textContent;
+          row.style.display = itemName.includes(`[${rank}]`) ? null : 'none';
+        })
+      })
+    }
+    function saveEquipPreset(name, obj){
+      let equipPresets = JSON.parse(localStorage.getItem('equipPresets')) || {};
+      equipPresets[name] = obj;
+      localStorage.setItem('equipPresets', JSON.stringify(equipPresets));
+      showEquipPreset();
+    }
+    function showEquipPreset(){
+      let equipPresets = JSON.parse(localStorage.getItem('equipPresets')) || {};
+      const liTemplate = document.createElement('li');
+      liTemplate.style.display = 'flex';
+      liTemplate.style.justifyContent = 'space-between';
+      liTemplate.style.borderBottom = 'solid 1px #000';
+      liTemplate.style.color = '#428bca';
+      liTemplate.style.cursor = 'pointer';
+      const span1 = document.createElement('span');
+      span1.style.flexGrow = '1';
+      span1.style.whiteSpace = 'nowrap';
+      span1.style.overflow = 'hidden';
+      const span2 = document.createElement('span');
+      span2.style.whiteSpace = 'nowrap';
+      span2.style.textAlign = 'right';
+      span2.style.overflow = 'hidden';
+      span2.style.fontSize = '90%';
+      liTemplate.append(span1,span2);
+      const fragment = document.createDocumentFragment();
+      Object.entries(equipPresets).forEach(([key, value])=>{
+        const li = liTemplate.cloneNode(true);
+        const span = li.querySelectorAll('span');
+        span[0].textContent = key;
+        span[1].textContent = value.rank.join(',');
+        fragment.append(li);
+      })
+      presetList.replaceChildren(fragment);
+    }
+    function importEquipPresets(text){
+      try{
+        if(text.trim() === ''){
+          localStorage.removeItem('equipPresets');
+          showEquipPreset();
+          return true;
+        }
+        const json = JSON.parse(text);
+        localStorage.setItem('equipPresets', JSON.stringify(json));
+        showEquipPreset();
+        return true;
+      } catch (e) {
+        if (e instanceof SyntaxError) {
+          alert('書式エラー');
+        }
+        return false;
+      }
+
+    }
+
+
+    function removePresetItems(presetName) {
+      const userConfirmed = confirm(presetName + ' を削除しますか？');
+      if(!userConfirmed) return;
+      const stat = document.querySelector('.equip-preset-stat');
+      const equipPresets = JSON.parse(localStorage.getItem('equipPresets')) || {};
+      const autoEquipItems = JSON.parse(localStorage.getItem('autoEquipItems')) || {};
+      const autoEquipItemsAutojoin = JSON.parse(localStorage.getItem('autoEquipItemsAutojoin')) || {};
+
+      if(!equipPresets || !equipPresets[presetName]) {
+        stat.textContent = '';
+        return;
+      }
+      delete equipPresets[presetName];
+      for (const key in autoEquipItems) {
+        if (Array.isArray(autoEquipItems[key])) {
+          autoEquipItems[key] = autoEquipItems[key].filter(v => v !== presetName);
+        }
+      }
+      for (const key in autoEquipItemsAutojoin) {
+        if (Array.isArray(autoEquipItemsAutojoin[key])) {
+          autoEquipItemsAutojoin[key] = autoEquipItemsAutojoin[key].filter(v => v !== presetName);
+        }
+      }
+      localStorage.setItem('equipPresets', JSON.stringify(equipPresets));
+      localStorage.setItem('autoEquipItems', JSON.stringify(autoEquipItems));
+      localStorage.setItem('autoEquipItemsAutojoin', JSON.stringify(autoEquipItemsAutojoin));
+      showEquipPreset();
+    }
+
+    function selectAutoEquipItems(li, name, rank) {
+      const target = autoEquipMode === 'autojoin' ? 'autoEquipItemsAutojoin' : 'autoEquipItems';
+      const items = JSON.parse(localStorage.getItem(target)) || {};
+
+      if(getComputedStyle(li).color === 'rgb(66, 139, 202)') {
+        li.style.color = 'rgb(202, 139, 66)';
+        (items[rank] ||= []).push(name);
+      } else {
+        li.style.color = 'rgb(66, 139, 202)';
+        const index = items[rank].indexOf(name);
+        if (index !== -1){
+          items[rank].splice(index,1);
+        }
+      }
+
+      localStorage.setItem(target, JSON.stringify(items));
+      console.log(items[rank]);
+    }
+  })();
+  //-- ここまで --//
+  async function setPresetItems (presetName) {
+    let currentEquip = JSON.parse(localStorage.getItem('current_equip')) || [];
+    const stat = document.querySelector('.equip-preset-stat');
+    if (stat.textContent === '装備中...') return;
+    const equipPresets = JSON.parse(localStorage.getItem('equipPresets')) || {};
+    const fetchPromises = equipPresets[presetName].id
+      .filter(id => id !== undefined && id !== null && !currentEquip.includes(id)) // 未登録or既に装備中の部位は除外
+      .map(id => fetch('https://donguri.5ch.net/equip/' + id));
+
+    stat.textContent = '装備中...';
+    try {
+      const responses = await Promise.all(fetchPromises);
+      const texts = await Promise.all(
+        responses.map(async response => {
+          if (!response.ok) {
+            throw new Error(`[${response.status}] /equip/`);
+          }
+          return response.text();
+        })
+      );
+
+      if(texts.includes('どんぐりが見つかりませんでした。')) {
+        throw new Error('再ログインしてください');
+      } else if(texts.includes('アイテムが見つかりませんでした。')) {
+        throw new Error('アイテムが見つかりませんでした');
+      }
+
+      const docs = texts.map(text => new DOMParser().parseFromString(text,'text/html'));
+      const titles = docs.map(doc => doc.querySelector('h1')?.textContent);
+      if(titles.includes('どんぐり基地')) {
+        throw new Error('再ログインしてください');
+      } else if (!titles.every(title => title === 'アイテムバッグ')) {
+        throw new Error('装備エラー');
+      }
+      stat.textContent = '完了: ' + presetName;
+      localStorage.setItem('current_equip', JSON.stringify(equipPresets[presetName].id));
+      currentEquipName = presetName;
+    } catch (e) {
+      stat.textContent = e;
+      localStorage.removeItem('current_equip');
+      throw e;
+    }
+  }
+
+  function scaleContentsToFit(container, contents){
+    const containerWidth = container.clientWidth;
+    const contentsWidth = contents.scrollWidth;
+    const scaleFactor = Math.min(1, containerWidth / contentsWidth);
+    contents.style.transform = `scale(${scaleFactor})`;
+    contents.style.transformOrigin = 'top left';
+
+    const scaledHeight = contents.scrollHeight * scaleFactor;
+
+    contents.style.height = `${scaledHeight}px`;
+  }
+
+  if (grid && grid.parentNode) {
+    scaleContentsToFit(grid.parentNode, grid);
+  }
+
+async function refreshArenaInfo() {
+    const refreshedCells = [];
+    function includesCoord(arr, row, col) {
+      return arr.some(([r, c]) => r === Number(row) && c === Number(col));
+    }
+
+    try {
+      const res = await fetch('');
+      if (!res.ok) throw new Error('res.ng');
+
+      const text = await res.text();
+      const doc = new DOMParser().parseFromString(text, 'text/html');
+      const headerText = doc?.querySelector('header')?.textContent || '';
+      if (!headerText.includes('どんぐりチーム戦い')) throw new Error('title.ng info');
+
+const gridWrap = document.getElementById('gridWrap');
+      if (!gridWrap) throw new Error('gridWrap not found');
+
+      let toolLayer = document.getElementById('aat_tool_layer');
+      if (!toolLayer) {
+        toolLayer = document.createElement('div');
+        toolLayer.id = 'aat_tool_layer';
+        toolLayer.style.position = 'absolute';
+        toolLayer.style.top = '0';
+        toolLayer.style.left = '0';
+        toolLayer.style.display = 'grid';
+        toolLayer.style.zIndex = '100';
+        gridWrap.appendChild(toolLayer);
+      }
+      const grid = toolLayer;
+
+      const scriptContent = doc.querySelector('script:not([src])')?.textContent || "";
+      const cellColorsMatch = scriptContent.match(/const cellColors = ({.+?});/s);
+      const cellColorsString = cellColorsMatch ? cellColorsMatch[1] : '{}';
+      const validJsonStr = cellColorsString.replace(/'/g, '"').replace(/,\s*}/, '}');
+      const cellColors = JSON.parse(validJsonStr);
+
+      const capitalMapMatch = scriptContent.match(/const capitalList = (\[.*?\]);/s);
+      const capitalMapString = capitalMapMatch ? capitalMapMatch[1] : '[]';
+      const capitalMap = JSON.parse(capitalMapString);
+
+      const gridSizeMatch = scriptContent.match(/const GRID_SIZE = (\d+);/);
+      const rows = gridSizeMatch ? Number(gridSizeMatch[1]) : 6;
+      const cols = rows;
+console.log('グリッドサイズ取得:', rows, 'x', cols);
+      if (rows === 0) alert('データが抽出できていません！');
+      const gridBase = document.getElementById('gridBase');
+      const currentCellSize = gridBase ? (parseInt(gridBase.style.width) / rows) + 'px' : '32px';
+
+      const currentCells = grid.querySelectorAll('.cell');
+
+      if (currentCells.length !== rows * cols) {
+        grid.style.gridTemplateRows = `repeat(${rows}, ${currentCellSize})`;
+        grid.style.gridTemplateColumns = `repeat(${cols}, ${currentCellSize})`;
+        grid.innerHTML = '';
+
+        for (let i = 0; i < rows; i++) {
+          for (let j = 0; j < cols; j++) {
+            const cell = document.createElement('div');
+            cell.className = 'cell';
+            cell.dataset.row = i;
+            cell.dataset.col = j;
+            cell.style.width = currentCellSize;
+            cell.style.height = currentCellSize;
+            cell.style.border = '1px solid rgba(204, 204, 204, 0.5)';
+            cell.style.cursor = 'pointer';
+            cell.style.pointerEvents = 'auto'; // クリックを有効化
+            cell.style.boxSizing = 'border-box';
+            cell.style.display = 'flex';
+            cell.style.alignItems = 'center';
+            cell.style.justifyContent = 'center';
+            cell.style.fontSize = '12px';
+            cell.style.fontWeight = 'bold';
+
+            if (includesCoord(capitalMap, i, j)) {
+              cell.style.outline = '2px solid gold';
+              cell.style.outlineOffset = '-2px';
+            }
+
+            const cellKey = `${i}-${j}`;
+            if (cellColors[cellKey]) {
+              // 地形が見えるように少し透明にする(0.3)
+              const hex = cellColors[cellKey];
+              cell.style.backgroundColor = hex + '44';
+            }
+
+            cell.addEventListener('click', (e) => {
+              e.stopPropagation();
+              handleCellClick(cell);
+            });
+
+            grid.appendChild(cell);
+            refreshedCells.push(cell);
+          }
+        }
+      } else {
+        currentCells.forEach(cell => {
+        });
+      }
+
+      const tables = document.querySelectorAll('table');
+      const newTables = doc.querySelectorAll('table');
+      newTables.forEach((table, i) => {
+        if (tables[i]) tables[i].replaceWith(table);
+      });
+      addCustomColor();
+      return refreshedCells;
+    } catch (e) {
+      console.error(e);
+    }
+  }
+
+async function fetchAreaInfo(refreshAll){
+    const refreshedCells = await refreshArenaInfo();
+
+    const grid = document.getElementById('aat_tool_layer');
+    if (!grid) {
+      console.log('aat_tool_layerが見つからないため、処理を中断します');
+      return;
+    }
+
+    if (currentViewMode === 'detail') {
+      grid.style.gridTemplateRows = grid.style.gridTemplateRows.replace('35px','65px');
+      grid.style.gridTemplateColumns = grid.style.gridTemplateColumns.replace('35px','105px');
+    }
+
+    if (grid.parentNode) {
+      grid.parentNode.style.height = null;
+      grid.parentNode.style.padding = '20px 0';
+    }
+
+    const cells = grid.querySelectorAll('.cell');
+    cells.forEach(async(elm) => {
+      const hasInfo = elm.dataset.rank !== undefined;
+      const isRefreshed = (refreshedCells || []).includes(elm);
+      if(refreshAll || !hasInfo || isRefreshed) {
+        fetchSingleArenaInfo(elm)
+      }
+    })
+  }
+async function fetchSingleArenaInfo(elm) {
+console.log('fetchSingleArenaInfoが実行されました');
+    try {
+      const { row, col } = elm.dataset;
+      const url = `https://donguri.5ch.net/teambattle?r=${row}&c=${col}&`+MODE;
+      const res = await fetch(url);
+      if(!res.ok) throw new Error(res.status + ' res.ng');
+      const text = await res.text();
+      const doc = new DOMParser().parseFromString(text, 'text/html');
+
+      const headerText = doc?.querySelector('header')?.textContent || '';
+      if(!headerText.includes('どんぐりチーム戦い')) throw new Error(`title.ng [${row}][${col}]`);
+
+      const rank = doc.querySelector('small')?.textContent || '';
+      if(!rank) return Promise.reject(`rank.ng [${row}][${col}]`);
+
+      const leader = doc.querySelector('strong')?.textContent || '';
+      const shortenRank = rank.replace('[エリート]','e').replace('[警備員]だけ','警').replace('から','-').replace(/(まで|\[|\]|\||\s)/g,'');
+      const teamname = doc.querySelector('table').rows[1]?.cells[2].textContent;
+
+      const cell = elm.cloneNode();
+      cell.style.width = elm.style.width;
+      cell.style.height = elm.style.height;
+
+      if (currentViewMode === 'detail') {
+        const p = [document.createElement('p'), document.createElement('p')];
+        p[0].textContent = shortenRank;
+        p[1].textContent = leader;
+        p[0].style.cssText = 'margin:0; line-height:1.1; color:#000; text-shadow:1px 1px 0 #fff; font-weight:bold; pointer-events:none;';
+        p[1].style.cssText = 'margin:0; line-height:1.1; color:#000; text-shadow:1px 1px 0 #fff; font-size:12px; pointer-events:none;';
+        cell.style.borderWidth = '3px';
+        cell.append(p[0],p[1]);
+      } else {
+        const p = document.createElement('p');
+        p.style.cssText = 'margin:0; display:flex; align-items:center; justify-content:center; width:100%; height:100%; color:#000; text-shadow:1px 1px 0 #fff; font-weight:bold; pointer-events:none;';
+
+        const str = shortenRank.replace(/\w+-|だけ/g,'');
+        p.textContent = str;
+
+        if (str.length === 3) p.style.fontSize = '14px';
+        else if (str.length >= 4) p.style.fontSize = '12px';
+        else p.style.fontSize = '16px';
+
+        cell.append(p);
+      }
+
+      cell.dataset.rank = shortenRank;
+      cell.dataset.leader = leader;
+      cell.dataset.team = teamname;
+
+      // 強制可視化設定
+      cell.style.opacity = '1';
+      cell.style.visibility = 'visible';
+      cell.style.display = 'flex';
+      cell.style.flexDirection = 'column';
+      cell.style.alignItems = 'center';
+      cell.style.justifyContent = 'center';
+      cell.style.zIndex = '9999';
+      cell.style.pointerEvents = 'auto';
+      cell.style.overflow = 'visible';
+
+      if ('customColors' in settings && teamname in settings.customColors) {
+        cell.style.backgroundColor = '#' + settings.customColors[teamname];
+      } else {
+        cell.style.backgroundColor = cell.style.backgroundColor || 'rgba(255,255,255,0.5)';
+      }
+
+      cell.addEventListener('click', (e)=>{
+        e.stopPropagation();
+        handleCellClick(cell);
+      });
+
+      elm.replaceWith(cell);
+    } catch(e) {
+      console.error(e);
+    }
+  }
+
+  function addCustomColor() {
+    const teamTable = document.querySelector('table');
+    const rows = [...teamTable.rows];
+    rows.shift();
+    const button = document.createElement('button');
+    button.style.padding = '4px';
+    button.style.lineHeight = '1';
+    button.style.marginLeft = '2px';
+
+    const editButton = button.cloneNode();
+    editButton.textContent = '▼';
+    editButton.addEventListener('click', ()=>{
+      editButton.style.display = 'none';
+      editEndButton.style.display = '';
+
+      rows.forEach(row => {
+        const cell = row.cells[0];
+        const cellColor = cell.textContent;
+        const input = document.createElement('input');
+        input.type = 'text';
+        input.value = cellColor;
+        input.style.width = '6em';
+        input.addEventListener('change',()=>{
+          if (input.value === '') {
+            if (settings.customColors) {
+              const teamname = row.cells[1].textContent;
+              delete settings.customColors[teamname];
+              localStorage.setItem('aat_settings', JSON.stringify(settings));
+            }
+            return;
+          }
+
+          const isValidColor = /^[0-9A-Fa-f]{6}$/.test(input.value);
+          if (!isValidColor) {
+            input.value = cellColor;
+            return;
+          } else {
+            const teamname = row.cells[1].textContent;
+            if (!settings.customColors) settings.customColors = {};
+            settings.customColors[teamname] = input.value;
+            localStorage.setItem('aat_settings', JSON.stringify(settings));
+            cell.style.background = '#' + input.value;
+            row.cells[0].style.fontStyle = 'italic';
+          }
+        })
+        cell.textContent = '';
+        cell.append(input);
+      })
+    })
+    const editEndButton = button.cloneNode();
+    editEndButton.textContent = '?';
+    editEndButton.style.display = 'none';
+    editEndButton.addEventListener('click', ()=>{
+      editButton.style.display = '';
+      editEndButton.style.display = 'none';
+
+      rows.forEach(row => {
+        const cell = row.cells[0];
+        const input = cell.querySelector('input');
+        cell.textContent = input.value;
+        input.remove();
+      })
+    })
+
+    const helpButton = button.cloneNode();
+    helpButton.textContent = '？';
+    helpButton.addEventListener('click', ()=>{
+      helpDialog.innerHTML = '';
+      const div = document.createElement('div');
+      div.style.lineHeight = '150%';
+      div.innerText = `・[▼]を押すと色を編集できます。編集後は一度[エリア情報再取得]を実行してください。
+      ・変更したチームのセルは[エリア情報更新]時に必ず取得されるようになります。
+      *更新時の読み込みを増やしたくない場合は、無闇に変更しないことを推奨します。
+      ・同色のチームが複数存在する場合、それぞれの色を変更することで同色の塗り替えに対応可能です。(カスタムカラーで上書きされたセルは常に読み込みの対象になるため)
+      ・編集した色を戻すには入力欄の文字を全て消した状態で保存してください。
+
+      仕様 (読まなくてよい)：
+      [エリア情報再取得]は全エリアにアクセスし情報を取得するのに対し、[エリア情報更新]は色が更新されたセルのみを取得するようにしてある。
+      ここで、同色のAとBのチームが存在する状況を想定する。
+      ・Bの色のみを編集した場合、Aが保持するセルをBが獲得した際、編集前の色情報が同一のためセル情報の取得が行われない。
+      ・AとBの双方を編集しておくと、Aが保持するセルは常に色情報が更新された扱いとなり取得対象になる。
+      要するに、同色の場合は全て色を変えておくとよいということ。同色がいなくなったら戻せばOK.
+      `;
+      const resetButton = button.cloneNode();
+      resetButton.textContent = '色設定初期化';
+      resetButton.addEventListener('click', ()=>{
+        delete settings.customColors;
+        localStorage.setItem('aat_settings', JSON.stringify(settings));
+        alert('色の設定を初期化しました（要エリア更新）');
+      })
+      helpDialog.append(resetButton, div);
+      helpDialog.show();
+    })
+    teamTable.rows[0].cells[0].append(editButton, editEndButton, helpButton);
+
+    function setCustomColors(rows) {
+      if (!settings.customColors) return;
+      rows.forEach(row => {
+        const teamname = row.cells[1].textContent;
+        if ('customColors' in settings && teamname in settings.customColors){
+          const color = settings.customColors[teamname];
+          row.cells[0].textContent = color;
+          row.cells[0].style.background = '#' + color;
+          row.cells[0].style.fontStyle = 'italic';
+        }
+        const rgb = row.cells[0].style.backgroundColor.match(/\d+/g);
+        const brightness = 0.2126 * rgb[0] + 0.7152 * rgb[1] + 0.0722 * rgb[2];
+        row.cells[0].style.color = brightness > 128 ? '#000' : '#fff';
+      })
+    }
+    setCustomColors(rows);
+  }
+  addCustomColor();
+
+  const observer = new MutationObserver(() => {
+    scaleContentsToFit(grid.parentNode, grid);
+  });
+
+if (grid) {
+    observer.observe(grid, { attributes: true, childList: true, subtree: true });
+}
+
+  (()=>{
+    [...document.querySelectorAll('.cell')].forEach(elm => {
+      const cell = elm.cloneNode();
+      elm.replaceWith(cell);
+      cell.addEventListener('click', ()=>{
+        handleCellClick(cell);
+      })
+    })
+  })();
+
+  async function fetchArenaTable(row, col){
+    const url = `https://donguri.5ch.net/teambattle?r=${row}&c=${col}&`+MODE;
+    try {
+      const res = await fetch(url);
+      if(!res.ok) throw new Error('res.ng');
+      const text = await res.text();
+      const doc = new DOMParser().parseFromString(text,'text/html');
+      const headerText = doc?.querySelector('header')?.textContent || '';
+      if(!headerText.includes('どんぐりチーム戦い')) return Promise.reject(`title.ng`);
+      const table = doc.querySelector('table');
+      if(!table) throw new Error('table.ng');
+      showArenaTable(table);
+    } catch (e) {
+      console.error(e);
+    }
+
+    function showArenaTable (table){
+      const tableRow = table.querySelector('tbody > tr');
+      if(!tableRow) return;
+      const coordinate = tableRow.cells[0].textContent.replace('アリーナ','').trim();
+      const holderName = tableRow.cells[1].querySelector('strong');
+      const equipCond = tableRow.cells[1].querySelector('small');
+      const teamName = tableRow.cells[2].textContent;
+      const statistics = tableRow.cells[3].textContent.match(/\d+/g);
+      const modCounts = tableRow.cells[4].textContent.match(/\d+/g);
+      const modders = tableRow.cells[5].textContent;
+
+      const newTable = document.createElement('table');
+      const tbody = document.createElement('tbody');
+      const tr = tbody.insertRow(0);
+
+      const cell = document.createElement('td');
+      cell.style.textAlign = 'center';
+      const cells = [];
+      for(let i=0; i<4; i++){
+        cells.push(cell.cloneNode());
+        tr.append(cells[i]);
+      }
+      const hr = document.createElement('hr');
+      hr.style.margin = '10px 0';
+
+      cells[0].append(coordinate, hr, equipCond);
+      cells[1].append(holderName, document.createElement('br'), `${teamName}`);
+      cells[2].innerText = `勝:${statistics[0]}\n負:${statistics[1]}\n引:${statistics[2]}`;
+      cells[3].innerText = `強化:${modCounts[0]}\n弱体:${modCounts[1]}\n${modders}人`;
+      cells[3].style.whiteSpace = 'nowrap';
+
+      const [dataRow, dataCol] = coordinate.match(/\d+/g);
+      newTable.dataset.row = dataRow;
+      newTable.dataset.col = dataCol;
+      newTable.dataset.rank = equipCond.textContent;
+      newTable.style.background = '#fff';
+      newTable.style.color = '#000';
+      newTable.style.margin = '0';
+      newTable.append(tbody);
+      arenaField.querySelector('table').replaceWith(newTable);
+      arenaField.show();
+    }
+  }
+
+  async function handleCellClick (cell){
+    if (cellSelectorActivate) {
+      if (cell.classList.contains('selected')) {
+        cell.style.borderColor = '#ccc';
+        cell.classList.remove('selected');
+      } else {
+        cell.style.borderColor = '#f64';
+        cell.classList.add('selected');
+      }
+    } else if (shouldSkipAreaInfo) {
+      const { row, col, rank } = cell.dataset;
+      if (arenaField.open) fetchArenaTable(row, col);
+      await autoEquipAndChallenge (row, col, rank);
+    } else {
+      const { row, col } = cell.dataset;
+      fetchArenaTable(row, col);
+    }
+  }
+
+  const autoEquipDialog = document.createElement('dialog');
+  autoEquipDialog.style.padding = '0';
+  autoEquipDialog.style.background = '#fff';
+  document.body.append(autoEquipDialog);
+  async function autoEquipAndChallenge (row, col, rank) {
+    if (shouldSkipAutoEquip) {
+      arenaChallenge(row, col);
+      return;
+    }
+    rank = rank
+      .replace('エリート','e')
+      .replace(/.+から|\w+-|まで|だけ|警備員|警|\s|\[|\]|\|/g,'');
+    const autoEquipItems = JSON.parse(localStorage.getItem('autoEquipItems')) || {};
+    if (autoEquipItems[rank] && !autoEquipItems[rank]?.includes(currentEquipName)) {
+      if (autoEquipItems[rank].length === 0) {
+        arenaChallenge(row, col);
+        return;
+      } else if (autoEquipItems[rank].length === 1) {
+        await setPresetItems(autoEquipItems[rank][0]);
+        arenaChallenge(row, col);
+        return;
+      } else if (settings.autoEquipRandomly) {
+        const index = Math.floor(Math.random() * autoEquipItems[rank].length);
+        await setPresetItems(autoEquipItems[rank][index]);
+        arenaChallenge(row, col);
+      } else {
+        while (autoEquipDialog.firstChild) {
+          autoEquipDialog.firstChild.remove();
+        }
+        const ul = document.createElement('ul');
+        ul.style.background = '#fff';
+        ul.style.listStyle = 'none';
+        ul.style.padding = '2px';
+        ul.style.textAlign = 'left';
+        ul.style.margin = '0';
+        const liTemplate = document.createElement('li');
+        liTemplate.style.borderBottom = 'solid 1px #000';
+        liTemplate.style.color = '#428bca';
+        liTemplate.style.cursor = 'pointer';
+
+        autoEquipItems[rank].forEach(v => {
+          const li = liTemplate.cloneNode();
+          li.textContent = v;
+          li.addEventListener('click', async()=>{
+            autoEquipDialog.close();
+            await setPresetItems(v);
+            arenaChallenge(row, col);
+          })
+          ul.append(li);
+        })
+        autoEquipDialog.append(ul);
+        autoEquipDialog.showModal();
+      }
+    } else {
+      arenaChallenge(row, col);
+    }
+  }
+
+  async function arenaChallenge (row, col){
+    const options = {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded'
+      },
+      body: `row=${row}&col=${col}`
+    };
+    try {
+      const response = await fetch('/teamchallenge?'+MODE, options);
+      if(!response.ok){
+        throw new Error('/teamchallenge res.ng');
+      }
+      const text = await response.text();
+      arenaResult.innerText = text;
+
+      const lastLine = text.trim().split('\n').pop();
+      if(text.includes('\n')) {
+        lastLine + '\n' + text;
+        const p = document.createElement('p');
+        p.textContent = lastLine;
+        p.style.fontWeight = 'bold';
+        p.style.padding = '0';
+        p.style.margin = '0';
+        arenaResult.prepend(p);
+      }
+
+      arenaResult.show();
+      setTimeout(() => {
+        if (settings.arenaResultScrollPosition === 'bottom') {
+          arenaResult.scrollTop = arenaResult.scrollHeight;
+        } else {
+          arenaResult.scrollTop = 0;
+        }
+      }, 0);
+      arenaResult.style.display = '';
+
+      if (lastLine === 'リーダーになった' || lastLine.includes('は新しいアリーナリーダーです。')) {
+        if (!settings.teamColor) return;
+        const cell = document.querySelector(`div[data-row="${row}"][data-col="${col}"]`);
+        cell.style.background = '#' + settings.teamColor;
+        fetchSingleArenaInfo(cell);
+      }
+    } catch (e) {
+      arenaResult.innerText = e;
+      arenaResult.show();
+    }
+  }
+
+  let rangeAttackQueue = [];
+  async function rangeAttack () {
+    if(rangeAttackQueue.length === 0) {
+      rangeAttackQueue = [...document.querySelectorAll('.cell.selected')];
+    }
+
+    if(rangeAttackQueue.length === 0) {
+      alert('セルを選択してください');
+      return;
+    }
+
+    const pTemplate = document.createElement('p');
+    pTemplate.style.padding = '0';
+    pTemplate.style.margin = '0';
+
+    let errorOccurred = false;
+    arenaResult.textContent = '';
+    arenaResult.show();
+
+    console.log(rangeAttackQueue);
+    //for(const cell of rangeAttackQueue) {
+    while(rangeAttackQueue.length > 0) {
+      if(!rangeAttackProcessing) return;
+
+      const cell = rangeAttackQueue[0];
+      // 攻撃前に選択解除された場合
+      if(!cell.classList.contains('selected')) {
+        rangeAttackQueue.shift();
+        continue;
+      }
+      const { row, col } = cell.dataset;
+
+      const options = {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded'
+        },
+        body: `row=${row}&col=${col}`
+      };
+      cell.style.borderColor = '#4f6';
+
+      try {
+        const response = await fetch('/teamchallenge?'+MODE, options);
+        const text = await response.text();
+        let lastLine = text.trim().split('\n').pop();
+        if(
+          lastLine.length > 100 ||
+          lastLine === 'どんぐりが見つかりませんでした。'
+        ) {
+          throw new Error('どんぐりが見つかりませんでした。');
+        }
+        if(
+          lastLine === 'あなたのチームは動きを使い果たしました。しばらくお待ちください。' ||
+          lastLine === 'ng<>too fast' ||
+          lastLine === '武器と防具を装備しなければなりません。' ||
+          lastLine === '最初にチームに参加する必要があります。'
+        ) {
+          throw new Error(lastLine);
+        }
+
+        const p = pTemplate.cloneNode();
+        p.textContent = `(${row}, ${col}) ${lastLine}`;
+        arenaResult.prepend(p);
+        rangeAttackQueue.shift();
+      } catch (e) {
+        const p = pTemplate.cloneNode();
+        p.textContent = `(${row}, ${col}) [中断] ${e}`;
+        arenaResult.prepend(p);
+        errorOccurred = true;
+        break;
+      }
+      if (rangeAttackQueue.length > 0) {
+        await new Promise(resolve => setTimeout(resolve, 1500));
+      }
+      cell.style.borderColor = cell.classList.contains('selected') ? '#f64' : '#ccc';
+    }
+    if(!errorOccurred) {
+      const p = pTemplate.cloneNode();
+      p.textContent = `完了`;
+      arenaResult.prepend(p);
+      return true;
+    } else {
+      return false;
+    }
+  }
+
+
+function toggleCellViewMode () {
+    const grid = document.getElementById('aat_tool_layer');
+    if (!grid) return; // レイヤーがなければ処理を中断
+
+    const cells = grid.querySelectorAll('.cell');
+
+    if(currentViewMode === 'detail') {
+      currentViewMode = 'compact';
+
+      grid.style.gridTemplateRows = grid.style.gridTemplateRows.replace('65px','35px');
+      grid.style.gridTemplateColumns = grid.style.gridTemplateColumns.replace('105px','35px');
+
+      for (const cell of cells) {
+        cell.style.width = '30px';
+        cell.style.height = '30px';
+        cell.style.borderWidth = '1px';
+        while (cell.firstChild) {
+          cell.firstChild.remove();
+        }
+        const p = document.createElement('p');
+        p.style.height = '28px'; // cellsize - borderWidth*2
+        p.style.width = '28px';
+        p.style.margin = '0';
+        p.style.display = 'flex';
+        p.style.alignItems = 'center';
+        p.style.lineHeight = '1';
+        p.style.justifyContent = 'center';
+        // datasetからランクを取得（未取得の場合は空文字）
+        const rank = (cell.dataset.rank || '').replace(/\w+-|だけ/g,'');
+        p.textContent = rank;
+        if (rank.length === 3) p.style.fontSize = '14px';
+        if (rank.length === 4) p.style.fontSize = '13px';
+        cell.append(p);
+      }
+    } else {
+      currentViewMode = 'detail';
+
+      grid.style.gridTemplateRows = grid.style.gridTemplateRows.replace('35px','65px');
+      grid.style.gridTemplateColumns = grid.style.gridTemplateColumns.replace('35px','105px');
+
+      for (const cell of cells) {
+        while (cell.firstChild) {
+          cell.firstChild.remove();
+        }
+        const {rank, leader } = cell.dataset;
+        const p = [document.createElement('p'), document.createElement('p')];
+        p[0].textContent = rank;
+        p[1].textContent = leader;
+        p[0].style.margin = '0';
+        p[1].style.margin = '0';
+        cell.style.width = '100px';
+        cell.style.height = '60px';
+        cell.style.borderWidth = '3px';
+        cell.append(p[0],p[1]);
+      }
+    }
+  }
 
   let autoJoinIntervalId;
   let isAutoJoinRunning = false;
@@ -1189,6 +2560,7 @@ var settings = typeof settings !== 'undefined' ? settings : {};
     const headers = { 'Content-Type': 'application/x-www-form-urlencoded' };
     let teamColor = settings.teamColor;
     let teamName = settings.teamName;
+
 
     function logMessage(region, message, next) {
       const date = new Date();
@@ -1284,6 +2656,7 @@ var settings = typeof settings !== 'undefined' ? settings : {};
       return result;
     }
 
+
     let nextProgress;
     async function attackRegion () {
       await drawProgressBar();
@@ -1291,8 +2664,7 @@ var settings = typeof settings !== 'undefined' ? settings : {};
         return;
       }
 
-      // RB の場合は自分の色を自動推定（あなたの原文のまま）
-      if (location.href.includes('/teambattle?m=rb')) {
+    if (location.href.includes('/teambattle?m=rb')) {
         try {
           const res = await fetch(`/teambattle?m=rb&t=${Date.now()}`, { cache: 'no-store' });
           if (res.ok) {
@@ -1313,16 +2685,8 @@ var settings = typeof settings !== 'undefined' ? settings : {};
         } catch (e) { console.error(e); }
       }
 
-      // ===== ここが修正点①：getRegions失敗ガード =====
       let regions = await getRegions();
-      if (!regions) {
-        logMessage(null, 'getRegions() 失敗（マップ解析できず）', '→ 20s');
-        isAutoJoinRunning = false;
-        await sleep(20000);
-        return;
-      }
       const excludeSet = new Set();
-      // ===============================================
 
       let cellType;
       if (regions.nonAdjacent.length > 0) {
@@ -1433,12 +2797,6 @@ var settings = typeof settings !== 'undefined' ? settings : {};
 
             if (processType === 'break') {
               regions = await getRegions();
-              if (!regions) {
-                logMessage(null, 'getRegions() 失敗（マップ解析できず）', '→ 20s');
-                isAutoJoinRunning = false;
-                await sleep(20000);
-                return;
-              }
               break;
             } else if (processType === 'return') {
               return;
@@ -1507,117 +2865,115 @@ var settings = typeof settings !== 'undefined' ? settings : {};
       }
     }
 
-    // ===== 修正点②：canvas版 teambattle のscript構造に対応した getRegions() を全文差し替え =====
     async function getRegions () {
       try {
-        // 現在ページ（/teambattle?m=...）を取り直す（cache対策）
-        const res = await fetch(location.pathname + location.search, { cache: 'no-store' });
-        if (!res.ok) throw new Error(`[${res.status}] /teambattle`);
+  // 現在ページ（/teambattle?m=...）を取り直す
+    const res = await fetch(location.pathname + location.search, { cache: 'no-store' });
+    if (!res.ok) throw new Error(`[${res.status}] /teambattle`);
 
-        const text = await res.text();
-        const doc = new DOMParser().parseFromString(text, 'text/html');
+    const text = await res.text();
+    const doc = new DOMParser().parseFromString(text, 'text/html');
 
-        const headerText = doc?.querySelector('header')?.textContent || '';
-        if (!headerText.includes('どんぐりチーム戦い')) throw new Error('title.ng info');
+    const headerText = doc?.querySelector('header')?.textContent || '';
+    if (!headerText.includes('どんぐりチーム戦い')) throw new Error('title.ng info');
 
-        // ★新フィールド：canvas版。scriptは .grid > script ではない
-        const scriptContent = doc.querySelector('script:not([src])')?.textContent || '';
-        if (!scriptContent.includes('const cellColors')) throw new Error('cellColors script not found');
+    // ★新フィールド：script は .grid > script ではない
+    const scriptContent = doc.querySelector('script:not([src])')?.textContent || '';
+    if (!scriptContent.includes('const cellColors')) throw new Error('cellColors script not found');
 
-        // GRID_SIZE
-        const gridSizeMatch = scriptContent.match(/const\s+GRID_SIZE\s*=\s*(\d+)\s*;/);
-        const size = gridSizeMatch ? Number(gridSizeMatch[1]) : 7;
-        const rows = size, cols = size;
+    // GRID_SIZE
+    const gridSizeMatch = scriptContent.match(/const\s+GRID_SIZE\s*=\s*(\d+)\s*;/);
+    const size = gridSizeMatch ? Number(gridSizeMatch[1]) : 7;
+    const rows = size, cols = size;
 
-        // cellColors（'...' のJSオブジェクト → JSON化）
-        const cellColorsMatch = scriptContent.match(/const\s+cellColors\s*=\s*({[\s\S]*?})\s*;/);
-        const cellColorsString = cellColorsMatch ? cellColorsMatch[1] : '{}';
-        const validJsonStr = cellColorsString
-          .replace(/'/g, '"')
-          .replace(/,\s*}/g, '}'); // 末尾カンマ対策
+    // cellColors（'...' のJSオブジェクトをJSON化）
+    const cellColorsMatch = scriptContent.match(/const\s+cellColors\s*=\s*({[\s\S]*?})\s*;/);
+    const cellColorsString = cellColorsMatch ? cellColorsMatch[1] : '{}';
+    const validJsonStr = cellColorsString
+      .replace(/'/g, '"')
+      .replace(/,\s*}/g, '}'); // 末尾カンマ対策（念のため複数）
 
-        const cellColors = JSON.parse(validJsonStr);
+    const cellColors = JSON.parse(validJsonStr);
 
-        // capitalList（旧: capitalMap ではなく capitalList）
-        const capitalListMatch = scriptContent.match(/const\s+capitalList\s*=\s*(\[[\s\S]*?\])\s*;/);
-        const capitalList = capitalListMatch ? JSON.parse(capitalListMatch[1]) : [];
+    // capitalList（今は capitalMap ではなく capitalList）
+    const capitalListMatch = scriptContent.match(/const\s+capitalList\s*=\s*(\[[\s\S]*?\])\s*;/);
+    const capitalList = capitalListMatch ? JSON.parse(capitalListMatch[1]) : [];
 
-        // 全セル座標
-        const cells = [];
-        for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) cells.push([r, c]);
+    // 全セル座標
+    const cells = [];
+    for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) cells.push([r, c]);
 
-        const directions = [[-1,0],[1,0],[0,-1],[0,1]];
+    const directions = [[-1,0],[1,0],[0,-1],[0,1]];
 
-        // capital隣接
-        const capitalSet = new Set(capitalList.map(([r,c]) => `${r}-${c}`));
-        const adjacentSet = new Set();
-        for (const [cr, cc] of capitalList) {
-          for (const [dr, dc] of directions) {
-            const nr = cr + dr, nc = cc + dc;
-            if (nr >= 0 && nr < rows && nc >= 0 && nc < cols) adjacentSet.add(`${nr}-${nc}`);
-          }
-        }
-
-        const nonAdjacentCells = cells.filter(([r,c]) => {
-          const k = `${r}-${c}`;
-          return !capitalSet.has(k) && !adjacentSet.has(k);
-        });
-
-        const capitalAdjacentCells = cells.filter(([r,c]) => adjacentSet.has(`${r}-${c}`));
-
-        // ★自チーム色のセル抽出：cellColors は "#d32f2f" 形式
-        const myColor = String(teamColor || '').replace('#','').toLowerCase();
-        const teamColorSet = new Set();
-        for (const [key, value] of Object.entries(cellColors)) {
-          const v = String(value || '').replace('#','').toLowerCase();
-          if (myColor && v === myColor) teamColorSet.add(key);
-        }
-
-        // 自領土＋隣接
-        const teamAdjacentSet = new Set();
-        for (const key of teamColorSet) {
-          const [tr, tc] = key.split('-').map(Number);
-          for (const [dr, dc] of directions) {
-            const nr = tr + dr, nc = tc + dc;
-            if (nr >= 0 && nr < rows && nc >= 0 && nc < cols) teamAdjacentSet.add(`${nr}-${nc}`);
-          }
-        }
-
-        const teamAdjacentCells = cells.filter(([r,c]) => {
-          const k = `${r}-${c}`;
-          return teamColorSet.has(k) || teamAdjacentSet.has(k);
-        });
-
-        // 端（mapEdge）
-        const mapEdgeSet = new Set();
-        for (let i=0; i<rows; i++) { mapEdgeSet.add(`${i}-0`); mapEdgeSet.add(`${i}-${cols-1}`); }
-        for (let i=0; i<cols; i++) { mapEdgeSet.add(`0-${i}`); mapEdgeSet.add(`${rows-1}-${i}`); }
-
-        const mapEdgeCells = cells.filter(([r,c]) => {
-          const k = `${r}-${c}`;
-          return mapEdgeSet.has(k) && !capitalSet.has(k);
-        });
-
-        function shuffle(arr) {
-          for (let i = arr.length - 1; i > 0; i--) {
-            const j = Math.floor(Math.random() * (i + 1));
-            [arr[i], arr[j]] = [arr[j], arr[i]];
-          }
-          return arr;
-        }
-
-        return {
-          nonAdjacent: shuffle(nonAdjacentCells),
-          capitalAdjacent: shuffle(capitalAdjacentCells),
-          teamAdjacent: shuffle(teamAdjacentCells),
-          mapEdge: shuffle(mapEdgeCells)
-        };
-      } catch (e) {
-        console.error(e);
-        return null;
+    // capital隣接
+    const capitalSet = new Set(capitalList.map(([r,c]) => `${r}-${c}`));
+    const adjacentSet = new Set();
+    for (const [cr, cc] of capitalList) {
+      for (const [dr, dc] of directions) {
+        const nr = cr + dr, nc = cc + dc;
+        if (nr >= 0 && nr < rows && nc >= 0 && nc < cols) adjacentSet.add(`${nr}-${nc}`);
       }
     }
-    // ===== ここまで getRegions差し替え =====
+
+    const nonAdjacentCells = cells.filter(([r,c]) => {
+      const k = `${r}-${c}`;
+      return !capitalSet.has(k) && !adjacentSet.has(k);
+    });
+
+    const capitalAdjacentCells = cells.filter(([r,c]) => adjacentSet.has(`${r}-${c}`));
+
+    // ★自チーム色のセル抽出：cellColors の値は "#d32f2f" 形式
+    const myColor = String(teamColor || '').replace('#','').toLowerCase();
+    const teamColorSet = new Set();
+    for (const [key, value] of Object.entries(cellColors)) {
+      const v = String(value || '').replace('#','').toLowerCase();
+      if (myColor && v === myColor) teamColorSet.add(key);
+    }
+
+    // 自領土＋隣接
+    const teamAdjacentSet = new Set();
+    for (const key of teamColorSet) {
+      const [tr, tc] = key.split('-').map(Number);
+      for (const [dr, dc] of directions) {
+        const nr = tr + dr, nc = tc + dc;
+        if (nr >= 0 && nr < rows && nc >= 0 && nc < cols) teamAdjacentSet.add(`${nr}-${nc}`);
+      }
+    }
+
+    const teamAdjacentCells = cells.filter(([r,c]) => {
+      const k = `${r}-${c}`;
+      return teamColorSet.has(k) || teamAdjacentSet.has(k);
+    });
+
+    // 端（mapEdge）
+    const mapEdgeSet = new Set();
+    for (let i=0; i<rows; i++) { mapEdgeSet.add(`${i}-0`); mapEdgeSet.add(`${i}-${cols-1}`); }
+    for (let i=0; i<cols; i++) { mapEdgeSet.add(`0-${i}`); mapEdgeSet.add(`${rows-1}-${i}`); }
+
+    const mapEdgeCells = cells.filter(([r,c]) => {
+      const k = `${r}-${c}`;
+      return mapEdgeSet.has(k) && !capitalSet.has(k);
+    });
+
+    function shuffle(arr) {
+      for (let i = arr.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [arr[i], arr[j]] = [arr[j], arr[i]];
+      }
+      return arr;
+    }
+
+    return {
+      nonAdjacent: shuffle(nonAdjacentCells),
+      capitalAdjacent: shuffle(capitalAdjacentCells),
+      teamAdjacent: shuffle(teamAdjacentCells),
+      mapEdge: shuffle(mapEdgeCells)
+    };
+  } catch (e) {
+    console.error(e);
+    return null;
+  }
+}
 
     async function challenge (region) {
       const [ row, col ] = region;
@@ -1639,8 +2995,6 @@ var settings = typeof settings !== 'undefined' ? settings : {};
       }
 
     }
-
-    // equipChange はあなたの原文のまま（略）
     async function equipChange (region) {
       const [ row, col ] = region;
       const url = `https://donguri.5ch.net/teambattle?r=${row}&c=${col}&`+MODE;
@@ -1683,7 +3037,6 @@ var settings = typeof settings !== 'undefined' ? settings : {};
     autoJoinIntervalId = setInterval(attackRegion,60000);
   };
 
-  // drawProgressBar 等（あなたの原文のまま）
   async function drawProgressBar(){
     try {
       const res = await fetch('https://donguri.5ch.net/');
@@ -1718,7 +3071,7 @@ var settings = typeof settings !== 'undefined' ? settings : {};
                totalSec = (100 - currentProgress) * 600 / 16.6;
              }
           } else {
-            totalSec = (currentProgress < 50) ? (50 - currentProgress) * 36 : (100 - currentProgress) * 36 + 10;
+          totalSec = (currentProgress < 50) ? (50 - currentProgress) * 36 : (100 - currentProgress) * 36 + 10;
           }
           totalSec = Math.floor(totalSec);
           min = Math.trunc(totalSec / 60);
@@ -1746,7 +3099,7 @@ var settings = typeof settings !== 'undefined' ? settings : {};
     autoJoin();
   }
   let progressBarIntervalId = setInterval(drawProgressBar, 18000);
-  (()=>{
+  (()=>{ // autoJoinとprogressBarのinterval管理
     function stopAutoJoin() {
       if (autoJoinIntervalId) {
         clearInterval(autoJoinIntervalId);
@@ -1770,9 +3123,4 @@ var settings = typeof settings !== 'undefined' ? settings : {};
       attributeFilter: ['open']
     });
   })();
-
-  // 重要：あなたの原文はこの後も続きますが、
-  // autoJoin修正が目的なので「自動参戦が動く完成版」をここに集約しています。
-  // UI/装備/範囲攻撃/セル表示の残り部分も完全に含めた“本当の全文”が必要なら、
-  // 次のメッセージで「省略なしで全文を続き貼って」と言ってください。
 })();
