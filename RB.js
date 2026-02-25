@@ -1,366 +1,351 @@
 // ==UserScript==
-// @name         donguri arena assist tool FIXED
-// @version      2.0
-// @description  arena assist (new map compatible + auto join + equip panel)
+// @name         donguri arena assist tool (stable toolbar + equip fixed)
+// @version      2.1
+// @description  Stable toolbar (always clickable) + equip panel that reliably loads from /bag
 // @match        https://donguri.5ch.net/teambattle*
 // @match        https://donguri.5ch.net/bag
 // ==/UserScript==
 
-(function(){
+(() => {
+  "use strict";
 
-/* -------------------------------
-   ページ判定
---------------------------------*/
-const isBag = location.pathname === "/bag";
+  const onReady = (fn) => {
+    if (document.readyState !== "loading") fn();
+    else document.addEventListener("DOMContentLoaded", fn, { once: true });
+  };
 
-/* -------------------------------
-   BAGページ：装備保存
---------------------------------*/
-if(isBag){
+  const isBag = location.pathname === "/bag";
 
-  function saveEquip(url,index){
-    let current = JSON.parse(localStorage.getItem("current_equip")||"[]");
-    const id = url.match(/equip\/(\d+)/)?.[1];
-    if(!id) return;
-    current[index]=id;
-    localStorage.setItem("current_equip",JSON.stringify(current));
+  /* -----------------------------
+     BAG: クリックした装備を current_equip に保存（武器/防具/首）
+  ------------------------------*/
+  if (isBag) {
+    function saveEquip(url, index) {
+      const id = url.match(/\/equip\/(\d+)/)?.[1];
+      if (!id) return;
+      const current = JSON.parse(localStorage.getItem("current_equip") || "[]");
+      current[index] = id;
+      localStorage.setItem("current_equip", JSON.stringify(current));
+    }
+
+    const tableIds = ["weaponTable", "armorTable", "necklaceTable"];
+    tableIds.forEach((tid, idx) => {
+      document.querySelectorAll(`#${tid} a[href^="https://donguri.5ch.net/equip/"]`)
+        .forEach((a) => a.addEventListener("click", () => saveEquip(a.href, idx)));
+    });
+    return;
   }
 
-  const tables=["weaponTable","armorTable","necklaceTable"];
-
-  tables.forEach((id,i)=>{
-    document.querySelectorAll(`#${id} a[href*="/equip/"]`)
-      .forEach(a=>{
-        a.addEventListener("click",()=>saveEquip(a.href,i));
-      });
-  });
-
-  return;
-}
-
-/* -------------------------------
-   TOOLBAR
---------------------------------*/
-
-const style=document.createElement("style");
-style.textContent=`
+  onReady(() => {
+    /* -----------------------------
+       STYLE: ツールバー最前面 + クリック確実
+    ------------------------------*/
+    const style = document.createElement("style");
+    style.textContent = `
 #aatToolbar{
- position:fixed;
- top:0;
- left:0;
- right:0;
- background:#fff;
- border-bottom:1px solid #000;
- z-index:999999;
- font-size:13px;
+  position:fixed;
+  top:0; left:0; right:0;
+  background:#fff;
+  border-bottom:1px solid #000;
+  z-index:2147483647; /* 最強 */
+  pointer-events:auto;
 }
-
 #aatWrap{
- max-width:1100px;
- margin:auto;
- padding:6px;
+  max-width:1200px;
+  margin:0 auto;
+  padding:6px 8px;
+  box-sizing:border-box;
 }
-
 #aatRow{
- display:flex;
- gap:6px;
- flex-wrap:wrap;
- align-items:center;
+  display:flex;
+  gap:6px;
+  flex-wrap:wrap;
+  align-items:center;
 }
-
 #aatBar{
- width:350px;
- height:16px;
- background:#ddd;
- border-radius:8px;
- overflow:hidden;
+  width:360px;
+  height:16px;
+  background:#ddd;
+  border-radius:8px;
+  overflow:hidden;
 }
-
-#aatBar div{
- height:100%;
- background:#428bca;
- color:#fff;
- text-align:right;
- padding-right:4px;
- font-size:12px;
+#aatBarInner{
+  height:100%;
+  background:#428bca;
+  color:#fff;
+  text-align:right;
+  padding-right:6px;
+  font-size:12px;
+  line-height:16px;
+  box-sizing:border-box;
+  white-space:nowrap;
 }
-
 #aatEquip{
- display:none;
- border-top:1px solid #000;
- margin-top:6px;
- padding-top:6px;
- gap:6px;
- flex-wrap:wrap;
+  display:none;
+  border-top:1px solid #000;
+  margin-top:6px;
+  padding-top:6px;
+  gap:10px;
+  flex-wrap:wrap;
+  align-items:center;
 }
-
+#aatEquip span{
+  display:inline-block;
+  min-width:10em;
+  max-width:60vw;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+}
 #aatLog{
- display:none;
- max-height:40vh;
- overflow:auto;
- border-top:1px solid #000;
- margin-top:6px;
- padding-top:6px;
- font-size:12px;
+  display:none;
+  max-height:40vh;
+  overflow:auto;
+  border-top:1px solid #000;
+  margin-top:6px;
+  padding-top:6px;
+  font-size:12px;
+  line-height:1.35;
 }
+#aatToolbar button{
+  padding:4px 8px;
+  border:1px solid #000;
+  background:#eee;
+  cursor:pointer;
+}
+#aatToolbar button:active{ transform:translateY(1px); }
 `;
-document.head.append(style);
+    document.head.appendChild(style);
 
-/* toolbar DOM */
-
-const bar=document.createElement("div");
-bar.id="aatToolbar";
-
-bar.innerHTML=`
+    /* -----------------------------
+       TOOLBAR DOM
+    ------------------------------*/
+    const toolbar = document.createElement("div");
+    toolbar.id = "aatToolbar";
+    toolbar.innerHTML = `
 <div id="aatWrap">
+  <div id="aatRow">
+    <b id="aatInfo">loading…</b>
+    <div id="aatBar"><div id="aatBarInner" style="width:0%">0%</div></div>
+    <button id="aatLogBtn">ログ</button>
+  </div>
 
-<div id="aatRow">
-<span id="aatInfo"></span>
-<div id="aatBar"><div id="aatBarInner"></div></div>
-</div>
+  <div id="aatRow" style="margin-top:6px;">
+    <button id="aatEquipBtn">装備</button>
+    <button id="aatEquipReload">装備更新</button>
+    <button id="aatRefreshBtn">進行更新</button>
+    <button id="aatAutoBtn">自動参戦:OFF</button>
+  </div>
 
-<div id="aatRow">
-<button id="aatEquipBtn">装備</button>
-<button id="aatRefreshBtn">更新</button>
-<button id="aatAutoBtn">自動参戦</button>
-</div>
+  <div id="aatEquip">
+    <div>武器: <span data-w>-</span></div>
+    <div>防具: <span data-a>-</span></div>
+    <div>首  : <span data-n>-</span></div>
+  </div>
 
-<div id="aatEquip">
-武:<span data-w>-</span>
-防:<span data-a>-</span>
-首:<span data-n>-</span>
-<button id="aatEquipReload">更新</button>
-</div>
-
-<div id="aatLog"></div>
-
+  <div id="aatLog"></div>
 </div>
 `;
+    document.body.prepend(toolbar);
 
-document.body.prepend(bar);
-document.body.style.paddingTop="90px";
+    // body上部を空ける（ツールバー被り防止）
+    const pad = 120;
+    document.body.style.paddingTop = `${pad}px`;
 
-/* -------------------------------
-   DOM
---------------------------------*/
+    // canvasがクリックを奪う場合に備え、toolbar領域だけ最前面＋クリック可能にしておく（z-indexで解決するはず）
+    // それでもダメな場合は gridOverlay が異常に高い z-index を持ってるケースなので下で補正する。
 
-const info=document.getElementById("aatInfo");
-const barInner=document.getElementById("aatBarInner");
-const equipPanel=document.getElementById("aatEquip");
-const logBox=document.getElementById("aatLog");
+    /* -----------------------------
+       REFERENCES
+    ------------------------------*/
+    const info = document.getElementById("aatInfo");
+    const barInner = document.getElementById("aatBarInner");
+    const equipPanel = document.getElementById("aatEquip");
+    const logBox = document.getElementById("aatLog");
+    const logBtn = document.getElementById("aatLogBtn");
 
-/* -------------------------------
-   LOG
---------------------------------*/
+    function log(msg) {
+      const d = document.createElement("div");
+      d.textContent = `${new Date().toLocaleTimeString()} ${msg}`;
+      logBox.prepend(d);
+    }
 
-function log(t){
- const d=document.createElement("div");
- d.textContent=new Date().toLocaleTimeString()+" "+t;
- logBox.prepend(d);
-}
+    /* -----------------------------
+       「最近2つでボタンが死ぬ」対策：
+       gridOverlay/canvasのz-indexがツールバーを超えてる時だけ強制補正
+    ------------------------------*/
+    function fixCanvasZ() {
+      const cv =
+        document.querySelector("#gridOverlay") ||
+        document.querySelector("#gridBase") ||
+        document.querySelector("canvas");
+      if (!cv) return;
 
-/* -------------------------------
-   装備表示
---------------------------------*/
+      // 変なz-indexが付いてるときだけ下げる
+      const z = Number(getComputedStyle(cv).zIndex);
+      if (Number.isFinite(z) && z >= 2147483000) {
+        cv.style.zIndex = "1";
+        log("canvas z-index を補正しました");
+      }
+    }
+    fixCanvasZ();
 
-async function loadEquip(){
+    /* -----------------------------
+       装備：/bag を取得して各テーブルの先頭アイテム名を表示
+       ※ログイン切れ/DOM差でも「-(取得失敗)」表示にする
+    ------------------------------*/
+    async function loadEquip() {
+      try {
+        const res = await fetch("/bag", { credentials: "same-origin" });
+        const html = await res.text();
+        const doc = new DOMParser().parseFromString(html, "text/html");
 
- try{
+        const h1 = doc.querySelector("h1")?.textContent || "";
+        if (!h1.includes("アイテムバッグ")) {
+          // ログイン切れ等
+          equipPanel.querySelector("[data-w]").textContent = "取得失敗（再ログイン？）";
+          equipPanel.querySelector("[data-a]").textContent = "取得失敗（再ログイン？）";
+          equipPanel.querySelector("[data-n]").textContent = "取得失敗（再ログイン？）";
+          log("装備: /bag が想定外（ログイン切れの可能性）");
+          return;
+        }
 
-  const res=await fetch("/bag");
-  const html=await res.text();
-  const doc=new DOMParser().parseFromString(html,"text/html");
+        const ids = ["weaponTable", "armorTable", "necklaceTable"];
+        const keys = ["w", "a", "n"];
 
-  const tables=[
-   doc.querySelector("#weaponTable"),
-   doc.querySelector("#armorTable"),
-   doc.querySelector("#necklaceTable")
-  ];
+        ids.forEach((tid, i) => {
+          const t = doc.querySelector("#" + tid);
+          // 1列目（名前）を拾う：tbody tr td の一番最初
+          const name = t?.querySelector("tbody tr td")?.textContent?.trim() || "-";
+          const span = equipPanel.querySelector(`[data-${keys[i]}]`);
+          if (span) span.textContent = name;
+        });
 
-  const roles=["w","a","n"];
+        log("装備を更新しました");
+      } catch (e) {
+        equipPanel.querySelector("[data-w]").textContent = "取得失敗";
+        equipPanel.querySelector("[data-a]").textContent = "取得失敗";
+        equipPanel.querySelector("[data-n]").textContent = "取得失敗";
+        log("装備取得失敗: " + (e?.message || e));
+      }
+    }
 
-  tables.forEach((t,i)=>{
+    /* -----------------------------
+       進行：トップページから % を読む（失敗しても壊れない）
+    ------------------------------*/
+    async function updateProgress() {
+      try {
+        const res = await fetch("/", { credentials: "same-origin" });
+        const html = await res.text();
+        const doc = new DOMParser().parseFromString(html, "text/html");
 
-    const name=t?.querySelector("tbody tr td")?.textContent||"-";
-    const span=equipPanel.querySelector(`[data-${roles[i]}]`);
-    if(span) span.textContent=name;
+        // ここはサイト側の構造差が出やすいので「数字っぽいもの」を優先する
+        const m = doc.body.textContent.match(/(\d{1,3})%/);
+        const percent = m ? Math.max(0, Math.min(100, parseInt(m[1], 10))) : null;
+
+        if (percent == null) {
+          info.textContent = "進行: 取得失敗";
+          return;
+        }
+
+        barInner.style.width = percent + "%";
+        barInner.textContent = percent + "%";
+        info.textContent = `進行 ${percent}%`;
+      } catch (_) {
+        info.textContent = "進行: 取得失敗";
+      }
+    }
+
+    /* -----------------------------
+       自動参戦（簡易）：ランダムセル叩く
+       ※あなたの元コードの「進行%で次の%」ロジックは、UI安定後に合体するのが安全
+    ------------------------------*/
+    function detectGridSize() {
+      // ページ内scriptから GRID_SIZE を拾う（あなたの貼ったバトルフィールドは const GRID_SIZE = 7）
+      const scripts = [...document.querySelectorAll("script")];
+      for (const s of scripts) {
+        const m = s.textContent.match(/const\s+GRID_SIZE\s*=\s*(\d+)/);
+        if (m) return parseInt(m[1], 10);
+      }
+      return 7;
+    }
+
+    async function challenge(r, c) {
+      const body = `row=${r}&col=${c}`;
+      const res = await fetch("/teamchallenge" + location.search, {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body,
+        credentials: "same-origin"
+      });
+      const text = await res.text();
+      const last = text.trim().split("\n").pop() || "";
+      log(`(${r},${c}) ${last}`);
+      return last;
+    }
+
+    const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+    let auto = false;
+    async function autoLoop() {
+      const size = detectGridSize();
+      while (auto) {
+        const r = Math.floor(Math.random() * size);
+        const c = Math.floor(Math.random() * size);
+
+        let last = "";
+        try {
+          last = await challenge(r, c);
+        } catch (e) {
+          log("自動参戦エラー: " + (e?.message || e));
+          await sleep(5000);
+          continue;
+        }
+
+        // too fast / 動き切れ の待機
+        if (last.includes("too fast") || last.includes("動きを使い果たしました")) {
+          await sleep(11000);
+        } else {
+          await sleep(1600);
+        }
+      }
+    }
+
+    /* -----------------------------
+       BUTTONS
+    ------------------------------*/
+    document.getElementById("aatEquipBtn").addEventListener("click", async () => {
+      // 「押しても出ない」対策：開くタイミングで必ず再取得する
+      if (equipPanel.style.display === "flex") {
+        equipPanel.style.display = "none";
+      } else {
+        equipPanel.style.display = "flex";
+        await loadEquip();
+      }
+    });
+
+    document.getElementById("aatEquipReload").addEventListener("click", loadEquip);
+    document.getElementById("aatRefreshBtn").addEventListener("click", updateProgress);
+
+    document.getElementById("aatAutoBtn").addEventListener("click", (e) => {
+      auto = !auto;
+      e.target.textContent = auto ? "自動参戦:ON" : "自動参戦:OFF";
+      log(auto ? "自動参戦 ON" : "自動参戦 OFF");
+      if (auto) autoLoop();
+    });
+
+    logBtn.addEventListener("click", () => {
+      logBox.style.display = (logBox.style.display === "block") ? "none" : "block";
+    });
+
+    /* -----------------------------
+       INIT
+    ------------------------------*/
+    updateProgress();
+    setInterval(updateProgress, 20000);
+
+    // 初回は装備パネル開いた時に取得するが、保険で一回だけ事前取得もしておく
+    loadEquip();
 
   });
-
- }catch(e){
-
-  log("装備取得失敗");
-
- }
-
-}
-
-/* -------------------------------
-   ボタン
---------------------------------*/
-
-document.getElementById("aatEquipBtn").onclick=()=>{
- equipPanel.style.display=
- equipPanel.style.display==="flex"?"none":"flex";
-};
-
-document.getElementById("aatEquipReload").onclick=loadEquip;
-
-document.getElementById("aatRefreshBtn").onclick=updateProgress;
-
-/* -------------------------------
-   progress
---------------------------------*/
-
-async function updateProgress(){
-
- try{
-
- const res=await fetch("/");
- const html=await res.text();
-
- const doc=new DOMParser().parseFromString(html,"text/html");
-
- const bar=doc.querySelector(".stat-block div div");
-
- if(!bar) return;
-
- const percent=parseInt(bar.textContent);
-
- barInner.style.width=percent+"%";
- barInner.textContent=percent+"%";
-
- info.textContent="map "+percent+"%";
-
- }catch(e){}
-
-}
-
-/* -------------------------------
-   マップクリック
---------------------------------*/
-
-function getCanvas(){
-
- return document.querySelector("#gridOverlay")
-     ||document.querySelector("canvas");
-
-}
-
-function detectGrid(){
-
- const script=[...document.querySelectorAll("script")]
- .find(s=>s.textContent.includes("GRID_SIZE"));
-
- if(!script) return 7;
-
- const m=script.textContent.match(/GRID_SIZE\s*=\s*(\d+)/);
- return m?parseInt(m[1]):7;
-
-}
-
-function getCell(e){
-
- const canvas=getCanvas();
- const rect=canvas.getBoundingClientRect();
- const size=detectGrid();
-
- const x=e.clientX-rect.left;
- const y=e.clientY-rect.top;
-
- const cellSize=rect.width/size;
-
- return {
-  r:Math.floor(y/cellSize),
-  c:Math.floor(x/cellSize)
- };
-
-}
-
-/* -------------------------------
-   自動参戦
---------------------------------*/
-
-let auto=false;
-
-document.getElementById("aatAutoBtn").onclick=()=>{
- auto=!auto;
- log(auto?"AUTO ON":"AUTO OFF");
- if(auto) autoLoop();
-};
-
-async function challenge(r,c){
-
- try{
-
- const body=`row=${r}&col=${c}`;
-
- const res=await fetch("/teamchallenge"+location.search,{
-  method:"POST",
-  headers:{'Content-Type':'application/x-www-form-urlencoded'},
-  body
- });
-
- const text=await res.text();
-
- log(`(${r},${c}) ${text.split("\n").pop()}`);
-
- if(text.includes("too fast"))
-  await sleep(2000);
-
- }catch(e){
-  log("error");
- }
-
-}
-
-function sleep(ms){
- return new Promise(r=>setTimeout(r,ms));
-}
-
-async function autoLoop(){
-
- while(auto){
-
-  const r=Math.floor(Math.random()*detectGrid());
-  const c=Math.floor(Math.random()*detectGrid());
-
-  await challenge(r,c);
-
-  await sleep(1500);
-
- }
-
-}
-
-/* -------------------------------
-   canvas click
---------------------------------*/
-
-function hookCanvas(){
-
- const canvas=getCanvas();
-
- if(!canvas) return;
-
- canvas.addEventListener("click",e=>{
-
-  const cell=getCell(e);
-
-  challenge(cell.r,cell.c);
-
- });
-
-}
-
-setTimeout(hookCanvas,1000);
-
-/* -------------------------------
-   init
---------------------------------*/
-
-updateProgress();
-loadEquip();
-setInterval(updateProgress,20000);
-
 })();
