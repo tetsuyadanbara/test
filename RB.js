@@ -1,12 +1,13 @@
 // ==UserScript==
 // @name         donguri arena assist tool
-// @version      1.3
-// @description  fix arena ui and add functions (updated specs & removed auto join)
-// @author       7234e634
+// @version      1.2.2d.パクリ9.4改 レッドブルー
+// @description fixes and additions
+// @author       ぱふぱふ
+// @match        https://donguri.5ch.net/teambattle?m=hc
+// @match        https://donguri.5ch.net/teambattle?m=l
 // @match        https://donguri.5ch.net/teambattle*
 // @match        https://donguri.5ch.net/bag
 // ==/UserScript==
-
 
 (()=>{
   if(location.href === 'https://donguri.5ch.net/bag') {
@@ -744,6 +745,7 @@
   });
   document.body.append(arenaResult, arenaField, helpDialog);
 
+  // --- 新仕様対応のグリッド生成ロジック追加 ---
   if (!document.querySelector('.grid') && document.querySelector('.gridCanvasOuter')) {
     const gridOuter = document.querySelector('.gridCanvasOuter');
     let GRID_SIZE = 16; // 初期値
@@ -795,7 +797,8 @@
     }
     gridOuter.appendChild(newGrid);
   }
-
+  // --- ここまで ---
+ 
   const grid = document.querySelector('.grid');
   grid.parentNode.style.height = null;
   grid.style.maxWidth = '100%';
