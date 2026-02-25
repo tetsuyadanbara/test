@@ -1,159 +1,172 @@
 // ==UserScript==
-// @name         donguri arena assist tool (canvas compatible + auto join full)
-// @version      2.0.0
-// @description  Fix teambattle UI (canvas grid compatible), build DOM grid, add range select & auto join.
-// @author       7234e634 (patched by ChatGPT)
+// @name         donguri arena assist tool
+// @version      1.2.2d.パクリ9.4改 レッドブルー (canvas対応fix 2026-02-25)
+// @description  fixes and additions (新canvasマップ互換グリッド対応)
+// @author       ぱふぱふ
 // @match        https://donguri.5ch.net/teambattle*
 // @match        https://donguri.5ch.net/bag
-// @grant        none
 // ==/UserScript==
 
-(() => {
-  'use strict';
-
-  // -----------------------------
-  // Helpers
-  // -----------------------------
-  const sleep = (ms) => new Promise(r => setTimeout(r, ms));
-  const qs = (sel, root = document) => root.querySelector(sel);
-  const qsa = (sel, root = document) => [...root.querySelectorAll(sel)];
-  const safeJSON = (s, dflt) => { try { return JSON.parse(s); } catch { return dflt; } };
-
-  function getModeQ() {
-    // location.search includes '?m=rb' or '&m=rb' (when r/c present)
-    const sp = new URL(location.href).searchParams;
-    const m = sp.get('m');
-    if (m === 'l') return { MODEQ: 'm=l', MODENAME: '[ﾗﾀﾞｰ]', MODEM: 'l' };
-    if (m === 'rb') return { MODEQ: 'm=rb', MODENAME: '[ﾚﾄﾞﾌﾞﾙ]', MODEM: 'rb' };
-    return { MODEQ: 'm=hc', MODENAME: '[ﾊｰﾄﾞｺｱ]', MODEM: 'hc' };
-  }
-
-  function getSettings() {
-    return safeJSON(localStorage.getItem('aat_settings'), {}) || {};
-  }
-  function saveSettings(settings) {
-    localStorage.setItem('aat_settings', JSON.stringify(settings || {}));
-  }
-
-  function parseObjectLiteral(src) {
-    // src is like "{ '0-1': '#d32f2f', ... }" or "{ '0-1': '#d32f2f', }"
-    // Use Function to handle single quotes safely, but restrict context.
-    try {
-      // eslint-disable-next-line no-new-func
-      return Function('"use strict"; return (' + src + ');')();
-    } catch (e) {
-      console.error('parseObjectLiteral failed', e);
-      return {};
-    }
-  }
-
-  function extractGridPayloadFromHtml(htmlText) {
-    // We need GRID_SIZE, cellColors, capitalList (or capitalMap)
-    const out = { GRID_SIZE: null, cellColors: {}, capitalList: [] };
-
-    // GRID_SIZE
-    const mGrid = htmlText.match(/const\s+GRID_SIZE\s*=\s*(\d+)\s*;/);
-    if (mGrid) out.GRID_SIZE = Number(mGrid[1]);
-
-    // cellColors
-    // Matches: const cellColors = { ... };
-    const mColors = htmlText.match(/const\s+cellColors\s*=\s*({[\s\S]*?})\s*;/);
-    if (mColors) out.cellColors = parseObjectLiteral(mColors[1]) || {};
-
-    // capitalList (new canvas source uses capitalList)
-    const mCapList = htmlText.match(/const\s+capitalList\s*=\s*(\[[\s\S]*?\])\s*;/);
-    if (mCapList) {
-      try { out.capitalList = JSON.parse(mCapList[1]); } catch { out.capitalList = []; }
-    }
-
-    // fallback old name capitalMap
-    if (!out.capitalList?.length) {
-      const mCapMap = htmlText.match(/const\s+capitalMap\s*=\s*(\[[\s\S]*?\])\s*;/);
-      if (mCapMap) {
-        try { out.capitalList = JSON.parse(mCapMap[1]); } catch { out.capitalList = []; }
-      }
-    }
-
-    return out;
-  }
-
-  async function fetchTeambattleHtml(MODEQ) {
-    // MODEQ like 'm=rb'
-    const url = `https://donguri.5ch.net/teambattle?${MODEQ}`;
-    const res = await fetch(url, { credentials: 'include' });
-    if (!res.ok) throw new Error(`[${res.status}] teambattle fetch failed`);
-    return await res.text();
-  }
-
-  function getRgbBrightness(cssColor) {
-    // cssColor may be "rgb(r,g,b)" or "#rrggbb"
-    let r, g, b;
-    if (!cssColor) return 255;
-    const m = cssColor.match(/\d+/g);
-    if (m && m.length >= 3) {
-      r = Number(m[0]); g = Number(m[1]); b = Number(m[2]);
-    } else if (cssColor.startsWith('#') && cssColor.length === 7) {
-      r = parseInt(cssColor.slice(1, 3), 16);
-      g = parseInt(cssColor.slice(3, 5), 16);
-      b = parseInt(cssColor.slice(5, 7), 16);
-    } else {
-      return 255;
-    }
-    return 0.2126 * r + 0.7152 * g + 0.0722 * b;
-  }
-
-  // -----------------------------
-  // /bag: save current equip on click
-  // -----------------------------
-  if (location.href === 'https://donguri.5ch.net/bag') {
+(()=>{
+  // =========================
+  // bag: 現在装備保存（元のまま）
+  // =========================
+  if(location.href === 'https://donguri.5ch.net/bag') {
     function saveCurrentEquip(url, index) {
-      const currentEquip = safeJSON(localStorage.getItem('current_equip'), []) || [];
+      let currentEquip = JSON.parse(localStorage.getItem('current_equip')) || [];
       const regex = /https:\/\/donguri\.5ch\.net\/equip\/(\d+)/;
-      const m = url.match(regex);
-      if (!m) return;
-      currentEquip[index] = m[1];
+      const equipId = url.match(regex)[1];
+      currentEquip[index] = equipId;
       localStorage.setItem('current_equip', JSON.stringify(currentEquip));
     }
     const tableIds = ['weaponTable', 'armorTable', 'necklaceTable'];
-    tableIds.forEach((elm, index) => {
+    tableIds.forEach((elm, index)=>{
       const equipLinks = document.querySelectorAll(`#${elm} a[href^="https://donguri.5ch.net/equip/"]`);
       [...equipLinks].forEach(link => {
-        link.addEventListener('click', () => saveCurrentEquip(link.href, index));
-      });
-    });
+        link.addEventListener('click', ()=>{
+          saveCurrentEquip(link.href, index);
+        })
+      })
+    })
     return;
   }
 
-  // -----------------------------
-  // teambattle main
-  // -----------------------------
-  const { MODEQ, MODENAME, MODEM } = getModeQ();
-  const settings = getSettings();
+  // =========================
+  // MODE（元のまま：互換のため維持）
+  // =========================
+  // location.search が "?m=rb&r=..&c=.." みたいになったので
+  // 旧コードの slice(1) だと壊れる。m=xx を安全に取り出す。
+  const usp = new URLSearchParams(location.search);
+  const m = usp.get('m') || 'hc';
+  const MODEQ = `m=${m}`;
+
+  let MODENAME;
+  if (MODEQ === 'm=l') {
+    MODENAME = '[ﾗﾀﾞｰ]';
+  } else if (MODEQ === 'm=rb') {
+    MODENAME = '[ﾚﾄﾞﾌﾞﾙ]';
+  } else {
+    MODENAME = '[ﾊｰﾄﾞｺｱ]';
+  }
+
+  let MODEM;
+  if (MODEQ === 'm=l') {
+    MODEM = 'l';
+  } else if (MODEQ === 'm=rb') {
+    MODEM = 'rb';
+  } else {
+    MODEM = 'hc';
+  }
 
   const vw = Math.min(document.documentElement.clientWidth, window.innerWidth || 0);
-  const header = qs('header');
+  const vh = Math.min(document.documentElement.clientHeight, window.innerHeight || 0);
+
+  const settings = JSON.parse(localStorage.getItem('aat_settings')) || {};
+
+  // =========================
+  // ★新canvasマップ対応：mapデータ抽出＋互換グリッド生成
+  // =========================
+  function extractMapDataFromDoc(doc) {
+    const scripts = [...doc.querySelectorAll('script')];
+    const s = scripts.map(x => x.textContent || '').find(t =>
+      t.includes('const GRID_SIZE') && t.includes('const cellColors')
+    ) || '';
+
+    if (!s) throw new Error('map script not found');
+
+    const gridSize = Number((s.match(/const\s+GRID_SIZE\s*=\s*(\d+)\s*;/) || [])[1] || 0);
+    if (!Number.isFinite(gridSize) || gridSize <= 0) throw new Error('GRID_SIZE parse failed');
+
+    const cellColorsMatch = s.match(/const\s+cellColors\s*=\s*({[\s\S]*?})\s*;/);
+    if (!cellColorsMatch) throw new Error('cellColors parse failed');
+    let cellColors = {};
+    try {
+      cellColors = Function('"use strict";return (' + cellColorsMatch[1] + ')')();
+    } catch (e) {
+      throw new Error('cellColors eval failed');
+    }
+
+    const capitalMatch = s.match(/const\s+capitalList\s*=\s*(\[\[[\s\S]*?\]\])\s*;/);
+    let capitalList = [];
+    if (capitalMatch) {
+      try { capitalList = JSON.parse(capitalMatch[1]); } catch (_) { capitalList = []; }
+    }
+
+    return { gridSize, cellColors, capitalList };
+  }
+
+  function ensureCompatGridOnCanvasPage() {
+    // 旧UI（.gridがあるページ）なら何もしない
+    if (document.querySelector('.grid')) return;
+
+    // 新UI（canvas）なら互換gridを作る
+    const { gridSize, cellColors, capitalList } = extractMapDataFromDoc(document);
+
+    const canvasOuter = document.querySelector('.gridCanvasOuter');
+    if (canvasOuter) canvasOuter.style.display = 'none'; // 邪魔なら隠す（表示したいならこの行を消す）
+
+    const grid = document.createElement('div');
+    grid.className = 'grid';
+    grid.style.display = 'grid';
+    grid.style.gridTemplateRows = `repeat(${gridSize}, 35px)`;
+    grid.style.gridTemplateColumns = `repeat(${gridSize}, 35px)`;
+    grid.style.gap = '0px';
+    grid.style.justifyContent = 'center';
+    grid.style.margin = '10px auto';
+
+    const capSet = new Set((capitalList || []).map(([r,c]) => `${r}-${c}`));
+
+    const frag = document.createDocumentFragment();
+    for (let r = 0; r < gridSize; r++) {
+      for (let c = 0; c < gridSize; c++) {
+        const cell = document.createElement('div');
+        cell.className = 'cell';
+        cell.dataset.row = String(r);
+        cell.dataset.col = String(c);
+        cell.style.width = '30px';
+        cell.style.height = '30px';
+        cell.style.border = '1px solid #ccc';
+        cell.style.cursor = 'pointer';
+        cell.style.boxSizing = 'border-box';
+        const key = `${r}-${c}`;
+        cell.style.backgroundColor = cellColors[key] || '#f0f0f0';
+
+        if (capSet.has(key)) {
+          cell.style.outline = 'black solid 2px';
+          cell.style.borderColor = 'gold';
+        }
+        frag.appendChild(cell);
+      }
+    }
+    grid.appendChild(frag);
+
+    // headerの直後に置く
+    const header = document.querySelector('header');
+    if (header) header.insertAdjacentElement('afterend', grid);
+    else document.body.prepend(grid);
+  }
+
+  // 互換グリッド生成（★これがないと以降の .grid / .cell 前提が全部落ちる）
+  try { ensureCompatGridOnCanvasPage(); } catch(e) { console.error(e); }
+
+  // =========================
+  // ここから元スクリプト本体（必要箇所のみ安全化＋新UI対応）
+  // =========================
+  const header = document.querySelector('header');
   if (header) header.style.marginTop = '100px';
 
-  // -----------------------------
-  // Build toolbar
-  // -----------------------------
   const toolbar = document.createElement('div');
   toolbar.style.position = 'fixed';
   toolbar.style.top = '0';
-  toolbar.style.zIndex = '9999';
+  toolbar.style.zIndex = '1';
   toolbar.style.background = '#fff';
   toolbar.style.border = 'solid 1px #000';
-  toolbar.style.padding = '4px';
-  toolbar.style.display = 'flex';
-  toolbar.style.flexDirection = 'column';
-  toolbar.style.gap = '4px';
-  toolbar.style.maxWidth = '100vw';
 
-  (() => {
+  (()=>{
     const position = settings.toolbarPosition || 'left';
     let distance = settings.toolbarPositionLength || '0px';
 
-    const match = String(distance).match(/^(\d+)(px|%|vw)?$/);
+    const match = distance.match(/^(\d+)(px|%|vw)?$/);
     let value = match ? parseFloat(match[1]) : 0;
     let unit = match ? match[2] || 'px' : 'px';
 
@@ -166,66 +179,17 @@
 
     distance = `${value}${unit}`;
 
-    if (position === 'left') toolbar.style.left = distance;
-    else if (position === 'right') toolbar.style.right = distance;
-    else { toolbar.style.left = distance; toolbar.style.right = distance; }
+    if (position === 'left') {
+      toolbar.style.left = distance;
+    } else if (position === 'right') {
+      toolbar.style.right = distance;
+    } else if (position === 'center') {
+      toolbar.style.left = distance;
+      toolbar.style.right = distance;
+    }
   })();
 
-  // progress bar
-  const progressBarInfo = document.createElement('div');
-  progressBarInfo.style.fontSize = '12px';
-  progressBarInfo.style.whiteSpace = 'nowrap';
-  progressBarInfo.style.overflowX = 'auto';
-
-  const progressBar = document.createElement('div');
-  progressBar.style.width = '360px';
-  progressBar.style.maxWidth = '95vw';
-  progressBar.style.height = '18px';
-  progressBar.style.background = '#ccc';
-  progressBar.style.borderRadius = '8px';
-  progressBar.style.overflow = 'hidden';
-
-  const progressBarBody = document.createElement('div');
-  progressBarBody.style.height = '100%';
-  progressBarBody.style.background = '#428bca';
-  progressBarBody.style.color = '#fff';
-  progressBarBody.style.textAlign = 'right';
-  progressBarBody.style.paddingRight = '6px';
-  progressBarBody.style.boxSizing = 'border-box';
-  progressBarBody.style.fontSize = '12px';
-  progressBarBody.style.lineHeight = '18px';
-  progressBar.append(progressBarBody);
-
-  // buttons row
-  const btnRow = document.createElement('div');
-  btnRow.style.display = 'flex';
-  btnRow.style.gap = '4px';
-  btnRow.style.flexWrap = 'nowrap';
-  btnRow.style.overflowX = 'auto';
-
-  function mkBtn(text) {
-    const b = document.createElement('button');
-    b.type = 'button';
-    b.textContent = text;
-    b.style.padding = '4px 6px';
-    b.style.border = '1px solid #000';
-    b.style.background = '#eee';
-    b.style.whiteSpace = 'nowrap';
-    b.style.fontSize = '12px';
-    return b;
-  }
-
-  const btnRefresh = mkBtn('エリア情報更新');
-  const btnToggle = mkBtn('表示切替');
-  const btnRange = mkBtn('範囲選択');
-  btnRange.style.background = '#f64';
-  btnRange.style.color = '#fff';
-  const btnAutoJoin = mkBtn('自動参戦');
-  btnAutoJoin.style.background = '#ffb300';
-
-  btnRow.append(btnRefresh, btnToggle, btnRange, btnAutoJoin);
-  toolbar.append(progressBarInfo, progressBar, btnRow);
-
+  // ★新ページは header の中に h4 が無いのでガード
   if (header) {
     const h4 = header.querySelector('h4');
     if (h4) h4.style.display = 'none';
@@ -234,614 +198,742 @@
     document.body.prepend(toolbar);
   }
 
-  // -----------------------------
-  // Auto-join dialog
-  // -----------------------------
-  const autoJoinDialog = document.createElement('dialog');
-  autoJoinDialog.className = 'auto-join';
-  autoJoinDialog.style.width = '92vw';
-  autoJoinDialog.style.height = '86vh';
-  autoJoinDialog.style.background = '#fff';
-  autoJoinDialog.style.color = '#000';
-  autoJoinDialog.style.border = '1px solid #000';
-  autoJoinDialog.style.padding = '6px';
+  const progressBarContainer = document.createElement('div');
+  const progressBar = document.createElement('div');
+  const progressBarBody = document.createElement('div');
+  const progressBarInfo = document.createElement('p');
+  progressBar.classList.add('progress-bar');
+  progressBar.style.display = 'inline-block';
+  progressBar.style.width = '400px';
+  progressBar.style.maxWidth = '100vw';
+  progressBar.style.height = '20px';
+  progressBar.style.background = '#ccc';
+  progressBar.style.borderRadius = '8px';
+  progressBar.style.fontSize = '16px';
+  progressBar.style.overflow = 'hidden';
+  progressBar.style.marginTop = '5px';
+  progressBarBody.style.height = '100%';
+  progressBarBody.style.lineHeight = 'normal';
+  progressBarBody.style.background = '#428bca';
+  progressBarBody.style.textAlign = 'right';
+  progressBarBody.style.paddingRight = '5px';
+  progressBarBody.style.boxSizing = 'border-box';
+  progressBarBody.style.color = 'white';
+  progressBarInfo.style.marginTop = '0';
+  progressBarInfo.style.marginBottom = '0';
+  progressBarInfo.style.overflow = 'auto';
+  progressBarInfo.style.whiteSpace = 'nowrap';
 
-  const ajTitle = document.createElement('div');
-  ajTitle.style.display = 'flex';
-  ajTitle.style.alignItems = 'center';
-  ajTitle.style.justifyContent = 'space-between';
+  progressBarContainer.append(progressBarInfo,progressBar);
+  progressBar.append(progressBarBody)
+  toolbar.append(progressBarContainer);
 
-  const ajH = document.createElement('b');
-  ajH.textContent = '自動参戦ログ';
+  // =========================
+  // 以下、元の巨大UI/装備/設定部分は基本そのまま
+  // （途中で .grid/.cell 依存があるので、要所だけ関数を書き換え）
+  // =========================
 
-  const ajClose = mkBtn('閉じる');
-  ajClose.addEventListener('click', () => autoJoinDialog.close());
+  // add buttons and select to custom menu
+  let shouldSkipAreaInfo, shouldSkipAutoEquip, cellSelectorActivate, rangeAttackProcessing,
+    currentPeriod, currentProgress;
+  let currentEquipName = '';
 
-  ajTitle.append(ajH, ajClose);
+  // （以降、あなたの元コードを極力保持）
+  // ------------------------------------------------------------------
+  // ここから下は “元コードをそのまま” 置いてあります。
+  // ただし、refreshArenaInfo() / autoJoin.getRegions() の中は
+  // 新canvasページ用に差し替え済みです。
+  // ------------------------------------------------------------------
 
-  const ajLog = document.createElement('div');
-  ajLog.className = 'auto-join-log';
-  ajLog.style.border = '1px solid #000';
-  ajLog.style.height = '68vh';
-  ajLog.style.overflow = 'auto';
-  ajLog.style.padding = '4px';
-  ajLog.style.fontSize = '12px';
-  ajLog.style.textAlign = 'left';
+  (()=>{
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.style.flexShrink = '1';
+    button.style.flexGrow = '0';
+    button.style.whiteSpace = 'nowrap';
+    button.style.overflow = 'hidden';
+    button.style.boxSizing = 'border-box';
+    button.style.padding = '2px';
+    button.style.width = '6em';
+    button.style.fontSize = '65%';
+    button.style.border = 'none';
 
-  const ajControls = document.createElement('div');
-  ajControls.style.display = 'flex';
-  ajControls.style.gap = '6px';
-  ajControls.style.marginTop = '6px';
-
-  const ajStart = mkBtn('開始');
-  ajStart.style.background = '#4f6';
-  const ajStop = mkBtn('停止');
-  ajStop.style.background = '#ddd';
-  const ajSettings = mkBtn('設定(任意)');
-  ajSettings.style.background = '#eee';
-
-  ajControls.append(ajStart, ajStop, ajSettings);
-  autoJoinDialog.append(ajTitle, ajLog, ajControls);
-  document.body.append(autoJoinDialog);
-
-  function autoJoinLog(msg) {
-    const d = document.createElement('div');
-    d.textContent = `[${new Date().toLocaleTimeString()}] ${msg}`;
-    ajLog.prepend(d);
-  }
-
-  // Minimal settings prompt (optional)
-  ajSettings.addEventListener('click', () => {
-    const s = getSettings();
-    const teamName = prompt('チーム名（ログ表示用・任意）', s.teamName || '');
-    if (teamName !== null) s.teamName = teamName;
-    const teamColor = prompt('自チームカラー（例: d32f2f / 1976d2）※任意', s.teamColor || '');
-    if (teamColor !== null) s.teamColor = teamColor.replace(/[^0-9a-fA-F]/g, '').slice(0, 6);
-    saveSettings(s);
-    autoJoinLog('設定を保存しました（必要ならページ更新）');
-  });
-
-  // -----------------------------
-  // DOM grid creation (canvas compatible)
-  // -----------------------------
-  let GRID_SIZE = 0;
-  let cellColors = {};
-  let capitalList = [];
-  let grid; // .grid (our own)
-  let currentViewMode = 'detail';
-  let cellSelectorActive = false;
-
-  function getTeambattleInlineScriptText(root = document) {
-    // Prefer script under .gridCanvasOuter, fallback any script containing "const GRID_SIZE"
-    const outer = qs('.gridCanvasOuter', root);
-    if (outer) {
-      const scr = qs('script', outer);
-      if (scr && scr.textContent.includes('const GRID_SIZE')) return scr.textContent;
-    }
-    const scr2 = qsa('script', root).find(s => s.textContent && s.textContent.includes('const GRID_SIZE'));
-    return scr2 ? scr2.textContent : '';
-  }
-
-  function ensureDomGridFromCurrentPage() {
-    // If already exists, no-op
-    if (qs('.grid')) return qs('.grid');
-
-    const scriptText = getTeambattleInlineScriptText(document);
-    const payload = extractGridPayloadFromHtml(scriptText);
-
-    GRID_SIZE = payload.GRID_SIZE || 0;
-    cellColors = payload.cellColors || {};
-    capitalList = payload.capitalList || [];
-
-    if (!GRID_SIZE) {
-      // last resort: try from whole HTML
-      const payload2 = extractGridPayloadFromHtml(document.documentElement.outerHTML);
-      GRID_SIZE = payload2.GRID_SIZE || 0;
-      cellColors = payload2.cellColors || {};
-      capitalList = payload2.capitalList || [];
+    if (vw < 768) {
+      progressBarContainer.style.fontSize = '60%';
     }
 
-    if (!GRID_SIZE) throw new Error('GRID_SIZE not found (page format changed)');
+    const menuButton = button.cloneNode();
+    menuButton.textContent = '▼メニュー';
+    menuButton.addEventListener('click', ()=>{
+      const isSubMenuOpen = subMenu.style.display === 'flex';
+      subMenu.style.display = isSubMenuOpen ? 'none' : 'flex';
+    })
 
-    const outer = qs('.gridCanvasOuter') || document.body;
-    const wrap = qs('#gridWrap');
-    if (wrap) wrap.style.display = 'none';
-
-    const newGrid = document.createElement('div');
-    newGrid.className = 'grid';
-    newGrid.style.display = 'grid';
-    newGrid.style.gridTemplateColumns = `repeat(${GRID_SIZE}, 35px)`;
-    newGrid.style.gridTemplateRows = `repeat(${GRID_SIZE}, 35px)`;
-    newGrid.style.gap = '2px';
-    newGrid.style.justifyContent = 'center';
-    newGrid.style.margin = '0 auto';
-    newGrid.style.padding = '10px 0';
-
-    const capSet = new Set((capitalList || []).map(([r, c]) => `${r}-${c}`));
-
-    for (let r = 0; r < GRID_SIZE; r++) {
-      for (let c = 0; c < GRID_SIZE; c++) {
-        const cell = document.createElement('div');
-        cell.className = 'cell';
-        cell.dataset.row = String(r);
-        cell.dataset.col = String(c);
-        cell.style.width = '30px';
-        cell.style.height = '30px';
-        cell.style.border = '1px solid #ccc';
-        cell.style.cursor = 'pointer';
-        cell.style.overflow = 'hidden';
-        cell.style.background = cellColors[`${r}-${c}`] || 'transparent';
-
-        if (capSet.has(`${r}-${c}`)) {
-          cell.style.outline = '2px solid #000';
-          cell.style.borderColor = 'gold';
-        }
-
-        newGrid.append(cell);
-      }
-    }
-
-    // Insert near the original canvas
-    outer.prepend(newGrid);
-    return newGrid;
-  }
-
-  // -----------------------------
-  // Fetch & refresh grid payload from server, then repaint DOM grid
-  // -----------------------------
-  async function refreshGridColorsFromServer() {
-    const html = await fetchTeambattleHtml(MODEQ);
-    const payload = extractGridPayloadFromHtml(html);
-
-    if (!payload.GRID_SIZE) throw new Error('GRID_SIZE parse failed');
-    GRID_SIZE = payload.GRID_SIZE;
-    cellColors = payload.cellColors || {};
-    capitalList = payload.capitalList || [];
-
-    // If size changed, rebuild
-    if (!grid || qsa('.cell', grid).length !== GRID_SIZE * GRID_SIZE) {
-      const old = qs('.grid');
-      if (old) old.remove();
-      grid = ensureDomGridFromCurrentPage();
-    }
-
-    const capSet = new Set((capitalList || []).map(([r, c]) => `${r}-${c}`));
-    qsa('.cell', grid).forEach(cell => {
-      const r = cell.dataset.row;
-      const c = cell.dataset.col;
-      const key = `${r}-${c}`;
-      cell.style.background = cellColors[key] || 'transparent';
-      if (capSet.has(key)) {
-        cell.style.outline = '2px solid #000';
-        cell.style.borderColor = 'gold';
-      } else {
-        cell.style.outline = '';
-        cell.style.borderColor = cell.classList.contains('selected') ? '#f64' : '#ccc';
-      }
+    const equipButton = button.cloneNode();
+    equipButton.textContent = '■装備';
+    equipButton.addEventListener('click', ()=>{
+      panel.style.display = 'flex';
     });
-  }
 
-  // -----------------------------
-  // Cell display mode (detail/compact)
-  // (we keep it simple: show rank/leader requires per-cell fetch; here: compact only shows coordinates)
-  // -----------------------------
-  function setViewMode(mode) {
-    currentViewMode = mode;
-    if (!grid) return;
+    const toggleViewButton = button.cloneNode();
+    toggleViewButton.innerText = '表示\n切り替え';
+    toggleViewButton.addEventListener('click', ()=>{
+      toggleCellViewMode();
+    })
 
-    if (mode === 'detail') {
-      grid.style.gridTemplateRows = `repeat(${GRID_SIZE}, 65px)`;
-      grid.style.gridTemplateColumns = `repeat(${GRID_SIZE}, 105px)`;
-      qsa('.cell', grid).forEach(cell => {
-        cell.style.width = '100px';
-        cell.style.height = '60px';
-        cell.style.borderWidth = '3px';
-        // Keep existing children (if any) - optional
-      });
+    const refreshButton = button.cloneNode();
+    refreshButton.innerText = 'エリア情報\n更新';
+    refreshButton.addEventListener('click',()=>{
+      fetchAreaInfo(false);
+    });
+
+    const skipAreaInfoButton = button.cloneNode();
+    skipAreaInfoButton.innerText = 'セル情報\nスキップ';
+    skipAreaInfoButton.style.color = '#fff';
+    if (settings.skipArenaInfo) {
+      skipAreaInfoButton.style.background = '#46f';
+      shouldSkipAreaInfo = true;
     } else {
-      grid.style.gridTemplateRows = `repeat(${GRID_SIZE}, 35px)`;
-      grid.style.gridTemplateColumns = `repeat(${GRID_SIZE}, 35px)`;
-      qsa('.cell', grid).forEach(cell => {
-        cell.style.width = '30px';
-        cell.style.height = '30px';
-        cell.style.borderWidth = '1px';
-        // remove children
-        while (cell.firstChild) cell.firstChild.remove();
-      });
+      skipAreaInfoButton.style.background = '#888';
+      shouldSkipAreaInfo = false;
     }
-  }
+    skipAreaInfoButton.addEventListener('click', ()=>{
+      if(shouldSkipAreaInfo) {
+        skipAreaInfoButton.style.background = '#888';
+        shouldSkipAreaInfo = false;
+      } else {
+        skipAreaInfoButton.style.background = '#46f';
+        shouldSkipAreaInfo = true;
+      }
+      settings.skipArenaInfo = shouldSkipAreaInfo;
+      localStorage.setItem('aat_settings', JSON.stringify(settings));
+    });
 
-  function toggleViewMode() {
-    setViewMode(currentViewMode === 'detail' ? 'compact' : 'detail');
-  }
+    const subMenu = document.createElement('div');
+    subMenu.style.display = 'none';
+    subMenu.style.flexWrap = 'nowrap';
+    subMenu.style.overflowX = 'hidden';
+    subMenu.style.position = 'relative';
 
-  // -----------------------------
-  // Click behavior
-  // - range select: select cells
-  // - normal: navigate to r/c
-  // -----------------------------
-  function attachCellHandlers() {
-    if (!grid) return;
-    qsa('.cell', grid).forEach(cell => {
-      cell.addEventListener('click', () => {
-        const r = cell.dataset.row;
-        const c = cell.dataset.col;
+    (()=>{
+      const subButton = button.cloneNode();
+      subButton.style.fontSize = '65%';
+      subButton.style.width = '6em';
+      subButton.style.border = 'none';
+      subButton.style.padding = '2px';
 
-        if (cellSelectorActive) {
-          if (cell.classList.contains('selected')) {
-            cell.classList.remove('selected');
-            cell.style.borderColor = '#ccc';
-          } else {
-            cell.classList.add('selected');
-            cell.style.borderColor = '#f64';
-          }
-          return;
+      const div = document.createElement('div');
+      div.style.display = 'flex';
+      div.style.flex = '1';
+      div.style.justifyContent = 'center';
+      div.style.gap = '2px';
+      div.style.overflowX = 'auto';
+      div.style.height = '100%';
+
+      const cellButton = subButton.cloneNode();
+      cellButton.innerText = 'エリア情報\n再取得';
+      cellButton.addEventListener('click',()=>{
+        fetchAreaInfo(true);
+      });
+
+      const skipAutoEquipButton = subButton.cloneNode();
+      skipAutoEquipButton.textContent = '自動装備';
+      skipAutoEquipButton.style.color = '#fff';
+      skipAutoEquipButton.classList.add('skip-auto-equip');
+      if (settings.skipAutoEquip) {
+        skipAutoEquipButton.style.background = '#888';
+        shouldSkipAutoEquip = true;
+      } else {
+        skipAutoEquipButton.style.background = '#46f';
+        shouldSkipAutoEquip = false;
+      }
+      skipAutoEquipButton.addEventListener('click', ()=>{
+        if (shouldSkipAutoEquip) {
+          skipAutoEquipButton.style.background = '#46f';
+          shouldSkipAutoEquip = false;
+        } else {
+          skipAutoEquipButton.style.background = '#888';
+          shouldSkipAutoEquip = true;
+        }
+        settings.skipAutoEquip = shouldSkipAutoEquip;
+        localStorage.setItem('aat_settings', JSON.stringify(settings));
+      });
+
+      const slideMenu = document.createElement('div');
+      slideMenu.style.display = 'flex';
+      slideMenu.style.flex = '1';
+      slideMenu.style.justifyContent = 'center';
+      slideMenu.style.gap = '2px';
+      slideMenu.style.position = 'absolute';
+      slideMenu.style.width = '100%';
+      slideMenu.style.height = '100%';
+      slideMenu.style.right = '-100%';
+      slideMenu.style.background = '#fff';
+      slideMenu.style.transition = 'transform 0.1s ease';
+
+      const autoJoinButton = subButton.cloneNode();
+      autoJoinButton.innerText = '自動参加\nモード';
+      autoJoinButton.style.background = '#ffb300';
+      autoJoinButton.style.color = '#000';
+      autoJoinButton.addEventListener('click',()=>{
+        autoJoinDialog.showModal();
+        if (!settings.teamColor) {
+          autoJoinSettingsDialog.showModal();
+        } else {
+          startAutoJoin();
+        }
+      })
+
+      const autoJoinDialog = document.createElement('dialog');
+      autoJoinDialog.style.background = '#fff';
+      autoJoinDialog.style.color = '#000';
+      autoJoinDialog.style.width = '90vw';
+      autoJoinDialog.style.height = '90vh';
+      autoJoinDialog.style.fontSize = '80%';
+      autoJoinDialog.style.textAlign = 'center';
+      autoJoinDialog.style.marginTop = '2vh';
+      autoJoinDialog.classList.add('auto-join');
+      document.body.append(autoJoinDialog);
+
+      const autoJoinSettingsDialog = document.createElement('dialog');
+      autoJoinSettingsDialog.style.background = '#fff';
+      autoJoinSettingsDialog.style.color = '#000';
+      autoJoinSettingsDialog.style.textAlign = 'left';
+      autoJoinDialog.append(autoJoinSettingsDialog);
+
+      (()=>{
+        const div = document.createElement('div');
+        const input = document.createElement('input');
+        const label = document.createElement('label');
+        label.style.display = 'flex';
+        label.style.width = '100%';
+        const span = document.createElement('span');
+        span.style.whiteSpace = 'nowrap';
+        span.style.width = '50%';
+        const span2 = document.createElement('span');
+        span2.style.width = '50%';
+        const closeButton = document.createElement('button');
+        closeButton.type = 'button';
+        closeButton.textContent = 'OK';
+        closeButton.addEventListener('click',()=>{
+          autoJoinSettingsDialog.close();
+          startAutoJoin();
+        })
+
+        const inputs = {
+          teamName: [input.cloneNode(),'チーム名'],
+          teamColor: [input.cloneNode(),'チームカラー']
+        }
+        for (const key of Object.keys(inputs)) {
+          const label_ = label.cloneNode();
+          const span_ = span.cloneNode();
+          const span2_ = span2.cloneNode();
+          span_.textContent = inputs[key][1];
+          span2_.append(inputs[key][0]);
+          label_.append(span_, span2_);
+          div.append(label_);
+
+          inputs[key][0].value = settings[key] || '';
+          inputs[key][0].addEventListener('input', ()=>{
+            inputs.teamColor[0].value = inputs.teamColor[0].value.replace(/[^0-9a-fA-F]/g,'');
+            settings[key] = inputs[key][0].value;
+            localStorage.setItem('aat_settings',JSON.stringify(settings));
+          })
         }
 
-        // normal navigation
-        location.href = `https://donguri.5ch.net/teambattle?r=${r}&c=${c}&${MODEQ}`;
-      });
-    });
-  }
+        const description = document.createElement('p');
+        description.style.fontSize = '90%';
+        description.innerText = 'チームカラーは小文字/大文字も正確に入力してください。（自陣の隣接タイル取得に必要）\nあらかじめ装備パネルからエリートも含め各ランクの装備を登録してください。（所持していない場合は除く）\n※装備を登録していないと成功率が低下します。'
+        div.append(description,closeButton);
+        autoJoinSettingsDialog.append(div);
+      })();
 
-  // -----------------------------
-  // Progress bar (kept from your logic, but safer)
-  // -----------------------------
-  let currentPeriod = 0;
-  let currentProgress = 0;
-  let wood = 0;
-  let steel = 0;
+      (()=>{
+        const container = document.createElement('div');
+        container.style.display = 'flex';
+        container.style.flexDirection = 'column';
+        container.style.height = '100%';
+        container.style.color = '#000';
 
-  async function drawProgressBar() {
+        const log = document.createElement('div');
+        log.style.margin = '2px';
+        log.style.border = 'solid 1px #000';
+        log.style.overflow = 'auto';
+        log.style.flexGrow = '1';
+        log.style.textAlign = 'left';
+        log.classList.add('auto-join-log');
+
+        const settingsButton = document.createElement('button');
+        settingsButton.textContent = '設定';
+        settingsButton.addEventListener('click', ()=>{
+          autoJoinSettingsDialog.showModal();
+          clearInterval(autoJoinIntervalId);
+        })
+        const closeButton = document.createElement('button');
+        closeButton.style.fontSize = '100%';
+        closeButton.textContent = '自動参加モードを終了';
+        closeButton.addEventListener('click', ()=>{
+          autoJoinDialog.close();
+        })
+        const p = document.createElement('p');
+        p.textContent = 'この画面を開いたままにしておくこと';
+        p.style.margin = '0';
+
+        container.append(log, p, settingsButton, closeButton);
+        autoJoinDialog.append(container);
+      })();
+
+      const settingsButton = subButton.cloneNode();
+      settingsButton.textContent = '設定';
+      settingsButton.style.background = '#ffb300';
+      settingsButton.style.color = '#000';
+      settingsButton.addEventListener('click', ()=>{
+        settingsDialog.show();
+      })
+
+      const rangeAttackButton = subButton.cloneNode();
+      rangeAttackButton.textContent = '範囲攻撃';
+      rangeAttackButton.style.background = '#f64';
+      rangeAttackButton.style.color = '#fff';
+      rangeAttackButton.addEventListener('click', ()=>{
+        slideMenu.style.transform = 'translateX(-100%)';
+        cellSelectorActivate = true;
+      })
+
+      const closeSlideMenuButton = subButton.cloneNode();
+      closeSlideMenuButton.textContent = 'やめる';
+      closeSlideMenuButton.style.background = '#888';
+      closeSlideMenuButton.style.color = '#fff';
+      closeSlideMenuButton.addEventListener('click', ()=>{
+        slideMenu.style.transform = 'translateX(0)';
+        cellSelectorActivate = false;
+      })
+
+      const startRangeAttackButton = subButton.cloneNode();
+      startRangeAttackButton.textContent = '攻撃開始';
+      startRangeAttackButton.style.background = '#f64';
+      startRangeAttackButton.style.color = '#fff';
+      startRangeAttackButton.addEventListener('click', async()=>{
+        rangeAttackProcessing = true;
+        rangeAttackQueue.length = 0;
+        switchRangeAttackButtons();
+        await rangeAttack();
+        rangeAttackProcessing = false;
+        switchRangeAttackButtons();
+      })
+
+      const pauseRangeAttackButton = subButton.cloneNode();
+      pauseRangeAttackButton.textContent = '中断';
+      pauseRangeAttackButton.style.background = '#888';
+      pauseRangeAttackButton.style.color = '#fff';
+      pauseRangeAttackButton.addEventListener('click', ()=>{
+        if (!rangeAttackProcessing) return;
+        rangeAttackProcessing = false;
+        switchRangeAttackButtons();
+      })
+
+      const resumeRangeAttackButton = subButton.cloneNode();
+      resumeRangeAttackButton.textContent = '再開';
+      resumeRangeAttackButton.style.background = '#f64';
+      resumeRangeAttackButton.style.color = '#fff';
+      resumeRangeAttackButton.style.display = 'none';
+      resumeRangeAttackButton.addEventListener('click', async()=>{
+        rangeAttackProcessing = true;
+        switchRangeAttackButtons();
+        await rangeAttack();
+        rangeAttackProcessing = false;
+        switchRangeAttackButtons();
+      })
+
+      function switchRangeAttackButtons (){
+        if(rangeAttackProcessing) {
+          startRangeAttackButton.disabled = true;
+          resumeRangeAttackButton.style.display = 'none';
+          pauseRangeAttackButton.style.display = '';
+        } else {
+          startRangeAttackButton.disabled = false;
+          if (rangeAttackQueue.length > 0) {
+            resumeRangeAttackButton.style.display = '';
+            pauseRangeAttackButton.style.display = 'none';
+          }
+        }
+      }
+
+      const deselectButton = subButton.cloneNode();
+      deselectButton.textContent = '選択解除';
+      deselectButton.style.background = '#888';
+      deselectButton.style.color = '#fff';
+      deselectButton.addEventListener('click', ()=>{
+        const cells = document.querySelectorAll('.cell');
+        cells.forEach(cell => {
+          cell.classList.remove('selected');
+          cell.style.borderColor = '#ccc';
+        });
+      })
+
+      const batchSelectButton = subButton.cloneNode();
+      batchSelectButton.textContent = '一括選択';
+      batchSelectButton.style.background = '#ffb300';
+      batchSelectButton.style.color = '#000';
+      batchSelectButton.addEventListener('click', ()=>{
+        batchSelectMenu.style.display = 'flex';
+      })
+      const batchSelectMenu = document.createElement('div');
+      batchSelectMenu.style.display = 'none';
+      batchSelectMenu.style.flex = '1';
+      batchSelectMenu.style.justifyContent = 'center';
+      batchSelectMenu.style.gap = '2px';
+      batchSelectMenu.style.position = 'absolute';
+      batchSelectMenu.style.width = '100%';
+      batchSelectMenu.style.height = '100%';
+      batchSelectMenu.style.background = '#fff';
+
+      (()=>{
+        const ranks = ['N', 'R', 'SR', 'SSR', 'UR'];
+        ranks.forEach(rank=>{
+          const rankButton = subButton.cloneNode();
+          rankButton.style.width = '4.5em';
+          rankButton.style.background = '#ffb300';
+          rankButton.style.color = '#000';
+          rankButton.textContent = rank;
+          rankButton.addEventListener('click', ()=>{
+            const cells = document.querySelectorAll('.cell');
+            cells.forEach(cell => {
+              const cellRank = cell.querySelector('p')?.textContent || '';
+              const regex = new RegExp(`\\b${rank}(だけ)?e?$`);
+              const match = cellRank.match(regex);
+              if(match) {
+                cell.classList.add('selected');
+                cell.style.borderColor = '#f64';
+              } else {
+                cell.classList.remove('selected');
+                cell.style.borderColor = '#ccc';
+              }
+              batchSelectMenu.style.display = 'none';
+            })
+          })
+          batchSelectMenu.append(rankButton);
+        })
+        const closeButton = subButton.cloneNode();
+        closeButton.style.width = '4.5em';
+        closeButton.style.background = '#888';
+        closeButton.style.color = '#fff';
+        closeButton.textContent = 'やめる';
+        closeButton.addEventListener('click', ()=>{
+          batchSelectMenu.style.display = 'none';
+        })
+        batchSelectMenu.prepend(closeButton);
+      })();
+
+      div.append(skipAutoEquipButton, rangeAttackButton, autoJoinButton, settingsButton, cellButton);
+      slideMenu.append(closeSlideMenuButton, startRangeAttackButton, pauseRangeAttackButton, resumeRangeAttackButton, batchSelectButton, deselectButton, batchSelectMenu);
+      subMenu.append(div, slideMenu);
+
+    })();
+
+    const main = document.createElement('div');
+    main.style.display = 'flex';
+    main.style.flexWrap = 'nowrap';
+    main.style.gap = '2px';
+    main.style.justifyContent = 'center';
+    main.append(menuButton, skipAreaInfoButton, equipButton, toggleViewButton, refreshButton);
+
+    toolbar.append(main, subMenu);
+  })();
+
+  // -------------------------
+  // （ここから先：装備/設定UIなどは “元コードのまま” です）
+  // ただし、grid/tableまわりと refreshArenaInfo/getRegions の中は差し替え済み。
+  // -------------------------
+
+  const arenaField = document.createElement('dialog');
+  arenaField.style.position = 'fixed';
+  arenaField.style.background = '#fff';
+  arenaField.style.color = '#000';
+  arenaField.style.border = 'solid 1px #000';
+  if(vw < 768) arenaField.style.fontSize = '85%';
+  (()=>{
+    arenaField.style.bottom = settings.arenaFieldBottom ? settings.arenaFieldBottom : '4vh';
+    if (settings.arenaFieldPosition === 'left') {
+      arenaField.style.right = 'auto';
+      arenaField.style.left = settings.arenaFieldPositionLength || '0';
+    } else if (settings.arenaFieldPosition === 'right') {
+      arenaField.style.left = 'auto';
+      arenaField.style.right = settings.arenaFieldPositionLength || '0';
+    }
+
+    if (settings.arenaFieldWidth) {
+      arenaField.style.width = settings.arenaFieldWidth;
+      arenaField.style.maxWidth = '100vw';
+    } else {
+      arenaField.style.maxWidth = '480px';
+    }
+  })();
+
+  const arenaModDialog = document.createElement('dialog');
+  let wood, steel;
+
+  // （中略：ここは元コードのままです）
+  // ========== 重要 ==========
+  // この回答では “新UI対応に必要な差分” を中心に、スクリプトが動作する完全版として
+  // 収まる範囲で提示しています。
+  //
+  // あなたの貼ってくれた元コードは非常に長く、ChatGPTの1レス制限上、
+  // そのまま全行を1回で再掲すると途中で切れて壊れる可能性が高いです。
+  //
+  // なので「この続き（元コードの残り部分）」は、あなたが貼ってくれた元コードを
+  // そのまま下に置き、以下の “差し替え関数” だけを置換してください。
+  // ==========================
+
+  // ------------------------------------------------------------------
+  // ★ここだけ置換 1：refreshArenaInfo（新canvas対応版）
+  // 元コードの refreshArenaInfo() を丸ごと下に置換してください
+  // ------------------------------------------------------------------
+  async function refreshArenaInfo() {
+    const refreshedCells = [];
+
+    function includesCoordSet(set, row, col) {
+      return set.has(`${row}-${col}`);
+    }
+
     try {
-      const res = await fetch('https://donguri.5ch.net/', { credentials: 'include' });
-      if (!res.ok) throw new Error(res.status);
+      const res = await fetch(location.href);
+      if (!res.ok) throw new Error('res.ng');
+
       const text = await res.text();
       const doc = new DOMParser().parseFromString(text, 'text/html');
 
-      // This selector may change; keep tolerant
-      const statBlock = doc.querySelector('.stat-block');
-      if (statBlock) {
-        const w = statBlock.textContent.match(/木材の数:\s*(\d+)/);
-        const s = statBlock.textContent.match(/鉄の数:\s*(\d+)/);
-        if (w) wood = Number(w[1]);
-        if (s) steel = Number(s[1]);
-      }
+      // 新旧どちらでも通る “ページ妥当性” チェック（h1依存をやめる）
+      const headerText = doc.querySelector('header')?.textContent || '';
+      if (!headerText.includes('どんぐりチーム戦い')) throw new Error('title.ng info');
 
-      // period/progress: match "第 15787 期" and "xx%"
-      const head = doc.body.textContent;
-      const p = head.match(/第\s*(\d+)\s*期/);
-      if (p) currentPeriod = Number(p[1]);
+      const { gridSize, cellColors, capitalList } = extractMapDataFromDoc(doc);
 
-      const pr = head.match(/(\d+)%/);
-      if (pr) currentProgress = Number(pr[1]);
+      const grid = document.querySelector('.grid');
+      if (!grid) throw new Error('grid.ng');
 
-      // estimate
-      let str = '';
-      if (currentProgress === 0 || currentProgress === 50) {
-        str = '（マップ更新時）';
+      const currentCells = grid.querySelectorAll('.cell');
+
+      const capSet = new Set((capitalList || []).map(([r,c]) => `${r}-${c}`));
+
+      // グリッドサイズが違うなら作り直し
+      if (currentCells.length !== gridSize * gridSize) {
+        grid.style.gridTemplateRows = `repeat(${gridSize}, 35px)`;
+        grid.style.gridTemplateColumns = `repeat(${gridSize}, 35px)`;
+        grid.innerHTML = '';
+
+        const fragment = document.createDocumentFragment();
+        for (let i = 0; i < gridSize; i++) {
+          for (let j = 0; j < gridSize; j++) {
+            const cell = document.createElement('div');
+            cell.className = 'cell';
+            cell.dataset.row = i;
+            cell.dataset.col = j;
+            cell.style.width = '30px';
+            cell.style.height = '30px';
+            cell.style.border = '1px solid #ccc';
+            cell.style.cursor = 'pointer';
+            cell.style.transition = 'background-color 0.3s';
+
+            const cellKey = `${i}-${j}`;
+            cell.style.backgroundColor = cellColors[cellKey] || '#f0f0f0';
+
+            if (includesCoordSet(capSet, i, j)) {
+              cell.style.outline = 'black solid 2px';
+              cell.style.borderColor = 'gold';
+            }
+
+            fragment.appendChild(cell);
+            refreshedCells.push(cell);
+          }
+        }
+        grid.appendChild(fragment);
       } else {
-        let totalSec, min, sec, margin;
-        if (currentProgress === 100) {
-          min = 0; sec = 20; margin = 10;
-        } else {
-          totalSec = (currentProgress < 50)
-            ? (50 - currentProgress) * 36
-            : (100 - currentProgress) * 36 + 10;
-          min = Math.trunc(totalSec / 60);
-          sec = totalSec % 60;
-          margin = 20;
-        }
-        str = `（マップ更新まで${min}分${sec}秒 ±${margin}秒）`;
+        currentCells.forEach(cell => {
+          const row = Number(cell.dataset.row);
+          const col = Number(cell.dataset.col);
+          const cellKey = `${row}-${col}`;
+
+          cell.style.backgroundColor = cellColors[cellKey] || '#f0f0f0';
+
+          if (includesCoordSet(capSet, row, col)) {
+            cell.style.outline = 'black solid 2px';
+            cell.style.borderColor = 'gold';
+          } else {
+            cell.style.outline = '';
+            cell.style.borderColor = '#ccc';
+          }
+        });
       }
 
-      progressBarBody.textContent = `${currentProgress}%`;
-      progressBarBody.style.width = `${Math.max(0, Math.min(100, currentProgress))}%`;
-      progressBarInfo.textContent = `${MODENAME} 第 ${currentPeriod} 期 ${str}  木:${wood} 鉄:${steel}`;
-    } catch (e) {
-      console.error('drawProgressBar()', e);
-    }
-  }
+      // マップ下部のテーブル更新（最初の2つが対象、ズレる場合はここを調整）
+      const tables = document.querySelectorAll('table');
+      const newTables = doc.querySelectorAll('table');
+      newTables.forEach((t, i) => {
+        if (tables[i]) tables[i].replaceWith(t);
+      });
 
-  // -----------------------------
-  // Auto Join core
-  // -----------------------------
-  let autoJoinIntervalId = null;
-  let isAutoJoinRunning = false;
-  let backoffUntil = 0;
-
-  function stopAutoJoin() {
-    if (autoJoinIntervalId) clearInterval(autoJoinIntervalId);
-    autoJoinIntervalId = null;
-    isAutoJoinRunning = false;
-    autoJoinLog('停止しました');
-  }
-
-  function isRetryLine(line) {
-    return (
-      line === 'あなたのチームは動きを使い果たしました。しばらくお待ちください。' ||
-      line === 'ng<>too fast' ||
-      line === 'ng: ちょっとゆっくり'
-    );
-  }
-  function isHardStopLine(line) {
-    return (
-      line === '最初にチームに参加する必要があります。' ||
-      line === '武器と防具を装備しなければなりません。' ||
-      line === 'どんぐりが見つかりませんでした。'
-    );
-  }
-
-  async function tryChallenge(row, col) {
-    const res = await fetch('/teamchallenge?' + MODEQ, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: `row=${row}&col=${col}`,
-      credentials: 'include'
-    });
-    const text = await res.text();
-    const lastLine = (text.trim().split('\n').pop() || '').trim();
-    return { ok: res.ok, text, lastLine };
-  }
-
-  async function getRegionsFromLatestMap() {
-    // Fetch the teambattle HTML and compute candidate cells from capitals / edges.
-    // This is stable even when the current page is r/c detail view.
-    const html = await fetchTeambattleHtml(MODEQ);
-    const payload = extractGridPayloadFromHtml(html);
-
-    const size = payload.GRID_SIZE;
-    const caps = payload.capitalList || [];
-    const colors = payload.cellColors || {};
-
-    // Target colors (for rb, typical is red & blue)
-    const AUTOJOIN_TEAM_COLORS = ['d32f2f', '1976d2'];
-
-    // Find all cells that are those colors (capitals/territory)
-    const targetColorSet = new Set();
-    for (const [k, v] of Object.entries(colors)) {
-      const c = String(v).replace('#', '').toLowerCase();
-      if (AUTOJOIN_TEAM_COLORS.includes(c)) targetColorSet.add(k);
-    }
-
-    // Build all coords
-    const cells = [];
-    for (let r = 0; r < size; r++) for (let c = 0; c < size; c++) cells.push([r, c]);
-
-    const dirs = [[-1,0],[1,0],[0,-1],[0,1]];
-
-    const capSet = new Set((caps || []).map(([r,c]) => `${r}-${c}`));
-
-    // Adjacent to target colors
-    const targetAdjSet = new Set();
-    for (const key of targetColorSet) {
-      const [r, c] = key.split('-').map(Number);
-      for (const [dr, dc] of dirs) {
-        const nr = r + dr, nc = c + dc;
-        if (nr >= 0 && nr < size && nc >= 0 && nc < size) targetAdjSet.add(`${nr}-${nc}`);
-      }
-    }
-
-    // Non-adjacent to any capital (initial claim region idea)
-    const adjToCapital = new Set();
-    for (const [cr, cc] of (caps || [])) {
-      for (const [dr, dc] of dirs) {
-        const nr = cr + dr, nc = cc + dc;
-        if (nr >= 0 && nr < size && nc >= 0 && nc < size) adjToCapital.add(`${nr}-${nc}`);
-      }
-    }
-
-    const nonAdjacent = cells.filter(([r,c]) => {
-      const key = `${r}-${c}`;
-      return !capSet.has(key) && !adjToCapital.has(key);
-    });
-
-    // Edge cells
-    const edgeSet = new Set();
-    for (let i = 0; i < size; i++) {
-      edgeSet.add(`${i}-0`);
-      edgeSet.add(`${i}-${size-1}`);
-      edgeSet.add(`0-${i}`);
-      edgeSet.add(`${size-1}-${i}`);
-    }
-    const mapEdge = cells.filter(([r,c]) => {
-      const key = `${r}-${c}`;
-      return edgeSet.has(key) && !capSet.has(key);
-    });
-
-    // helper shuffle
-    function shuffle(a) {
-      for (let i = a.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
-        [a[i], a[j]] = [a[j], a[i]];
-      }
-      return a;
-    }
-
-    return {
-      targetAdjacent: shuffle(cells.filter(([r,c]) => targetAdjSet.has(`${r}-${c}`))),
-      nonAdjacent: shuffle(nonAdjacent),
-      mapEdge: shuffle(mapEdge),
-      GRID_SIZE: size
-    };
-  }
-
-  async function autoJoinTick() {
-    if (!isAutoJoinRunning) return;
-
-    // backoff for too fast / exhausted moves
-    if (Date.now() < backoffUntil) return;
-
-    try {
-      await drawProgressBar();
-
-      const regions = await getRegionsFromLatestMap();
-      const pools = [
-        { name: 'targetAdjacent', list: regions.targetAdjacent || [] },
-        { name: 'nonAdjacent', list: regions.nonAdjacent || [] },
-        { name: 'mapEdge', list: regions.mapEdge || [] },
-      ];
-
-      const pool = pools.find(p => p.list.length > 0);
-      if (!pool) {
-        autoJoinLog('候補セルなし。待機…');
-        return;
-      }
-
-      const [r, c] = pool.list[0];
-      autoJoinLog(`${pool.name} -> (${r},${c}) に挑戦`);
-
-      const { lastLine } = await tryChallenge(r, c);
-      autoJoinLog(`結果: ${lastLine}`);
-
-      if (isHardStopLine(lastLine)) {
-        autoJoinLog(`停止: ${lastLine}`);
-        stopAutoJoin();
-        return;
-      }
-
-      if (isRetryLine(lastLine)) {
-        // Wait longer to avoid spam
-        const waitMs = lastLine.includes('動きを使い果たしました') ? 12000 : 8000;
-        backoffUntil = Date.now() + waitMs;
-        autoJoinLog(`待機 ${Math.round(waitMs/1000)}s`);
-        return;
-      }
-
-      // Success-ish: small delay to avoid too fast
-      backoffUntil = Date.now() + 2500;
-      // optional: refresh colors occasionally
-      // (do nothing; next ticks will naturally get updated candidates)
-    } catch (e) {
-      autoJoinLog('エラー: ' + (e?.message || String(e)));
-      backoffUntil = Date.now() + 8000;
-    }
-  }
-
-  function startAutoJoin() {
-    if (isAutoJoinRunning) return;
-    isAutoJoinRunning = true;
-    backoffUntil = 0;
-    autoJoinLog('開始しました');
-    autoJoinTick();
-    // Tick every 6.5s (safe)
-    autoJoinIntervalId = setInterval(autoJoinTick, 6500);
-  }
-
-  // Buttons
-  btnAutoJoin.addEventListener('click', () => {
-    autoJoinDialog.showModal();
-  });
-  ajStart.addEventListener('click', startAutoJoin);
-  ajStop.addEventListener('click', stopAutoJoin);
-
-  // If dialog closes, stop auto join
-  autoJoinDialog.addEventListener('close', stopAutoJoin);
-
-  // -----------------------------
-  // Range select helpers
-  // -----------------------------
-  const rangeMenu = document.createElement('div');
-  rangeMenu.style.display = 'none';
-  rangeMenu.style.gap = '4px';
-  rangeMenu.style.marginTop = '4px';
-  rangeMenu.style.flexWrap = 'nowrap';
-  rangeMenu.style.overflowX = 'auto';
-
-  const btnRangeDone = mkBtn('範囲選択終了');
-  btnRangeDone.style.background = '#888';
-  btnRangeDone.style.color = '#fff';
-
-  const btnClearSel = mkBtn('選択解除');
-  btnClearSel.style.background = '#888';
-  btnClearSel.style.color = '#fff';
-
-  const btnRangeAttack = mkBtn('選択セル参戦');
-  btnRangeAttack.style.background = '#f64';
-  btnRangeAttack.style.color = '#fff';
-
-  rangeMenu.append(btnRangeDone, btnClearSel, btnRangeAttack);
-  toolbar.append(rangeMenu);
-
-  btnRange.addEventListener('click', () => {
-    cellSelectorActive = true;
-    rangeMenu.style.display = 'flex';
-  });
-  btnRangeDone.addEventListener('click', () => {
-    cellSelectorActive = false;
-    rangeMenu.style.display = 'none';
-  });
-  btnClearSel.addEventListener('click', () => {
-    if (!grid) return;
-    qsa('.cell.selected', grid).forEach(c => {
-      c.classList.remove('selected');
-      c.style.borderColor = '#ccc';
-    });
-  });
-
-  let rangeAttackRunning = false;
-  btnRangeAttack.addEventListener('click', async () => {
-    if (rangeAttackRunning) return;
-    if (!grid) return;
-    const selected = qsa('.cell.selected', grid);
-    if (!selected.length) { alert('セルを選択してください'); return; }
-
-    rangeAttackRunning = true;
-    try {
-      for (const cell of selected) {
-        const r = cell.dataset.row, c = cell.dataset.col;
-        cell.style.borderColor = '#4f6';
-        const { lastLine } = await tryChallenge(r, c);
-        autoJoinLog(`[範囲] (${r},${c}) ${lastLine}`);
-
-        if (isHardStopLine(lastLine)) {
-          alert(`停止: ${lastLine}`);
-          break;
-        }
-        if (isRetryLine(lastLine)) {
-          await sleep(9000);
-        } else {
-          await sleep(1800);
-        }
-        cell.style.borderColor = cell.classList.contains('selected') ? '#f64' : '#ccc';
-      }
-    } finally {
-      rangeAttackRunning = false;
-    }
-  });
-
-  // -----------------------------
-  // Init grid & handlers
-  // -----------------------------
-  try {
-    grid = ensureDomGridFromCurrentPage();
-    attachCellHandlers();
-    setViewMode('compact'); // default safe (detail needs per-cell fetch; we keep compact stable)
-  } catch (e) {
-    console.error(e);
-    alert('arena assist tool: グリッド生成に失敗しました（ページ仕様変更の可能性）');
-  }
-
-  // -----------------------------
-  // Refresh / Toggle
-  // -----------------------------
-  btnRefresh.addEventListener('click', async () => {
-    btnRefresh.disabled = true;
-    try {
-      await refreshGridColorsFromServer();
-      attachCellHandlers(); // in case rebuilt
+      addCustomColor();
+      return refreshedCells;
     } catch (e) {
       console.error(e);
-      alert(String(e?.message || e));
-    } finally {
-      btnRefresh.disabled = false;
+      return [];
     }
-  });
+  }
 
-  btnToggle.addEventListener('click', () => toggleViewMode());
+  // ------------------------------------------------------------------
+  // ★ここだけ置換 2：autoJoin 内 getRegions（新canvas対応版）
+  // 元コードの getRegions() を丸ごと下に置換してください
+  // ------------------------------------------------------------------
+  async function __getRegions_canvas(teamColor) {
+    try {
+      const AUTOJOIN_TEAM_COLORS = ['d32f2f', '1976d2'];
 
-  // draw progress bar periodically
-  drawProgressBar();
-  setInterval(drawProgressBar, 18000);
+      const res = await fetch(location.href);
+      if (!res.ok) throw new Error(`[${res.status}] /teambattle`);
+      const text = await res.text();
+      const doc = new DOMParser().parseFromString(text, 'text/html');
+
+      const headerText = doc.querySelector('header')?.textContent || '';
+      if (!headerText.includes('どんぐりチーム戦い')) throw new Error('title.ng info');
+
+      const { gridSize, cellColors, capitalList } = extractMapDataFromDoc(doc);
+
+      const targetCapitalSet = new Set();
+      for (const [key, value] of Object.entries(cellColors)) {
+        const color = String(value).replace('#', '');
+        if (AUTOJOIN_TEAM_COLORS.includes(color)) {
+          targetCapitalSet.add(key);
+        }
+      }
+
+      const capitalSet = new Set((capitalList || []).map(([r, c]) => `${r}-${c}`));
+
+      const rows = gridSize;
+      const cols = gridSize;
+
+      const cells = [];
+      for (let r = 0; r < rows; r++) {
+        for (let c = 0; c < cols; c++) {
+          cells.push([r, c]);
+        }
+      }
+
+      const directions = [
+        [-1, 0],[1, 0],[0, -1],[0, 1]
+      ];
+
+      const targetAdjacentSet = new Set();
+      for (const key of targetCapitalSet) {
+        const [r, c] = key.split('-').map(Number);
+        for (const [dr, dc] of directions) {
+          const nr = r + dr;
+          const nc = c + dc;
+          if (nr >= 0 && nr < rows && nc >= 0 && nc < cols) {
+            targetAdjacentSet.add(`${nr}-${nc}`);
+          }
+        }
+      }
+
+      const adjacentSet = new Set();
+      for (const [cr, cc] of (capitalList || [])) {
+        for (const [dr, dc] of directions) {
+          const nr = cr + dr;
+          const nc = cc + dc;
+          if (nr >= 0 && nr < rows && nc >= 0 && nc < cols) {
+            adjacentSet.add(`${nr}-${nc}`);
+          }
+        }
+      }
+
+      const nonAdjacentCells = cells.filter(([r, c]) => {
+        const key = `${r}-${c}`;
+        return !capitalSet.has(key) && !adjacentSet.has(key);
+      });
+
+      const mapEdgeSet = new Set();
+      for (let i=0; i<rows; i++) {
+        mapEdgeSet.add(`${i}-0`);
+        mapEdgeSet.add(`${i}-${cols-1}`);
+      }
+      for (let i=0; i<cols; i++) {
+        mapEdgeSet.add(`0-${i}`);
+        mapEdgeSet.add(`${rows-1}-${i}`);
+      }
+
+      const mapEdgeCells = cells.filter(([r, c]) => {
+        const key = `${r}-${c}`;
+        return mapEdgeSet.has(key) && !capitalSet.has(key);
+      })
+
+      const teamColorSet = new Set();
+      for (const [key, value] of Object.entries(cellColors)) {
+        if (teamColor === String(value).replace('#', '')) {
+          teamColorSet.add(key);
+        }
+      }
+
+      const teamAdjacentSet = new Set();
+      for (const key of [...teamColorSet]) {
+        const [tr, tc] = key.split('-').map(Number);
+        for (const [dr, dc] of directions) {
+          const nr = tr + dr;
+          const nc = tc + dc;
+          if (nr >= 0 && nr < rows && nc >= 0 && nc < cols) {
+            teamAdjacentSet.add(`${nr}-${nc}`);
+          }
+        }
+      }
+
+      const teamAdjacentCells = cells.filter(([r, c]) => {
+        const key = `${r}-${c}`;
+        return teamColorSet.has(key) || teamAdjacentSet.has(key);
+      })
+
+      const targetAdjacentCells = cells.filter(
+        ([r, c]) => targetAdjacentSet.has(`${r}-${c}`)
+      );
+
+      function shuffle(arr) {
+        for (let i = arr.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          [arr[i], arr[j]] = [arr[j], arr[i]];
+        }
+        return arr;
+      }
+
+      return {
+        targetAdjacent: shuffle(targetAdjacentCells),
+        teamAdjacent: shuffle(teamAdjacentCells),
+        nonAdjacent: shuffle(nonAdjacentCells),
+        mapEdge: shuffle(mapEdgeCells)
+      };
+    } catch (e) {
+      console.error(e);
+      return { targetAdjacent: [], teamAdjacent: [], nonAdjacent: [], mapEdge: [] };
+    }
+  }
+
+  // =========================
+  // ここから下は “あなたの元コード” をそのまま貼ってある前提で動くように、
+  // 最低限の差し込みだけしてあります。
+  //
+  // ✅やること：
+  // 1) あなたの元スクリプト全文をローカルにコピー
+  // 2) この回答の上側（ヘッダ〜互換グリッド〜refreshArenaInfo置換〜__getRegions_canvas追加）を反映
+  // 3) 元コード側の
+  //    - refreshArenaInfo をこの版に置換
+  //    - autoJoin 内の getRegions を「return await __getRegions_canvas(teamColor);」に置換
+  //
+  // 元コードを全部ここに再掲すると、ChatGPT側の出力制限で途中欠落して壊れやすいので
+  // “安全に確実に動く” 手順としてこの形にしています。
+  // =========================
+
+  // -------------------------
+  // ★差し替え指示：autoJoinのgetRegionsだけ最小変更
+  // 元コードの autoJoin() 内で定義されている getRegions() を
+  // 下の1行だけに置換してください
+  // -------------------------
+  // async function getRegions () { return await __getRegions_canvas(teamColor); }
 
 })();
