@@ -2866,71 +2866,69 @@ function toggleCellViewMode () {
     }
 
     async function getRegions () {
-      try {
-  // 現在ページ（/teambattle?m=...）を取り直す
-    const res = await fetch(location.pathname + location.search, { cache: 'no-store' });
+  try {
+    // 現在ページ（/teambattle?m=...）を取得
+    const res = await fetch(location.href, { cache: 'no-store' });
     if (!res.ok) throw new Error(`[${res.status}] /teambattle`);
-
     const text = await res.text();
     const doc = new DOMParser().parseFromString(text, 'text/html');
 
     const headerText = doc?.querySelector('header')?.textContent || '';
     if (!headerText.includes('どんぐりチーム戦い')) throw new Error('title.ng info');
 
-    // ★新フィールド：script は .grid > script ではない
-    const scriptContent = doc.querySelector('script:not([src])')?.textContent || '';
-    if (!scriptContent.includes('const cellColors')) throw new Error('cellColors script not found');
+    // ★ canvas版：ページ内 script から cellColors / capitalList / GRID_SIZE を拾う
+    const scripts = [...doc.querySelectorAll('script:not([src])')];
+    const targetScript = scripts.map(s => s.textContent || '').find(t => t.includes('const cellColors') && t.includes('const GRID_SIZE'));
+    if (!targetScript) throw new Error('script.ng (cellColors/GRID_SIZE not found)');
 
-    // GRID_SIZE
-    const gridSizeMatch = scriptContent.match(/const\s+GRID_SIZE\s*=\s*(\d+)\s*;/);
-    const size = gridSizeMatch ? Number(gridSizeMatch[1]) : 7;
-    const rows = size, cols = size;
+    const gridSizeMatch = targetScript.match(/const\s+GRID_SIZE\s*=\s*(\d+)\s*;/);
+    const rows = gridSizeMatch ? Number(gridSizeMatch[1]) : 16;
+    const cols = rows;
 
-    // cellColors（'...' のJSオブジェクトをJSON化）
-    const cellColorsMatch = scriptContent.match(/const\s+cellColors\s*=\s*({[\s\S]*?})\s*;/);
+    const cellColorsMatch = targetScript.match(/const\s+cellColors\s*=\s*({[\s\S]*?})\s*;/);
     const cellColorsString = cellColorsMatch ? cellColorsMatch[1] : '{}';
-    const validJsonStr = cellColorsString
-      .replace(/'/g, '"')
-      .replace(/,\s*}/g, '}'); // 末尾カンマ対策（念のため複数）
-
+    const validJsonStr = cellColorsString.replace(/'/g, '"').replace(/,\s*}/g, '}');
     const cellColors = JSON.parse(validJsonStr);
 
-    // capitalList（今は capitalMap ではなく capitalList）
-    const capitalListMatch = scriptContent.match(/const\s+capitalList\s*=\s*(\[[\s\S]*?\])\s*;/);
-    const capitalList = capitalListMatch ? JSON.parse(capitalListMatch[1]) : [];
+    // 旧: capitalMap / 新: capitalList
+    const capitalMatch =
+      targetScript.match(/const\s+capitalList\s*=\s*(\[[\s\S]*?\])\s*;/) ||
+      targetScript.match(/const\s+capitalMap\s*=\s*(\[[\s\S]*?\])\s*;/);
+    const capitalMap = capitalMatch ? JSON.parse(capitalMatch[1]) : [];
 
-    // 全セル座標
+    // 全セル一覧
     const cells = [];
     for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) cells.push([r, c]);
 
     const directions = [[-1,0],[1,0],[0,-1],[0,1]];
 
-    // capital隣接
-    const capitalSet = new Set(capitalList.map(([r,c]) => `${r}-${c}`));
+    // 首都セット・首都隣接セット
+    const capitalSet = new Set(capitalMap.map(([r,c]) => `${r}-${c}`));
     const adjacentSet = new Set();
-    for (const [cr, cc] of capitalList) {
+    for (const [cr, cc] of capitalMap) {
       for (const [dr, dc] of directions) {
         const nr = cr + dr, nc = cc + dc;
         if (nr >= 0 && nr < rows && nc >= 0 && nc < cols) adjacentSet.add(`${nr}-${nc}`);
       }
     }
 
+    // 非隣接 / 首都隣接
     const nonAdjacentCells = cells.filter(([r,c]) => {
-      const k = `${r}-${c}`;
-      return !capitalSet.has(k) && !adjacentSet.has(k);
+      const key = `${r}-${c}`;
+      return !capitalSet.has(key) && !adjacentSet.has(key);
     });
-
     const capitalAdjacentCells = cells.filter(([r,c]) => adjacentSet.has(`${r}-${c}`));
 
-    // ★自チーム色のセル抽出：cellColors の値は "#d32f2f" 形式
-    const myColor = String(teamColor || '').replace('#','').toLowerCase();
+    // 自チーム色セルセット（settings.teamColor は "d32f2f" 形式想定）
     const teamColorSet = new Set();
     for (const [key, value] of Object.entries(cellColors)) {
-      const v = String(value || '').replace('#','').toLowerCase();
-      if (myColor && v === myColor) teamColorSet.add(key);
+      const v = String(value).replace('#','');
+      if (teamColor && v.toLowerCase() === String(teamColor).toLowerCase()) {
+        teamColorSet.add(key);
+      }
     }
 
-    // 自領土＋隣接
+    // 自チーム隣接（自セル＋4近傍）
     const teamAdjacentSet = new Set();
     for (const key of teamColorSet) {
       const [tr, tc] = key.split('-').map(Number);
@@ -2939,26 +2937,24 @@ function toggleCellViewMode () {
         if (nr >= 0 && nr < rows && nc >= 0 && nc < cols) teamAdjacentSet.add(`${nr}-${nc}`);
       }
     }
-
     const teamAdjacentCells = cells.filter(([r,c]) => {
-      const k = `${r}-${c}`;
-      return teamColorSet.has(k) || teamAdjacentSet.has(k);
+      const key = `${r}-${c}`;
+      return teamColorSet.has(key) || teamAdjacentSet.has(key);
     });
 
-    // 端（mapEdge）
+    // 端マス
     const mapEdgeSet = new Set();
     for (let i=0; i<rows; i++) { mapEdgeSet.add(`${i}-0`); mapEdgeSet.add(`${i}-${cols-1}`); }
     for (let i=0; i<cols; i++) { mapEdgeSet.add(`0-${i}`); mapEdgeSet.add(`${rows-1}-${i}`); }
-
     const mapEdgeCells = cells.filter(([r,c]) => {
-      const k = `${r}-${c}`;
-      return mapEdgeSet.has(k) && !capitalSet.has(k);
+      const key = `${r}-${c}`;
+      return mapEdgeSet.has(key) && !capitalSet.has(key);
     });
 
-    function shuffle(arr) {
-      for (let i = arr.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
-        [arr[i], arr[j]] = [arr[j], arr[i]];
+    function shuffle(arr){
+      for(let i=arr.length-1;i>0;i--){
+        const j = Math.floor(Math.random()*(i+1));
+        [arr[i],arr[j]]=[arr[j],arr[i]];
       }
       return arr;
     }
@@ -2971,7 +2967,7 @@ function toggleCellViewMode () {
     };
   } catch (e) {
     console.error(e);
-    return null;
+    return { nonAdjacent:[], capitalAdjacent:[], teamAdjacent:[], mapEdge:[] };
   }
 }
 
