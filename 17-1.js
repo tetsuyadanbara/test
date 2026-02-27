@@ -10,37 +10,18 @@
 
 
 (()=>{
-
-  // ===== Bag: save current equip (from Red Blue new) =====
-  if(location.href.startsWith('https://donguri.5ch.net/bag')) {
-      function saveCurrentEquip(url, index) {
-        let currentEquip = JSON.parse(localStorage.getItem('current_equip')) || [];
-        const regex = /https:\/\/donguri\.5ch\.net\/equip\/(\d+)/;
-        const equipId = url.match(regex)[1];
-        currentEquip[index] = equipId;
-        localStorage.setItem('current_equip', JSON.stringify(currentEquip));
-      }
-      const tableIds = ['weaponTable', 'armorTable', 'necklaceTable'];
-      tableIds.forEach((elm, index)=>{
-        const equipLinks = document.querySelectorAll(`#${elm} a[href^="https://donguri.5ch.net/equip/"]`);
-        [...equipLinks].forEach(link => {
-          link.addEventListener('click', ()=>{
-            saveCurrentEquip(link.href, index);
-          })
-        })
-      })
-      return;
-  }
-
   const __params = new URLSearchParams(location.search);
-  const __m = __params.get('m') || 'hc';
+  const __m = __params.get('m') || 'rb'; // default rb if missing
   const MODE = `m=${__m}`;
 
-  if(location.pathname === '/bag') {
+  // bag page: save current equip ids when clicking equip links
+  if (location.pathname === '/bag') {
     function saveCurrentEquip(url, index) {
-      let currentEquip = JSON.parse(localStorage.getItem('current_equip')) || [];
+      const currentEquip = JSON.parse(localStorage.getItem('current_equip')) || [];
       const regex = /https:\/\/donguri\.5ch\.net\/equip\/(\d+)/;
-      const equipId = url.match(regex)[1];
+      const m = url.match(regex);
+      if (!m) return;
+      const equipId = m[1];
       currentEquip[index] = equipId;
       localStorage.setItem('current_equip', JSON.stringify(currentEquip));
     }
@@ -50,15 +31,12 @@
       [...equipLinks].forEach(link => {
         link.addEventListener('click', ()=>{
           saveCurrentEquip(link.href, index);
-        })
-      })
-    })
+        });
+      });
+    });
     return;
   }
 
-  // 現在のモードクエリ（m=hc / m=l / m=rb）
-  const _mParam = new URLSearchParams(location.search).get('m') || 'rb';
-  const MODE = `m=${_mParam}`;
 
   let currentPeriod = 0;
   let currentProgress = 0;
