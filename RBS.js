@@ -350,6 +350,8 @@
 
       autoJoinButton.addEventListener('click', ()=>{
         autoJoinDialog.showModal();
+        // Start immediately if settings are already present
+        setTimeout(() => { if (settings.teamColor) { try { startAutoJoin(); } catch(e){ console.error(e);} } }, 0);
         if (!settings.teamColor) {
           autoJoinSettingsDialog.showModal();
         } else {
@@ -691,16 +693,16 @@
     }
   })();
   window.addEventListener('mousedown', (event) => {
-    if (!arenaResult.contains(event.target) && !rangeAttackProcessing) {
+    if ((typeof arenaResult !== 'undefined' && arenaResult) && !arenaResult.contains(event.target) && !rangeAttackProcessing) {
       arenaResult.close();
     }
-    if (!arenaModDialog.contains(event.target)) {
+    if (typeof arenaModDialog !== 'undefined' && arenaModDialog && !arenaModDialog.contains(event.target)) {
       arenaModDialog.close();
     }
-    if (!settingsDialog.contains(event.target)) {
+    if (typeof settingsDialog !== 'undefined' && settingsDialog && !settingsDialog.contains(event.target)) {
       settingsDialog.close();
     }
-    if (!panel.contains(event.target)) {
+    if (typeof panel !== 'undefined' && panel && !panel.contains(event.target)) {
       panel.style.display = 'none';
     }
   });
@@ -2023,6 +2025,22 @@
   
   
 async function autoEquipAndChallenge (row, col, rank, mode = 'normal') {
+
+    // If rank is missing (e.g., cells without cached info), fetch it from the arena page.
+    if (!rank) {
+      try {
+        const url = `https://donguri.5ch.net/teambattle?r=${row}&c=${col}&` + MODE;
+        const res = await fetch(url, { cache: 'no-store' });
+        if (res.ok) {
+          const t = await res.text();
+          const doc = new DOMParser().parseFromString(t, 'text/html');
+          const small = doc.querySelector('table td small, small');
+          rank = small ? small.textContent : '';
+        }
+      } catch (e) {
+        console.error(e);
+      }
+    }
   // mode: 'normal' (cell click / manual) or 'autojoin' (auto join mode)
   try {
     if (shouldSkipAutoEquip) {
@@ -2553,4 +2571,30 @@ function drawProgressBar(){
 
   drawProgressBar();
   setInterval(drawProgressBar, 18000);
+
+  // --- Robust cell click handling (event delegation) ---
+  // Some map implementations recreate / replace .cell nodes; delegation keeps clicks working.
+  document.addEventListener('click', (event) => {
+    const cell = event.target.closest && event.target.closest('.cell');
+    if (!cell) return;
+    // Only handle clicks inside the battle grid area
+    const gridRoot = document.getElementById('gridWrap') || document.querySelector('.grid') || document.getElementById('aat_tool_layer');
+    if (gridRoot && !gridRoot.contains(cell)) return;
+    if (cell.dataset && cell.dataset.row !== undefined && cell.dataset.col !== undefined) {
+      // Prevent other handlers from consuming the click first
+      event.stopPropagation();
+      handleCellClick(cell);
+    }
+  }, true);
+
+  document.addEventListener('touchstart', (event) => {
+    const cell = event.target.closest && event.target.closest('.cell');
+    if (!cell) return;
+    const gridRoot = document.getElementById('gridWrap') || document.querySelector('.grid') || document.getElementById('aat_tool_layer');
+    if (gridRoot && !gridRoot.contains(cell)) return;
+    if (cell.dataset && cell.dataset.row !== undefined && cell.dataset.col !== undefined) {
+      event.stopPropagation();
+      handleCellClick(cell);
+    }
+  }, { capture: true, passive: true });
 })();
