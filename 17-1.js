@@ -3236,10 +3236,27 @@ async function arenaChallenge (row, col){
     }
 
 
-    let nextProgress;
-    async function attackRegion () {
+    // 次に撃つべき進行度(%)を決める（RBマップは16/33/50/66/83/100で区切り）
+    function computeNextProgressRB(pct){
+      if (pct < 16) return 26;
+      if (pct < 33) return 43;
+      if (pct < 50) return 60;
+      if (pct < 66) return 76;
+      if (pct < 83) return 93;
+      return 10;
+    }
+
+    // 現在進行度から次の目標進行度を初期化（未初期化だと常時発射してしまう）
+    let nextProgress = null;
+async function attackRegion () {
       await drawProgressBar();
-      if (isAutoJoinRunning || Math.abs(nextProgress - currentProgress) >= 3) {
+      if (isAutoJoinRunning) return;
+      // nextProgress未設定/NaN対策
+      if (nextProgress === null || Number.isNaN(Number(nextProgress))) {
+        nextProgress = location.href.includes('/teambattle?m=rb') ? computeNextProgressRB(currentProgress) : nextProgress;
+      }
+      // 目標進行度±2%に入っていない時は何もしない
+      if (nextProgress !== null && Math.abs(nextProgress - currentProgress) >= 3) {
         return;
       }
 
@@ -3349,19 +3366,9 @@ async function arenaChallenge (row, col){
             }
 
             if (success) {
-              if (currentProgress < 16) {
-                nextProgress = 26;
-               } else if (currentProgress < 33) {
-                nextProgress = 43;
-               } else if (currentProgress < 50) {
-                nextProgress = 60;
-               } else if (currentProgress < 66) {
-                nextProgress = 76;
-               } else if (currentProgress < 83) {
-                nextProgress = 93;
-               } else {
-                nextProgress = 10;
-               }
+              if (location.href.includes('/teambattle?m=rb')) {
+                nextProgress = computeNextProgressRB(currentProgress);
+              }
               next = `→ ${nextProgress}±2%`;
               isAutoJoinRunning = false;
             } else if (processType === 'return') {
@@ -3423,19 +3430,9 @@ async function arenaChallenge (row, col){
           }
         }
         if (!success && regions[cellType].length === 0) {
-              if (currentProgress < 16) {
-                nextProgress = 26;
-               } else if (currentProgress < 33) {
-                nextProgress = 43;
-               } else if (currentProgress < 50) {
-                nextProgress = 60;
-               } else if (currentProgress < 66) {
-                nextProgress = 76;
-               } else if (currentProgress < 83) {
-                nextProgress = 93;
-               } else {
-                nextProgress = 10;
-               }
+          if (location.href.includes('/teambattle?m=rb')) {
+            nextProgress = computeNextProgressRB(currentProgress);
+          }
           const next = `→ ${nextProgress}±2%`;
           isAutoJoinRunning = false;
           logMessage(null, '攻撃可能なタイルが見つかりませんでした。', next);
@@ -3633,6 +3630,12 @@ async function arenaChallenge (row, col){
         console.error(e);
         throw e;
       }
+    }
+
+    // 自動参加開始時点で次の目標進行度を設定
+    try{ await drawProgressBar(); }catch(e){}
+    if (location.href.includes('/teambattle?m=rb')) {
+      nextProgress = computeNextProgressRB(currentProgress);
     }
 
     if (!isAutoJoinRunning) {
