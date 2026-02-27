@@ -1880,14 +1880,9 @@
       if (!headerText.includes('どんぐりチーム戦い')) throw new Error('title.ng info');
 
       const gridWrap = document.getElementById('gridWrap');
-        // ★ここに追加
-      const original = document.querySelector('.gridCanvasOuter');
-      if (original) original.style.display = 'none';
-
-      if (!gridWrap) return;
-
-      // 以下は元のコードのまま
       if (!gridWrap) throw new Error('gridWrap not found');
+      const wrap = document.querySelector('.gridCanvasOuter');
+      if (wrap) wrap.style.display = 'none';
 
       let toolLayer = document.getElementById('aat_tool_layer');
       if (!toolLayer) {
