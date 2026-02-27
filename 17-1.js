@@ -3159,7 +3159,45 @@ async function drawProgressBar(){
   }
 
   drawProgressBar();
-  setInterval(drawProgressBar, 18000);
+  let progressBarIntervalId = setInterval(drawProgressBar, 18000);
+
+  // ---- Auto Join start/stop (missing in previous merge) ----
+  function stopAutoJoin() {
+    if (typeof autoJoinIntervalId !== 'undefined' && autoJoinIntervalId) {
+      clearInterval(autoJoinIntervalId);
+      autoJoinIntervalId = null;
+    }
+    if (typeof isAutoJoinRunning !== 'undefined') {
+      isAutoJoinRunning = false;
+    }
+  }
+
+  function startAutoJoin() {
+    // avoid duplicate runs
+    stopAutoJoin();
+    if (progressBarIntervalId) {
+      clearInterval(progressBarIntervalId);
+      progressBarIntervalId = null;
+    }
+    // kick once immediately + schedule inside autoJoin()
+    autoJoin();
+  }
+
+  // When Auto Join dialog is closed, stop auto-join and resume progress bar updates
+  (() => {
+    const dialog = document.querySelector('.auto-join');
+    if (!dialog) return;
+    const observer = new MutationObserver(() => {
+      if (!dialog.open) {
+        stopAutoJoin();
+        drawProgressBar();
+        if (!progressBarIntervalId) {
+          progressBarIntervalId = setInterval(drawProgressBar, 18000);
+        }
+      }
+    });
+    observer.observe(dialog, { attributes: true, attributeFilter: ['open'] });
+  })();
 
   // --- Robust cell click handling (event delegation) ---
   // Some map implementations recreate / replace .cell nodes; delegation keeps clicks working.
