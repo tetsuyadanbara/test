@@ -275,7 +275,7 @@
       autoJoinSettingsDialog.style.background = '#fff';
       autoJoinSettingsDialog.style.color = '#000';
       autoJoinSettingsDialog.style.textAlign = 'left';
-      autoJoinDialog.append(autoJoinSettingsDialog);
+      document.body.append(autoJoinSettingsDialog);
 
       (()=>{ // autoJoinSettingsDialog
         const div = document.createElement('div');
@@ -2506,6 +2506,15 @@
     let teamColor = settings.teamColor;
     let teamName = settings.teamName;
 
+    // --- autoJoin timing init ---
+    // nextProgress is the scheduled progress target (e.g. 26/43/60/76/93/10). If unset, initialize to currentProgress.
+    if (typeof nextProgress === 'undefined' || nextProgress === null) {
+      try {
+        await drawProgressBar();
+        nextProgress = currentProgress;
+      } catch (e) {}
+    }
+
 
     function logMessage(region, message, next) {
       const date = new Date();
@@ -2561,7 +2570,9 @@
         '最初にチームに参加する必要があります。',
         'どんぐりが見つかりませんでした。',
         'あなたのどんぐりが理解できませんでした。',
-        'レベルが低すぎます。'
+        'レベルが低すぎます。',
+        '参戦',
+        'どんぐりシステム'
       ],
       guardError: [
         '[警備員]だけ'
@@ -2605,7 +2616,18 @@
     let nextProgress;
     async function attackRegion () {
       await drawProgressBar();
+      if (nextProgress === undefined || nextProgress === null || Number.isNaN(nextProgress)) {
+        nextProgress = currentProgress;
+      }
+      // Wait until we're close to the scheduled progress window (±2%).
       if (isAutoJoinRunning || Math.abs(nextProgress - currentProgress) >= 3) {
+        return;
+      }
+      // Skip map-update moments to avoid spam.
+      if (
+        currentProgress === 0 || currentProgress === 50 ||
+        (location.href.includes('/teambattle?m=rb') && (currentProgress === 16 || currentProgress === 33 || currentProgress === 66 || currentProgress === 83))
+      ) {
         return;
       }
 
@@ -2957,6 +2979,10 @@
 
         if(!res.ok) throw new Error(res.status);
         const text = await res.text();
+        // If the server returned an HTML page (e.g. not logged in / redirected), treat as a system message.
+        if (/<html[\s>]/i.test(text) || /<form[\s>]/i.test(text)) {
+          return [ text, 'どんぐりシステム' ];
+        }
         const lastLine = text.trim().split('\n').pop();
         return [ text, lastLine ];
       } catch (e) {
