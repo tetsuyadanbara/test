@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         donguri arena assist tool
-// @version      ResBlue1.3 + RBnew features (map preserved)
+// @version      1.3
 // @description  fix arena ui and add functions (updated specs & removed auto join)
 // @author       7234e634
 // @match        https://donguri.5ch.net/teambattle*
@@ -27,95 +27,6 @@
       })
     })
     return;
-  }
-
-  // --- mode query (e.g., m=rb / m=hc / m=l) ---
-  var MODE = location.search.replace(/^\?/, '');
-  // expose for any dynamically-evaluated code
-  window.MODE = MODE;
-
-  // --- Canvas map click layer (ResBlue1.3) ---
-  // ResBlue1.3 uses <canvas id="gridBase"> for the map, so there are no clickable ".cell" elements.
-  // We add an invisible grid layer with ".cell" divs on top of the canvas so existing handlers work.
-  function initCanvasClickLayer() {
-    const gridWrap = document.getElementById('gridWrap');
-    const gridBase = document.getElementById('gridBase'); // canvas (ResBlue1.3)
-    if (!gridWrap || !gridBase || gridWrap.querySelector('.grid')) return; // normal HTML grid or missing canvas
-
-    // Detect GRID_SIZE from inline scripts
-    const scriptsText = [...document.querySelectorAll('script:not([src])')].map(s => s.textContent || '').join('\n');
-    const m = scriptsText.match(/const\s+GRID_SIZE\s*=\s*(\d+)\s*;/);
-    const size = m ? Number(m[1]) : 6;
-
-    let layer = document.getElementById('aat_tool_layer');
-    if (!layer) {
-      layer = document.createElement('div');
-      layer.id = 'aat_tool_layer';
-      gridWrap.style.position = gridWrap.style.position || 'relative';
-      layer.style.position = 'absolute';
-      layer.style.inset = '0';
-      layer.style.zIndex = '1000';
-      layer.style.display = 'grid';
-      layer.style.pointerEvents = 'auto';
-      // allow the canvas to keep rendering behind
-      layer.style.background = 'transparent';
-      gridWrap.appendChild(layer);
-    }
-
-    // Match the visible canvas size
-    const rect = gridBase.getBoundingClientRect();
-    // Use fixed pixel sizing so coordinates stay aligned even if the page scales
-    layer.style.width = rect.width + 'px';
-    layer.style.height = rect.height + 'px';
-    layer.style.left = (gridBase.offsetLeft || 0) + 'px';
-    layer.style.top = (gridBase.offsetTop || 0) + 'px';
-
-    layer.style.gridTemplateRows = `repeat(${size}, 1fr)`;
-    layer.style.gridTemplateColumns = `repeat(${size}, 1fr)`;
-
-    // Build cells only if missing or size changed
-    const existing = layer.querySelectorAll('.cell');
-    if (existing.length !== size * size) {
-      layer.textContent = '';
-      for (let r = 0; r < size; r++) {
-        for (let c = 0; c < size; c++) {
-          const cell = document.createElement('div');
-          cell.className = 'cell';
-          cell.dataset.row = String(r);
-          cell.dataset.col = String(c);
-          cell.style.boxSizing = 'border-box';
-          cell.style.border = '1px solid rgba(204, 204, 204, 0.10)';
-          cell.style.cursor = 'pointer';
-          cell.style.userSelect = 'none';
-          cell.style.background = 'transparent';
-          cell.style.display = 'flex';
-          cell.style.alignItems = 'center';
-          cell.style.justifyContent = 'center';
-          // keep text hidden; info is shown by the canvas
-          cell.style.color = 'transparent';
-
-          // IMPORTANT: click must reach our handler
-          cell.addEventListener('click', (e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            handleCellClick(cell);
-          });
-
-          layer.appendChild(cell);
-        }
-      }
-    }
-
-    // Keep aligned on resize/zoom
-    const sync = () => {
-      const r = gridBase.getBoundingClientRect();
-      layer.style.width = r.width + 'px';
-      layer.style.height = r.height + 'px';
-      layer.style.left = (gridBase.offsetLeft || 0) + 'px';
-      layer.style.top = (gridBase.offsetTop || 0) + 'px';
-    };
-    window.addEventListener('resize', sync);
-    sync();
   }
 
   const vw = Math.min(document.documentElement.clientWidth, window.innerWidth || 0);
@@ -161,38 +72,10 @@
   if(h4) h4.style.display = 'none';
   header.append(toolbar);
   const progressBarContainer = document.createElement('div');
-  const progressBar = document.createElement('div');
-  const progressBarBody = document.createElement('div');
-  const progressBarInfo = document.createElement('p');
-  progressBar.classList.add('progress-bar');
-  progressBar.style.display = 'inline-block';
-  progressBar.style.width = '400px';
-  progressBar.style.maxWidth = '100vw';
-  progressBar.style.height = '20px';
-  progressBar.style.background = '#ccc';
-  progressBar.style.borderRadius = '8px';
-  progressBar.style.fontSize = '16px';
-  progressBar.style.overflow = 'hidden';
-  progressBar.style.marginTop = '5px';
-  progressBarBody.style.height = '100%';
-  progressBarBody.style.lineHeight = 'normal';
-  progressBarBody.style.background = '#428bca';
-  progressBarBody.style.textAlign = 'right';
-  progressBarBody.style.paddingRight = '5px';
-  progressBarBody.style.boxSizing = 'border-box';
-  progressBarBody.style.color = 'white';
-  progressBarInfo.style.marginTop = '0';
-  progressBarInfo.style.marginBottom = '0';
-  progressBarInfo.style.overflow = 'auto';
-  progressBarInfo.style.whiteSpace = 'nowrap';
-
-  progressBarContainer.append(progressBarInfo,progressBar);
-  progressBar.append(progressBarBody)
   toolbar.append(progressBarContainer);
 
   // add buttons and select to custom menu
-  let shouldSkipAreaInfo, shouldSkipAutoEquip, cellSelectorActivate, rangeAttackProcessing,
-    currentPeriod, currentProgress;
+  let shouldSkipAreaInfo, shouldSkipAutoEquip, cellSelectorActivate, rangeAttackProcessing, currentPeriod, currentProgress;
   let currentEquipName = '';
   (()=>{
     const button = document.createElement('button');
@@ -205,7 +88,6 @@
     button.style.padding = '2px';
     button.style.width = '6em';
     button.style.fontSize = '65%';
-    button.style.border = 'none';
 
     if (vw < 768) {
       progressBarContainer.style.fontSize = '60%';
@@ -217,48 +99,37 @@
       const isSubMenuOpen = subMenu.style.display === 'flex';
       subMenu.style.display = isSubMenuOpen ? 'none' : 'flex';
     })
-
+  
     const equipButton = button.cloneNode();
     equipButton.textContent = '■装備';
     equipButton.addEventListener('click', ()=>{
       panel.style.display = 'flex';
     });
 
-    const toggleViewButton = button.cloneNode();
-    toggleViewButton.innerText = '表示\n切り替え';
-    toggleViewButton.addEventListener('click', ()=>{
-      toggleCellViewMode();
+    let currnetSort = 'default';
+    const sortButton = button.cloneNode();
+    sortButton.innerText = 'ソート\n切り替え';
+    sortButton.addEventListener('click', ()=>{
+      if(currnetSort === 'default') {
+        sortCells('cond');
+        currnetSort = 'cond';
+      } else {
+        sortCells('default');
+        currnetSort = 'default';
+      }
     })
 
-
+    const cellButton = button.cloneNode();
+    cellButton.innerText = 'エリア情報\n再取得';
+    cellButton.addEventListener('click',()=>{
+      fetchAreaInfo(true);
+    });
+  
     const refreshButton = button.cloneNode();
     refreshButton.innerText = 'エリア情報\n更新';
     refreshButton.addEventListener('click',()=>{
       fetchAreaInfo(false);
     });
-
-    const skipAreaInfoButton = button.cloneNode();
-    skipAreaInfoButton.innerText = 'セル情報\nスキップ';
-    skipAreaInfoButton.style.color = '#fff';
-    if (settings.skipArenaInfo) {
-      skipAreaInfoButton.style.background = '#46f';
-      shouldSkipAreaInfo = true;
-    } else {
-      skipAreaInfoButton.style.background = '#888';
-      shouldSkipAreaInfo = false;
-    }
-    skipAreaInfoButton.addEventListener('click', ()=>{
-      if(shouldSkipAreaInfo) {
-        skipAreaInfoButton.style.background = '#888';
-        shouldSkipAreaInfo = false;
-      } else {
-        skipAreaInfoButton.style.background = '#46f';
-        shouldSkipAreaInfo = true;
-      }
-      settings.skipArenaInfo = shouldSkipAreaInfo;
-      localStorage.setItem('aat_settings', JSON.stringify(settings));
-    });
-
 
     const subMenu = document.createElement('div');
     subMenu.style.display = 'none';
@@ -273,6 +144,7 @@
       subButton.style.border = 'none';
       subButton.style.padding = '2px';
 
+
       const div = document.createElement('div');
       div.style.display = 'flex';
       div.style.flex = '1';
@@ -281,34 +153,6 @@
       div.style.overflowX = 'auto';
       div.style.height = '100%';
 
-      const cellButton = subButton.cloneNode();
-      cellButton.innerText = 'エリア情報\n再取得';
-      cellButton.addEventListener('click',()=>{
-        fetchAreaInfo(true);
-      });
-
-      const skipAutoEquipButton = subButton.cloneNode();
-      skipAutoEquipButton.textContent = '自動装備';
-      skipAutoEquipButton.style.color = '#fff';
-      skipAutoEquipButton.classList.add('skip-auto-equip');
-      if (settings.skipAutoEquip) {
-        skipAutoEquipButton.style.background = '#888';
-        shouldSkipAutoEquip = true;
-      } else {
-        skipAutoEquipButton.style.background = '#46f';
-        shouldSkipAutoEquip = false;
-      }
-      skipAutoEquipButton.addEventListener('click', ()=>{
-        if (shouldSkipAutoEquip) {
-          skipAutoEquipButton.style.background = '#46f';
-          shouldSkipAutoEquip = false;
-        } else {
-          skipAutoEquipButton.style.background = '#888';
-          shouldSkipAutoEquip = true;
-        }
-        settings.skipAutoEquip = shouldSkipAutoEquip;
-        localStorage.setItem('aat_settings', JSON.stringify(settings));
-      });
 
       const slideMenu = document.createElement('div');
       slideMenu.style.display = 'flex';
@@ -322,122 +166,27 @@
       slideMenu.style.background = '#fff';
       slideMenu.style.transition = 'transform 0.1s ease';
 
-
-      const autoJoinButton = subButton.cloneNode();
-      autoJoinButton.innerText = '自動参加\nモード';
-      autoJoinButton.style.background = '#ffb300';
-      autoJoinButton.style.color = '#000';
-      autoJoinButton.addEventListener('click',()=>{
-        autoJoinDialog.showModal();
-        if (!settings.teamColor) {
-          autoJoinSettingsDialog.showModal();
+      const skipAreaInfoButton = subButton.cloneNode();
+      skipAreaInfoButton.innerText = 'セル情報\nスキップ';
+      skipAreaInfoButton.style.color = '#fff';
+      if (settings.skipArenaInfo) {
+        skipAreaInfoButton.style.background = '#46f';
+        shouldSkipAreaInfo = true;
+      } else {
+        skipAreaInfoButton.style.background = '#888';
+        shouldSkipAreaInfo = false;
+      }
+      skipAreaInfoButton.addEventListener('click', ()=>{
+        if(shouldSkipAreaInfo) {
+          skipAreaInfoButton.style.background = '#888';
+          shouldSkipAreaInfo = false;
         } else {
-          startAutoJoin();
+          skipAreaInfoButton.style.background = '#46f';
+          shouldSkipAreaInfo = true;
         }
+        settings.skipArenaInfo = shouldSkipAreaInfo;
+        localStorage.setItem('aat_settings', JSON.stringify(settings));
       })
-
-      const autoJoinDialog = document.createElement('dialog');
-      autoJoinDialog.style.background = '#fff';
-      autoJoinDialog.style.color = '#000';
-      autoJoinDialog.style.width = '90vw';
-      autoJoinDialog.style.height = '90vh';
-      autoJoinDialog.style.fontSize = '80%';
-      autoJoinDialog.style.textAlign = 'center';
-      autoJoinDialog.style.marginTop = '2vh';
-      autoJoinDialog.classList.add('auto-join');
-      document.body.append(autoJoinDialog);
-
-      const autoJoinSettingsDialog = document.createElement('dialog');
-      autoJoinSettingsDialog.style.background = '#fff';
-      autoJoinSettingsDialog.style.color = '#000';
-      autoJoinSettingsDialog.style.textAlign = 'left';
-      autoJoinDialog.append(autoJoinSettingsDialog);
-
-      (()=>{ // autoJoinSettingsDialog
-        const div = document.createElement('div');
-        const input = document.createElement('input');
-        const label = document.createElement('label');
-        label.style.display = 'flex';
-        label.style.width = '100%';
-        const span = document.createElement('span');
-        span.style.whiteSpace = 'nowrap';
-        span.style.width = '50%';
-        const span2 = document.createElement('span');
-        span2.style.width = '50%';
-        const closeButton = document.createElement('button');
-        closeButton.type = 'button';
-        closeButton.textContent = 'OK';
-        closeButton.addEventListener('click',()=>{
-          autoJoinSettingsDialog.close();
-          startAutoJoin();
-        })
-
-        const inputs = {
-          teamName: [input.cloneNode(),'チーム名'],
-          teamColor: [input.cloneNode(),'チームカラー']
-        }
-        for (const key of Object.keys(inputs)) {
-          const label_ = label.cloneNode();
-          const span_ = span.cloneNode();
-          const span2_ = span2.cloneNode();
-          span_.textContent = inputs[key][1];
-          span2_.append(inputs[key][0]);
-          label_.append(span_, span2_);
-          div.append(label_);
-
-          inputs[key][0].value = settings[key] || '';
-          inputs[key][0].addEventListener('input', ()=>{
-            inputs.teamColor[0].value = inputs.teamColor[0].value.replace(/[^0-9a-fA-F]/g,'');
-            settings[key] = inputs[key][0].value;
-            localStorage.setItem('aat_settings',JSON.stringify(settings));
-          })
-        }
-
-        const description = document.createElement('p');
-        description.style.fontSize = '90%';
-        description.innerText = 'チームカラーは小文字/大文字も正確に入力してください。（自陣の隣接タイル取得に必要）\nあらかじめ装備パネルからエリートも含め各ランクの装備を登録してください。（所持していない場合は除く）\n※装備を登録していないと成功率が低下します。'
-        div.append(description,closeButton);
-        autoJoinSettingsDialog.append(div);
-      })();
-
-      //autoJoin
-      (()=>{
-        const container = document.createElement('div');
-        container.style.display = 'flex';
-        container.style.flexDirection = 'column';
-        container.style.height = '100%';
-        container.style.color = '#000';
-
-        const log = document.createElement('div');
-        log.style.margin = '2px';
-        log.style.border = 'solid 1px #000';
-        log.style.overflow = 'auto';
-        log.style.flexGrow = '1';
-        log.style.textAlign = 'left';
-        log.classList.add('auto-join-log');
-
-        const settingsButton = document.createElement('button');
-        settingsButton.textContent = '設定';
-        settingsButton.addEventListener('click', ()=>{
-          autoJoinSettingsDialog.showModal();
-          clearInterval(autoJoinIntervalId);
-        })
-        const closeButton = document.createElement('button');
-        closeButton.style.fontSize = '100%';
-        closeButton.textContent = '自動参加モードを終了';
-        closeButton.addEventListener('click', ()=>{
-          autoJoinDialog.close();
-        })
-        //closeButton.autofocus = true; // inputへのオートフォーカス阻止
-        const p = document.createElement('p');
-        //p.textContent = 'この画面を開いたままにしておくこと。最短600秒';
-        p.textContent = 'この画面を開いたままにしておくこと';
-        p.style.margin = '0';
-
-        container.append(log, p, settingsButton, closeButton);
-        autoJoinDialog.append(container);
-      })();
-
 
       const settingsButton = subButton.cloneNode();
       settingsButton.textContent = '設定';
@@ -446,6 +195,29 @@
       settingsButton.addEventListener('click', ()=>{
         settingsDialog.show();
       })
+
+      const skipAutoEquipButton = subButton.cloneNode();
+      skipAutoEquipButton.textContent = '自動装備';
+      skipAutoEquipButton.style.color = '#fff';
+      skipAutoEquipButton.classList.add('skip-auto-equip');
+      if (settings.skipAutoEquip) {
+        skipAutoEquipButton.style.background = '#888';
+        shouldSkipAutoEquip = true;
+      } else {
+        skipAutoEquipButton.style.background = '#46f';
+        shouldSkipAutoEquip = false;
+      }
+      skipAutoEquipButton.addEventListener('click', ()=> {
+        if (shouldSkipAutoEquip) {
+          skipAutoEquipButton.style.background = '#46f';
+          shouldSkipAutoEquip = false;
+        } else {
+          skipAutoEquipButton.style.background = '#888';
+          shouldSkipAutoEquip = true;
+        }
+        settings.skipAutoEquip = shouldSkipAutoEquip;
+        localStorage.setItem('aat_settings', JSON.stringify(settings));
+      });
 
       const rangeAttackButton = subButton.cloneNode();
       rangeAttackButton.textContent = '範囲攻撃';
@@ -464,7 +236,7 @@
         slideMenu.style.transform = 'translateX(0)';
         cellSelectorActivate = false;
       })
-
+      
       const startRangeAttackButton = subButton.cloneNode();
       startRangeAttackButton.textContent = '攻撃開始';
       startRangeAttackButton.style.background = '#f64';
@@ -526,7 +298,7 @@
           cell.style.borderColor = '#ccc';
         });
       })
-
+      
       const batchSelectButton = subButton.cloneNode();
       batchSelectButton.textContent = '一括選択';
       batchSelectButton.style.background = '#ffb300';
@@ -581,7 +353,7 @@
         batchSelectMenu.prepend(closeButton);
       })();
 
-      div.append(skipAutoEquipButton, rangeAttackButton, autoJoinButton, settingsButton, cellButton);
+      div.append(skipAreaInfoButton, skipAutoEquipButton, rangeAttackButton, settingsButton);
       slideMenu.append(closeSlideMenuButton, startRangeAttackButton, pauseRangeAttackButton, resumeRangeAttackButton, batchSelectButton, deselectButton, batchSelectMenu);
       subMenu.append(div, slideMenu);
 
@@ -592,7 +364,7 @@
     main.style.flexWrap = 'nowrap';
     main.style.gap = '2px';
     main.style.justifyContent = 'center';
-    main.append(menuButton, skipAreaInfoButton, equipButton, toggleViewButton, refreshButton);
+    main.append(menuButton, equipButton, sortButton, refreshButton, cellButton);
 
     toolbar.append(main, subMenu);
   })();
@@ -804,80 +576,69 @@
     }
   });
   document.body.append(arenaResult);
+
+  const autoEquipDialog = document.createElement('dialog');
+  autoEquipDialog.style.padding = '0';
+  autoEquipDialog.style.background = '#fff';
+  autoEquipDialog.style.border = 'solid 1px #000';
+  autoEquipDialog.style.color = '#000';
+  document.body.append(autoEquipDialog);
+
   document.body.append(arenaField);
-
-  // --- 新マップ(キャンバス)表示はResBlue1.3のまま維持し、クリック用の透明レイヤーだけ被せる ---
-  function ensureCanvasClickLayer() {
-    const wrap = document.getElementById('gridWrap');
-    const outer = document.querySelector('.gridCanvasOuter');
-    if (!wrap || !outer) return;
-
-    const base = wrap.querySelector('#gridBase') || wrap.querySelector('canvas');
-    if (!base) return;
-
-    // GRID_SIZE を script から取得（見つからなければ既存セル数から推定）
-    let gridSize = 0;
-    const scripts = [...wrap.querySelectorAll('script:not([src])')].map(s => s.textContent || '').join('\n');
-    const mSize = scripts.match(/const\s+GRID_SIZE\s*=\s*(\d+)\s*;/);
-    if (mSize) gridSize = Number(mSize[1]);
-
-    // fallback: canvas 幅/高さからおおよそ（32px/35pxセル想定は危険なので、最低 6）
-    if (!gridSize || !Number.isFinite(gridSize)) gridSize = 6;
-
-    const rect = base.getBoundingClientRect();
-    if (!rect.width || !rect.height) return;
-
-    let layer = document.getElementById('aat_click_layer');
-    if (!layer) {
-      layer = document.createElement('div');
-      layer.id = 'aat_click_layer';
-      // outer が position:relative の想定（無ければ付ける）
-      const cs = getComputedStyle(outer);
-      if (cs.position === 'static') outer.style.position = 'relative';
-      layer.style.position = 'absolute';
-      layer.style.left = '0';
-      layer.style.top = '0';
-      layer.style.zIndex = '9999';
-      layer.style.pointerEvents = 'auto';
-      layer.style.display = 'grid';
-      layer.style.background = 'transparent';
-      outer.appendChild(layer);
-    }
-
-    // サイズ同期
-    layer.style.width = rect.width + 'px';
-    layer.style.height = rect.height + 'px';
-    layer.style.gridTemplateColumns = `repeat(${gridSize}, ${rect.width / gridSize}px)`;
-    layer.style.gridTemplateRows = `repeat(${gridSize}, ${rect.height / gridSize}px)`;
-
-    // 再生成（サイズ/GRID_SIZE変更に追従）
-    const expected = gridSize * gridSize;
-    if (layer.childElementCount !== expected) {
-      layer.innerHTML = '';
-      for (let r = 0; r < gridSize; r++) {
-        for (let c = 0; c < gridSize; c++) {
-          const cell = document.createElement('div');
-          cell.className = 'cell';
-          cell.dataset.row = String(r);
-          cell.dataset.col = String(c);
-          cell.style.boxSizing = 'border-box';
-          cell.style.border = '1px solid rgba(204, 204, 204, 0.35)';
-          cell.style.background = 'transparent';   // 下のキャンバス表示を隠さない
-          cell.style.cursor = 'pointer';
-          cell.style.pointerEvents = 'auto';
-          cell.addEventListener('click', (e) => {
-            e.stopPropagation();
-            handleCellClick(cell);
-          });
-          layer.appendChild(cell);
+  
+  // --- 新仕様対応のグリッド生成ロジック追加 ---
+  if (!document.querySelector('.grid') && document.querySelector('.gridCanvasOuter')) {
+    const gridOuter = document.querySelector('.gridCanvasOuter');
+    let GRID_SIZE = 16; // 初期値
+    let cellColors = {};
+    const scripts = document.querySelectorAll('script');
+    for (let s of scripts) {
+      if (s.textContent.includes('const cellColors =')) {
+        const cellColorsMatch = s.textContent.match(/const cellColors = ({.+?});/s);
+        if (cellColorsMatch) {
+          const validJsonStr = cellColorsMatch[1].replace(/'/g, '"').replace(/,\s*}/, '}');
+          cellColors = JSON.parse(validJsonStr);
         }
+        const gridMatch = s.textContent.match(/const GRID_SIZE = (\d+);/);
+        if (gridMatch) {
+          GRID_SIZE = parseInt(gridMatch[1]);
+        }
+        break;
       }
     }
-  }
-  ensureCanvasClickLayer();
-  window.addEventListener('resize', () => ensureCanvasClickLayer());
-  // --- ここまで ---
 
+    const wrap = document.getElementById('gridWrap');
+    if (wrap) wrap.style.display = 'none';
+
+    const newGrid = document.createElement('div');
+    newGrid.className = 'grid';
+    newGrid.style.display = 'grid';
+    newGrid.style.gridTemplateColumns = `repeat(${GRID_SIZE}, 35px)`;
+    newGrid.style.gridTemplateRows = `repeat(${GRID_SIZE}, 35px)`;
+    newGrid.style.gap = '2px';
+    for (let i = 0; i < GRID_SIZE; i++) {
+      for (let j = 0; j < GRID_SIZE; j++) {
+        const cell = document.createElement('div');
+        cell.className = 'cell';
+        cell.dataset.row = i;
+        cell.dataset.col = j;
+        cell.style.width = '30px';
+        cell.style.height = '30px';
+        cell.style.border = '1px solid #ccc';
+        cell.style.cursor = 'pointer';
+        cell.style.transition = 'background-color 0.3s';
+        const cellKey = `${i}-${j}`;
+        if (cellColors[cellKey]) {
+          cell.style.backgroundColor = cellColors[cellKey];
+        } else {
+          cell.style.backgroundColor = 'transparent';
+        }
+        newGrid.appendChild(cell);
+      }
+    }
+    gridOuter.appendChild(newGrid);
+  }
+  // --- ここまで ---
 
   const grid = document.querySelector('.grid');
   if(grid) {
@@ -1800,15 +1561,13 @@
           throw new Error('装備エラー');
         }
         stat.textContent = '完了: ' + presetName;
-        localStorage.setItem('current_equip', JSON.stringify(equipPresets[presetName].id));  
+        localStorage.setItem('current_equip', JSON.stringify(equipPresets[presetName].id));
+        currentEquipName = presetName;  
       } catch (e) {
         stat.textContent = e;
         localStorage.removeItem('current_equip');
       }
     }
-    // expose for other modules (auto-join / auto-equip)
-    window.setPresetItems = setPresetItems;
-
     function removePresetItems(presetName) {
       const userConfirmed = confirm(presetName + ' を削除しますか？');
       if(!userConfirmed) return;
@@ -1854,20 +1613,6 @@
       }
   
       const currentCells = grid.querySelectorAll('.cell');
-
-      // canvasサイズからセル寸法を算出（ResBlue1.3はcanvas描画）
-      const canvas = document.getElementById('gridOverlay') || document.getElementById('gridBase');
-      const rect = canvas ? canvas.getBoundingClientRect() : { width: cols * 35, height: rows * 35 };
-      const cellW = rect.width / cols;
-      const cellH = rect.height / rows;
-      const cellWpx = `${cellW}px`;
-      const cellHpx = `${cellH}px`;
-      grid.style.width = `${rect.width}px`;
-      grid.style.height = `${rect.height}px`;
-      grid.style.position = 'absolute';
-      grid.style.top = '0';
-      grid.style.left = '0';
-
       
       let scriptContent = '';
       for (let s of doc.querySelectorAll('script')) {
@@ -1894,8 +1639,8 @@
       }
   
       if (currentCells.length !== rows * cols) {
-        grid.style.gridTemplateRows = `repeat(${rows}, ${cellHpx})`;
-        grid.style.gridTemplateColumns = `repeat(${cols}, ${cellWpx})`;
+        grid.style.gridTemplateRows = `repeat(${rows}, 35px)`;
+        grid.style.gridTemplateColumns = `repeat(${cols}, 35px)`;
         grid.innerHTML = '';
   
         for (let i = 0; i < rows; i++) {
@@ -2040,134 +1785,7 @@
     })
   }
 
-  
-
-  function addCustomColor() {
-    const teamTable = document.querySelector('table');
-    const rows = [...teamTable.rows];
-    rows.shift();
-    const button = document.createElement('button');
-    button.style.padding = '4px';
-    button.style.lineHeight = '1';
-    button.style.marginLeft = '2px';
-
-    const editButton = button.cloneNode();
-    editButton.textContent = '▼';
-    editButton.addEventListener('click', ()=>{
-      editButton.style.display = 'none';
-      editEndButton.style.display = '';
-
-      rows.forEach(row => {
-        const cell = row.cells[0];
-        const cellColor = cell.textContent;
-        const input = document.createElement('input');
-        input.type = 'text';
-        input.value = cellColor;
-        input.style.width = '6em';
-        input.addEventListener('change',()=>{
-          if (input.value === '') {
-            if (settings.customColors) {
-              const teamname = row.cells[1].textContent;
-              delete settings.customColors[teamname];
-              localStorage.setItem('aat_settings', JSON.stringify(settings));
-            }
-            return;
-          }
-
-          const isValidColor = /^[0-9A-Fa-f]{6}$/.test(input.value);
-          if (!isValidColor) {
-            input.value = cellColor;
-            return;
-          } else {
-            const teamname = row.cells[1].textContent;
-            if (!settings.customColors) settings.customColors = {};
-            settings.customColors[teamname] = input.value;
-            localStorage.setItem('aat_settings', JSON.stringify(settings));
-            cell.style.background = '#' + input.value;
-            row.cells[0].style.fontStyle = 'italic';
-          }
-        })
-        cell.textContent = '';
-        cell.append(input);
-      })
-    })
-    const editEndButton = button.cloneNode();
-    editEndButton.textContent = '?';
-    editEndButton.style.display = 'none';
-    editEndButton.addEventListener('click', ()=>{
-      editButton.style.display = '';
-      editEndButton.style.display = 'none';
-
-      rows.forEach(row => {
-        const cell = row.cells[0];
-        const input = cell.querySelector('input');
-        cell.textContent = input.value;
-        input.remove();
-      })
-    })
-
-    const helpButton = button.cloneNode();
-    helpButton.textContent = '？';
-    helpButton.addEventListener('click', ()=>{
-      helpDialog.innerHTML = '';
-      const div = document.createElement('div');
-      div.style.lineHeight = '150%';
-      div.innerText = `・[▼]を押すと色を編集できます。編集後は一度[エリア情報再取得]を実行してください。
-      ・変更したチームのセルは[エリア情報更新]時に必ず取得されるようになります。
-      *更新時の読み込みを増やしたくない場合は、無闇に変更しないことを推奨します。
-      ・同色のチームが複数存在する場合、それぞれの色を変更することで同色の塗り替えに対応可能です。(カスタムカラーで上書きされたセルは常に読み込みの対象になるため)
-      ・編集した色を戻すには入力欄の文字を全て消した状態で保存してください。
-
-      仕様 (読まなくてよい)：
-      [エリア情報再取得]は全エリアにアクセスし情報を取得するのに対し、[エリア情報更新]は色が更新されたセルのみを取得するようにしてある。
-      ここで、同色のAとBのチームが存在する状況を想定する。
-      ・Bの色のみを編集した場合、Aが保持するセルをBが獲得した際、編集前の色情報が同一のためセル情報の取得が行われない。
-      ・AとBの双方を編集しておくと、Aが保持するセルは常に色情報が更新された扱いとなり取得対象になる。
-      要するに、同色の場合は全て色を変えておくとよいということ。同色がいなくなったら戻せばOK.
-      `;
-      const resetButton = button.cloneNode();
-      resetButton.textContent = '色設定初期化';
-      resetButton.addEventListener('click', ()=>{
-        delete settings.customColors;
-        localStorage.setItem('aat_settings', JSON.stringify(settings));
-        alert('色の設定を初期化しました（要エリア更新）');
-      })
-      helpDialog.append(resetButton, div);
-      helpDialog.show();
-    })
-    teamTable.rows[0].cells[0].append(editButton, editEndButton, helpButton);
-
-    function setCustomColors(rows) {
-      if (!settings.customColors) return;
-      rows.forEach(row => {
-        const teamname = row.cells[1].textContent;
-        if ('customColors' in settings && teamname in settings.customColors){
-          const color = settings.customColors[teamname];
-          row.cells[0].textContent = color;
-          row.cells[0].style.background = '#' + color;
-          row.cells[0].style.fontStyle = 'italic';
-        }
-        const rgb = row.cells[0].style.backgroundColor.match(/\d+/g);
-        const brightness = 0.2126 * rgb[0] + 0.7152 * rgb[1] + 0.0722 * rgb[2];
-        row.cells[0].style.color = brightness > 128 ? '#000' : '#fff';
-      })
-    }
-    setCustomColors(rows);
-  }
-  addCustomColor();
-
-  // --- ResBlue1.3(canvas)向け: クリック用セルレイヤーを初期生成 ---
-  // .cellが存在しない(=canvas表示のみ)場合でも、透明セルを生成してクリック/選択を可能にする
-  try {
-    const hasCells = document.querySelector('.cell');
-    const hasCanvasWrap = document.getElementById('gridCanvasWrap');
-    if (!hasCells && hasCanvasWrap) {
-      refreshArenaInfo();
-    }
-  } catch (e) { console.error(e); }
-
-
-const observer = new MutationObserver(() => {
+  const observer = new MutationObserver(() => {
     if(grid) scaleContentsToFit(grid.parentNode, grid);
   });
   
@@ -2200,7 +1818,7 @@ const observer = new MutationObserver(() => {
       }
       const table = doc.querySelector('table');
       if(!table) throw new Error('table.ng');
-      return showArenaTable(table);
+      showArenaTable(table);
     } catch (e) {
       console.error(e);
     }
@@ -2250,11 +1868,10 @@ const observer = new MutationObserver(() => {
       newTable.append(tbody);
       arenaField.querySelector('table').replaceWith(newTable);
       arenaField.show();
-      return { row: dataRow, col: dataCol, rank: equipCond.textContent };
     }
   }
 
-  async function handleCellClick (cell){
+  function handleCellClick (cell){
     if (cellSelectorActivate) {
       if (cell.classList.contains('selected')) {
         cell.style.borderColor = '#ccc';
@@ -2263,105 +1880,59 @@ const observer = new MutationObserver(() => {
         cell.style.borderColor = '#f64';
         cell.classList.add('selected');
       }
-      return;
-    }
-
-    const { row, col } = cell.dataset;
-
-    if (shouldSkipAreaInfo) {
-      // canvas版/初期状態ではrank未取得のことがあるため、必要ならテーブルから取得する
-      let rank = cell.dataset.rank;
-      if (!rank) {
-        const info = await fetchArenaTable(row, col);
-        rank = info?.rank || '';
-      } else {
-        // skip時でも情報パネルが開いてるなら更新
-        if (arenaField.open) fetchArenaTable(row, col);
-      }
-      await autoEquipAndChallenge(row, col, rank);
-      return;
-    }
-
-    // 通常: クリックでセル詳細表示
-    fetchArenaTable(row, col);
-  }
-  // --- robust click handling (event delegation) ---
-  // Some map renderers replace/clone cells; delegation keeps clicks working.
-  if (!window.__aat_delegated_click__) {
-    window.__aat_delegated_click__ = true;
-    document.addEventListener('click', (ev) => {
-      const cell = ev.target && ev.target.closest ? ev.target.closest('.cell') : null;
-      if (!cell) return;
-      if (cell.dataset && cell.dataset.row !== undefined && cell.dataset.col !== undefined) {
-        // If the cell has its own click handler, let it run too; we only ensure at least one path works.
-        try { handleCellClick(cell); } catch (e) { console.error(e); }
-      }
-    }, true);
-  }
-
-
-  
-  // Initialize click layer for canvas-based map (ResBlue1.3)
-  initCanvasClickLayer();
-const autoEquipDialog = document.createElement('dialog');
-  autoEquipDialog.style.padding = '0';
-  autoEquipDialog.style.background = '#fff';
-  document.body.append(autoEquipDialog);
-  // rank が無い(クリックレイヤー直後など)場合に取得する
-  async function fetchArenaRankText(row, col) {
-    const url = `https://donguri.5ch.net/teambattle?r=${row}&c=${col}&` + MODE;
-    const res = await fetch(url, { cache: 'no-store' });
-    if (!res.ok) throw new Error(res.status);
-    const html = await res.text();
-    const doc = new DOMParser().parseFromString(html, 'text/html');
-    const headerText = doc?.querySelector('header')?.textContent || '';
-    if (!headerText.includes('どんぐりチーム戦い')) throw new Error('title.ng');
-    // まず small（ランク条件）を優先
-    const small = doc.querySelector('small')?.textContent || '';
-    if (small) return small;
-    // fallback: テーブル内 small
-    return doc.querySelector('table td small')?.textContent || '';
-  }
-
-  
-  async function autoEquipAndChallenge (row, col, rank) {
-    if (shouldSkipAutoEquip) {
+    } else if (shouldSkipAreaInfo) {
+      const row = cell.dataset.row;
+      const col = cell.dataset.col;
+      if (arenaField.open) fetchArenaTable(row, col);
       arenaChallenge(row, col);
-      return;
+    } else {
+      const row = cell.dataset.row;
+      const col = cell.dataset.col;
+      fetchArenaTable(row, col);
+    }
+  }
+
+  
+  async function autoEquipAndChallenge (row, col) {
+    if (shouldSkipAutoEquip) {
+      return arenaChallenge(row, col);
     }
 
-    // rank が未取得の場合は取得（キャンバスクリックレイヤー直後など）
-    if (!rank) {
-      try {
-        rank = await fetchArenaRankText(row, col);
-      } catch (e) {
-        console.error(e);
-        arenaChallenge(row, col);
-        return;
-      }
+    // rankがセルに無い/古い場合に備えて、対象セルの装備条件を都度取得する
+    let rank = '';
+    try {
+      const url = `https://donguri.5ch.net/teambattle?r=${row}&c=${col}&` + MODE;
+      const res = await fetch(url, { cache: 'no-store' });
+      if (!res.ok) throw new Error(`[${res.status}] /teambattle?r=${row}&c=${col}`);
+      const text = await res.text();
+      const doc = new DOMParser().parseFromString(text, 'text/html');
+      const headerText = doc?.querySelector('header')?.textContent || '';
+      if (!headerText.includes('どんぐりチーム戦い')) throw new Error('title.ng');
+      const table = doc.querySelector('table');
+      const equipCond = table?.querySelector('td small')?.textContent || '';
+      rank = equipCond
+        .replace('エリート','e')
+        .replace(/.+から|\w+-|まで|だけ|警備員|警|\s|\[|\]|\|/g,'');
+    } catch (e) {
+      console.error(e);
+      // 取得失敗時はそのまま挑戦
+      return arenaChallenge(row, col);
     }
-
-    rank = String(rank)
-      .replace('エリート','e')
-      .replace(/.+から|\w+-|まで|だけ|警備員|警|\s|\[|\]|\|/g,'');
 
     const autoEquipItems = JSON.parse(localStorage.getItem('autoEquipItems')) || {};
     if (autoEquipItems[rank] && !autoEquipItems[rank]?.includes(currentEquipName)) {
       if (autoEquipItems[rank].length === 0) {
-        arenaChallenge(row, col);
-        return;
+        return arenaChallenge(row, col);
       } else if (autoEquipItems[rank].length === 1) {
         await setPresetItems(autoEquipItems[rank][0]);
-        arenaChallenge(row, col);
-        return;
+        return arenaChallenge(row, col);
       } else if (settings.autoEquipRandomly) {
         const index = Math.floor(Math.random() * autoEquipItems[rank].length);
         await setPresetItems(autoEquipItems[rank][index]);
-        arenaChallenge(row, col);
+        return arenaChallenge(row, col);
       } else {
-        while (autoEquipDialog.firstChild) {
-          autoEquipDialog.firstChild.remove();
-        }
+        // 選択UI（簡易版）
+        while (autoEquipDialog.firstChild) autoEquipDialog.firstChild.remove();
         const ul = document.createElement('ul');
         ul.style.background = '#fff';
         ul.style.listStyle = 'none';
@@ -2376,7 +1947,7 @@ const autoEquipDialog = document.createElement('dialog');
         autoEquipItems[rank].forEach(v => {
           const li = liTemplate.cloneNode();
           li.textContent = v;
-          li.addEventListener('click', async()=>{
+          li.addEventListener('click', async()=> {
             autoEquipDialog.close();
             await setPresetItems(v);
             arenaChallenge(row, col);
@@ -2387,11 +1958,11 @@ const autoEquipDialog = document.createElement('dialog');
         autoEquipDialog.showModal();
       }
     } else {
-      arenaChallenge(row, col);
+      return arenaChallenge(row, col);
     }
   }
 
-  async function arenaChallenge (row, col){
+async function arenaChallenge (row, col){
     const options = {
       method: 'POST',
       headers: {
@@ -2400,15 +1971,16 @@ const autoEquipDialog = document.createElement('dialog');
       body: `row=${row}&col=${col}`
     };
     try {
-      const response = await fetch('/teamchallenge?'+MODE, options);
+      const url = '/teamchallenge' + window.location.search;
+      const response = await fetch(url, options);
       if(!response.ok){
         throw new Error('/teamchallenge res.ng');
       }
       const text = await response.text();
       arenaResult.innerText = text;
 
-      const lastLine = text.trim().split('\n').pop();
       if(text.includes('\n')) {
+        const lastLine = text.trim().split('\n').pop();
         lastLine + '\n' + text;
         const p = document.createElement('p');
         p.textContent = lastLine;
@@ -2419,7 +1991,6 @@ const autoEquipDialog = document.createElement('dialog');
       }
 
       arenaResult.show();
-      // arenaResult.show();のあとでsetTimeoutを使用しないと位置がずれる
       setTimeout(() => {
         if (settings.arenaResultScrollPosition === 'bottom') {
           arenaResult.scrollTop = arenaResult.scrollHeight;
@@ -2429,19 +2000,11 @@ const autoEquipDialog = document.createElement('dialog');
       }, 0);
       arenaResult.style.display = '';
 
-      if (lastLine === 'リーダーになった' || lastLine.includes('は新しいアリーナリーダーです。')) {
-        if (!settings.teamColor) return;
-        const cell = document.querySelector(`div[data-row="${row}"][data-col="${col}"]`);
-        cell.style.background = '#' + settings.teamColor;
-        fetchSingleArenaInfo(cell);
-      }
     } catch (e) {
       arenaResult.innerText = e;
       arenaResult.show();
     }
   }
-
-  
 
   let rangeAttackQueue = [];
   async function rangeAttack () {
@@ -2652,664 +2215,4 @@ const autoEquipDialog = document.createElement('dialog');
 
   drawProgressBar();
   setInterval(drawProgressBar, 18000);
-
-
-  let currentViewMode = 'detail';
-  function toggleCellViewMode () {
-    const grid = document.querySelector('.grid');
-    if (!grid) return;
-    const cells = grid.querySelectorAll('.cell');
-
-    if(currentViewMode === 'detail') {
-      currentViewMode = 'compact';
-
-      grid.style.gridTemplateRows = grid.style.gridTemplateRows.replace('65px','35px');
-      grid.style.gridTemplateColumns = grid.style.gridTemplateColumns.replace('105px','35px');
-
-      for (const cell of cells) {
-        cell.style.width = '30px';
-        cell.style.height = '30px';
-        cell.style.borderWidth = '1px';
-        while (cell.firstChild) {
-          cell.firstChild.remove();
-        }
-        const p = document.createElement('p');
-        p.style.height = '28px'; // cellsize - borderWidth*2
-        p.style.width = '28px';
-        p.style.margin = '0';
-        p.style.display = 'flex';
-        p.style.alignItems = 'center';
-        p.style.lineHeight = '1';
-        p.style.justifyContent = 'center';
-        const rank = cell.dataset.rank.replace(/\w+-|だけ/g,'');
-        p.textContent = rank;
-        if (rank.length === 3) p.style.fontSize = '14px';
-        if (rank.length === 4) p.style.fontSize = '13px';
-        cell.append(p);
-      }
-    } else {
-      currentViewMode = 'detail';
-
-      grid.style.gridTemplateRows = grid.style.gridTemplateRows.replace('35px','65px');
-      grid.style.gridTemplateColumns = grid.style.gridTemplateColumns.replace('35px','105px');
-
-      for (const cell of cells) {
-        while (cell.firstChild) {
-          cell.firstChild.remove();
-        }
-        const {rank, leader } = cell.dataset;
-        const p = [document.createElement('p'), document.createElement('p')];
-        p[0].textContent = rank;
-        p[1].textContent = leader;
-        p[0].style.margin = '0';
-        p[1].style.margin = '0';
-        cell.style.width = '100px';
-        cell.style.height = '60px';
-        cell.style.borderWidth = '3px';
-        cell.append(p[0],p[1]);
-      }
-    }
-  }
-
-  
-
-  let autoJoinIntervalId;
-  let isAutoJoinRunning = false;
-  const sleep = s => new Promise(r=>setTimeout(r,s));
-  async function autoJoin() {
-    const dialog = document.querySelector('.auto-join');
-
-    const logArea = dialog.querySelector('.auto-join-log');
-    const headers = { 'Content-Type': 'application/x-www-form-urlencoded' };
-    let teamColor = settings.teamColor;
-    let teamName = settings.teamName;
-
-
-    function logMessage(region, message, next) {
-      const date = new Date();
-      const ymd = date.toLocaleDateString('sv-SE').slice(2);
-      const time = date.toLocaleTimeString('sv-SE');
-      const timestamp = document.createElement('div');
-      timestamp.innerText = `${ymd}\n${time}`;
-      timestamp.style.fontSize = '90%';
-      timestamp.style.color = '#666';
-      timestamp.style.borderRight = 'solid 0.5px #888';
-      timestamp.style.whiteSpace = 'nowrap';
-
-      const regionDiv = document.createElement('div');
-      const progress = `${currentPeriod}期 ${currentProgress}%`;
-      if (region) regionDiv.innerText = `${progress}\ntarget: ${region}\n${next}`;
-      else regionDiv.innerText = next;
-      regionDiv.style.fontSize = '90%';
-      regionDiv.style.color = '#444';
-      regionDiv.style.borderRight = 'dotted 0.5px #888';
-      regionDiv.style.whiteSpace = 'nowrap';
-
-      const messageDiv = document.createElement('div');
-      messageDiv.textContent = message;
-
-      const div = document.createElement('div');
-      div.style.display = 'flex';
-      div.style.gap = '4px';
-      div.style.alignItems = 'center';
-      div.style.marginBottom = '-0.5px';
-      div.style.marginTop = '-0.5px';
-      div.style.border = 'solid 0.5px #888';
-
-      div.append(timestamp, regionDiv, messageDiv);
-      logArea.prepend(div);
-    }
-
-    const messageTypes = {
-      breaktime: [
-        'チームに参加または離脱してから間もないため、次のバトルが始まるまでお待ちください。',
-        'もう一度バトルに参加する前に、待たなければなりません。',
-        'ng: ちょっとゆっくり'
-      ],
-      toofast: [
-        'ng<>too fast'
-      ],
-      retry: [
-        'あなたのチームは動きを使い果たしました。しばらくお待ちください。'
-      ],
-      reset: [
-        'このタイルは攻撃できません。範囲外です。'
-      ],
-      quit: [
-        '最初にチームに参加する必要があります。',
-        'どんぐりが見つかりませんでした。',
-        'あなたのどんぐりが理解できませんでした。',
-        'レベルが低すぎます。'
-      ],
-      guardError: [
-        '[警備員]だけ'
-      ],
-      equipError: [
-        '武器と防具を装備しなければなりません。',
-        '装備している防具と武器が力不足です。',
-        '装備している防具と武器が強すぎます',
-        '装備しているものは改造が多すぎます。改造の少ない他のものをお試しください',
-        '参加するには、装備中の武器と防具のアイテムID'
-      ],
-      nonAdjacent: [
-        'このタイルは攻撃できません。あなたのチームが首都を持つまで、どの首都にも隣接するタイルを主張することはできません。',
-        'あなたのチームは首都を持っていないため、他のチームの首都に攻撃できません。'
-      ],
-      teamAdjacent: [
-        'このタイルは攻撃できません。あなたのチームの制御領土に隣接していなければなりません。',
-        'このタイルは攻撃できません。首都を奪取するには、隣接タイルを少なくとも3つ支配している必要があります。',
-        'このタイルは攻撃できません。首都を奪取するには、隣接タイルを少なくとも2つ支配している必要があります。',
-        'このタイルは攻撃できません。首都を奪取するには、隣接タイルを少なくとも1つ支配している必要があります。',
-        'このタイルは攻撃できません。自分の首都は攻撃できません。',
-        'この首都は攻撃できません。相手の総タイル数の少なくとも'
-      ],
-      capitalAdjacent: [
-        'このタイルは攻撃できません。混雑したマップでは、初期主張は正確に1つの首都に隣接していなければなりません。'
-      ],
-      mapEdge: [
-        'このタイルは攻撃できません。混雑したマップでは、初期主張はマップの端でなければなりません。'
-      ]
-    }
-
-    function getMessageType (text) {
-      const result = Object.keys(messageTypes)
-        .find(key => messageTypes[key]
-          .some(v => text.includes(v))
-        )
-      return result;
-    }
-
-
-    let nextProgress;
-    async function attackRegion () {
-      await drawProgressBar();
-      if (isAutoJoinRunning || Math.abs(nextProgress - currentProgress) >= 3) {
-        return;
-      }
-
-    if (location.href.includes('/teambattle?m=rb')) {
-        try {
-          const res = await fetch(`/teambattle?m=rb&t=${Date.now()}`, { cache: 'no-store' });
-          if (res.ok) {
-            const text = await res.text();
-            const doc = new DOMParser().parseFromString(text, 'text/html');
-            const target = Array.from(doc.querySelectorAll('header span')).find(s => s.textContent.includes('チーム:'));
-            if (target) {
-              const raw = target.textContent;
-              if (raw.includes('レッド')) {
-                teamName = 'レッド';
-                teamColor = 'd32f2f';
-              } else if (raw.includes('ブルー')) {
-                teamName = 'ブルー';
-                teamColor = '1976d2';
-              }
-            }
-          }
-        } catch (e) { console.error(e); }
-      }
-
-      let regions = await getRegions();
-      const excludeSet = new Set();
-
-      let cellType;
-      if (regions.nonAdjacent.length > 0) {
-        cellType = 'nonAdjacent';
-      } else if (regions.teamAdjacent.length > 0) {
-        cellType = 'teamAdjacent';
-      } else if (regions.capitalAdjacent.length > 0) {
-        cellType = 'capitalAdjacent';
-      } else {
-        cellType = 'mapEdge';
-      }
-
-      while(dialog.open) {
-        let success = false;
-        isAutoJoinRunning = true;
-
-        regions[cellType] = regions[cellType]
-          .filter(e => !excludeSet.has(e.join(',')));
-        for (const region of regions[cellType]) {
-          let errorCount = 0;
-          let next;
-          try {
-            const [cellRank, equipChangeStat] = await equipChange(region);
-            if (equipChangeStat === 'noEquip') {
-              excludeSet.add(region.join(','));
-              continue;
-            }
-
-            const [ text, lastLine ] = await challenge(region);
-            const messageType = getMessageType(lastLine);
-            let message = lastLine;
-            let processType;
-            let sleepTime = 2;
-
-            if (text.startsWith('アリーナチャレンジ開始')||text.startsWith('リーダーになった')) {
-              success = true;
-              message = '[成功] ' + lastLine;
-              processType = 'return';
-            } else if (messageType === 'breaktime') {
-              success = true;
-              message = lastLine;
-              processType = 'return';
-            } else if (messageType === 'toofast') {
-              sleepTime = 3;
-              processType = 'continue';
-            } else if (messageType === 'retry') {
-              sleepTime = 20;
-              processType = 'continue';
-            } else if (messageType === 'guardError') {
-              message = lastLine;
-              processType = 'continue';
-            } else if (messageType === 'equipError') {
-              message += ` (${cellRank}, ${currentEquipName})`;
-              processType = 'continue';
-            } else if (lastLine.length > 100) {
-              message = 'どんぐりシステム';
-              processType = 'continue';
-            } else if (messageType === 'quit') {
-              message = '[停止] ' + lastLine;
-              processType = 'return';
-              clearInterval(autoJoinIntervalId);
-            } else if (messageType === 'reset') {
-              processType = 'break';
-            } else if (messageType in regions) {
-              excludeSet.add(region.join(','));
-              if (messageType === cellType) {
-                processType = 'continue';
-              } else if (messageType === 'nonAdjacent') {
-                cellType = 'nonAdjacent';
-                processType = 'break';
-              } else if (messageType === 'teamAdjacent') {
-                cellType = 'teamAdjacent';
-                processType = 'break';
-              } else if (messageType === 'capitalAdjacent') {
-                cellType = 'capitalAdjacent';
-                processType = 'break';
-              } else if (messageType === 'mapEdge') {
-                cellType = 'mapEdge';
-                processType = 'break';
-              }
-            }
-
-            if (success) {
-              if (currentProgress < 16) {
-                nextProgress = 26;
-               } else if (currentProgress < 33) {
-                nextProgress = 43;
-               } else if (currentProgress < 50) {
-                nextProgress = 60;
-               } else if (currentProgress < 66) {
-                nextProgress = 76;
-               } else if (currentProgress < 83) {
-                nextProgress = 93;
-               } else {
-                nextProgress = 10;
-               }
-              next = `→ ${nextProgress}±2%`;
-              isAutoJoinRunning = false;
-            } else if (processType === 'return') {
-              next = '';
-              isAutoJoinRunning = false;
-            } else {
-              next = `→ ${sleepTime}s`;
-            }
-
-            logMessage(region, message, next);
-            await sleep(sleepTime * 1000);
-
-            if (processType === 'break') {
-              regions = await getRegions();
-              break;
-            } else if (processType === 'return') {
-              return;
-            }
-          } catch (e){
-            let message = '';
-            switch (e) {
-              case 403:
-                message = `[403] Forbidden`;
-                break;
-              case 404:
-                message = `[404] Not Found`;
-                break;
-              case 500:
-                message = `[500] Internal Server Error`;
-                break;
-              case 502:
-                message = `[502] Bad Gateway`;
-                break;
-              default:
-                message = e;
-                break;
-            }
-            if (e.message === '再ログインしてください') {
-              logMessage(region, '[停止] どんぐりが見つかりませんでした', '');
-              isAutoJoinRunning = false;
-              clearInterval(autoJoinIntervalId);
-              return;
-            } else if (e === 403) {
-              logMessage(region, message, '');
-              isAutoJoinRunning = false;
-              clearInterval(autoJoinIntervalId);
-              return;
-            } else if ([404,500,502].includes(e)) {
-              errorCount++;
-              let sleepTime = 20 * errorCount;
-              if(sleepTime > 600) sleepTime = 600;
-              logMessage(region, message, `→ ${sleepTime}s`);
-              await sleep(sleepTime * 1000);
-            } else {
-              let sleepTime = 20;
-              logMessage(region, e, `→ ${sleepTime}s`);
-              await sleep(sleepTime * 1000);
-            }
-          }
-        }
-        if (!success && regions[cellType].length === 0) {
-              if (currentProgress < 16) {
-                nextProgress = 26;
-               } else if (currentProgress < 33) {
-                nextProgress = 43;
-               } else if (currentProgress < 50) {
-                nextProgress = 60;
-               } else if (currentProgress < 66) {
-                nextProgress = 76;
-               } else if (currentProgress < 83) {
-                nextProgress = 93;
-               } else {
-                nextProgress = 10;
-               }
-          const next = `→ ${nextProgress}±2%`;
-          isAutoJoinRunning = false;
-          logMessage(null, '攻撃可能なタイルが見つかりませんでした。', next);
-          return;
-        }
-      }
-    }
-
-    async function getRegions () {
-      try {
-        const res = await fetch('');
-        if (!res.ok) throw new Error(`[${res.status}] /teambattle`);
-        const text = await res.text();
-        const doc = new DOMParser().parseFromString(text, 'text/html');
-        const headerText = doc?.querySelector('header')?.textContent || '';
-        if (!headerText.includes('どんぐりチーム戦い')) throw new Error('title.ng info');
-
-        const scriptContent = doc.querySelector('.grid > script, #gridWrap + script')?.textContent || '';
-
-        let cellColors, capitalMap, rows, cols;
-
-        if (location.href.includes('m=rb')) {
-          //rb
-          const cellColorsMatch = scriptContent.match(/const cellColors = ({.+?});/s);
-          const validJsonStr = cellColorsMatch[1].replace(/'/g, '"').replace(/,\s*}/, '}');
-          cellColors = JSON.parse(validJsonStr);
-
-          const capitalListMatch = scriptContent.match(/const capitalList = (\[.*?\]);/s);
-          capitalMap = JSON.parse(capitalListMatch[1]);
-
-          const gridSizeMatch = scriptContent.match(/const GRID_SIZE = (\d+);/);
-          rows = cols = Number(gridSizeMatch[1]);
-        } else {
-          //hc/l
-          const cellColorsString = scriptContent.match(/const cellColors = ({.+?})/s)[1];
-          const validJsonStr = cellColorsString.replace(/'/g, '"').replace(/,\s*}/, '}');
-          cellColors = JSON.parse(validJsonStr);
-          const capitalMapString = scriptContent.match(/const capitalMap = (\[.*?\]);/s)[1];
-          capitalMap = JSON.parse(capitalMapString);
-
-          const grid = doc.querySelector('.grid');
-          if (!grid) return;
-          rows = Number(grid.style.gridTemplateRows.match(/repeat\((\d+), 35px\)/)[1]);
-          cols = Number(grid.style.gridTemplateColumns.match(/repeat\((\d+), 35px\)/)[1]);
-        }
-
-        const cells = [];
-        for (let r = 0; r < rows; r++) {
-          for (let c = 0; c < cols; c++) {
-            cells.push([r, c]);
-          }
-        }
-
-        const directions = [
-          [-1, 0],
-          [1, 0],
-          [0, -1],
-          [0, 1]
-        ];
-
-        const adjacentSet = new Set();
-        for (const [cr, cc] of capitalMap) {
-          for (const [dr, dc] of directions) {
-            const nr = cr + dr;
-            const nc = cc + dc;
-            if (nr >= 0 && nr < rows && nc >= 0 && nc < cols) {
-              adjacentSet.add(`${nr}-${nc}`);
-            }
-          }
-        }
-
-        const capitalSet = new Set(capitalMap.map(([r, c]) => `${r}-${c}`));
-
-        const nonAdjacentCells = cells.filter(([r, c]) => {
-          const key = `${r}-${c}`;
-          return !capitalSet.has(key) && !adjacentSet.has(key);
-        });
-
-        const capitalAdjacentCells = cells.filter(([r, c]) => {
-          const key = `${r}-${c}`;
-          return adjacentSet.has(key);
-        });
-
-        const teamColorSet = new Set();
-        for(const [key, value] of Object.entries(cellColors)) {
-          if (teamColor === value.replace('#','')) {
-            teamColorSet.add(key);
-          }
-        }
-
-        const teamAdjacentSet = new Set();
-        for (const key of [...teamColorSet]) {
-          const [tr, tc] = key.split('-');
-          for (const [dr, dc] of directions) {
-            const nr = Number(tr) + dr;
-            const nc = Number(tc) + dc;
-            if (nr >= 0 && nr < rows && nc >= 0 && nc < cols) {
-              teamAdjacentSet.add(`${nr}-${nc}`);
-            }
-          }
-        }
-
-        const teamAdjacentCells = cells.filter(([r, c]) => {
-          const key = `${r}-${c}`;
-          return teamColorSet.has(key) || teamAdjacentSet.has(key);
-        })
-
-        const mapEdgeSet = new Set();
-        for (let i=0; i<rows; i++) {
-          mapEdgeSet.add(`${i}-0`);
-          mapEdgeSet.add(`${i}-${cols-1}`);
-        }
-        for (let i=0; i<cols; i++) {
-          mapEdgeSet.add(`0-${i}`);
-          mapEdgeSet.add(`${rows-1}-${i}`);
-        }
-
-        const mapEdgeCells = cells.filter(([r, c]) => {
-          const key = `${r}-${c}`;
-          return mapEdgeSet.has(key) && !capitalSet.has(key);
-        })
-
-        function shuffle(arr) {
-          for (let i = arr.length - 1; i > 0; i--) {
-            const j = Math.floor(Math.random() * (i + 1));
-            [arr[i], arr[j]] = [arr[j], arr[i]];
-          }
-          return arr;
-        }
-
-        const regions = {
-          nonAdjacent: shuffle(nonAdjacentCells),
-          capitalAdjacent: shuffle(capitalAdjacentCells),
-          teamAdjacent: shuffle(teamAdjacentCells),
-          mapEdge: shuffle(mapEdgeCells)
-        };
-        return regions;
-      } catch (e) {
-        console.error(e);
-        return;
-      }
-    }
-
-    async function challenge (region) {
-      const [ row, col ] = region;
-      const body = `row=${row}&col=${col}`;
-      try {
-        const res = await fetch('/teamchallenge?'+MODE, {
-          method: 'POST',
-          body: body,
-          headers: headers
-        })
-
-        if(!res.ok) throw new Error(res.status);
-        const text = await res.text();
-        const lastLine = text.trim().split('\n').pop();
-        return [ text, lastLine ];
-      } catch (e) {
-        console.error(e);
-        throw e;
-      }
-
-    }
-    async function equipChange (region) {
-      const [ row, col ] = region;
-      const url = `https://donguri.5ch.net/teambattle?r=${row}&c=${col}&`+MODE;
-      try {
-        const res = await fetch(url);
-        if(!res.ok) throw new Error(`[${res.status}] /teambattle?r=${row}&c=${col}`);
-        const text = await res.text();
-        const doc = new DOMParser().parseFromString(text,'text/html');
-        const headerText = doc?.querySelector('header')?.textContent || '';
-        if(!headerText.includes('どんぐりチーム戦い')) return Promise.reject(`title.ng`);
-        const table = doc.querySelector('table');
-        if(!table) throw new Error('table.ng');
-        const equipCond = table.querySelector('td small').textContent;
-        const rank = equipCond
-          .replace('エリート','e')
-          .replace(/.+から|\w+-|まで|だけ|警備員|警|\s|\[|\]|\|/g,'');
-        const autoEquipItems = JSON.parse(localStorage.getItem('autoEquipItems')) || {};
-        const autoEquipItemsAutojoin = JSON.parse(localStorage.getItem('autoEquipItemsAutojoin')) || {};
-
-        if (autoEquipItemsAutojoin[rank]?.length > 0) {
-          const index = Math.floor(Math.random() * autoEquipItemsAutojoin[rank].length);
-          await setPresetItems(autoEquipItemsAutojoin[rank][index]);
-          return [rank, 'success'];
-        } else if (autoEquipItems[rank]?.length > 0) {
-          const index = Math.floor(Math.random() * autoEquipItems[rank].length);
-          await setPresetItems(autoEquipItems[rank][index]);
-          return [rank, 'success'];
-        } else {
-          return [rank, 'noEquip'];
-        }
-      } catch (e) {
-        console.error(e);
-        throw e;
-      }
-    }
-
-    if (!isAutoJoinRunning) {
-      attackRegion();
-    }
-    autoJoinIntervalId = setInterval(attackRegion,60000);
-  };
-
-  async function drawProgressBar(){
-    try {
-      const res = await fetch('https://donguri.5ch.net/');
-      if (!res.ok) throw new Error(res.status);
-      const text = await res.text();
-      const doc = new DOMParser().parseFromString(text, 'text/html');
-      const container = doc.querySelector('div.stat-block:nth-child(2)>div:nth-child(5)').cloneNode(true);
-      currentPeriod = Number(container.firstChild.textContent.match(/\d+/)[0]);
-      currentProgress = parseInt(container.lastElementChild.textContent);
-      let str,min,totalSec,sec,margin;
-
-      if (currentProgress === 0 || currentProgress === 50 || (location.href.includes('/teambattle?m=rb') && (currentProgress === 16 || currentProgress === 33 || currentProgress === 66 || currentProgress === 83))) {
-        str = '（マップ更新）';
-      } else {
-        if (currentProgress === 100) {
-          min = 0;
-          sec = 20;
-          margin = 10;
-        } else {
-          if (location.href.includes('/teambattle?m=rb')) {
-             if (currentProgress <= 16) {
-               totalSec = (16 - currentProgress) * 600 / 16.6;
-             } else if (currentProgress <= 33) {
-               totalSec = (33 - currentProgress) * 600 / 16.6;
-             } else if (currentProgress <= 50) {
-               totalSec = (50 - currentProgress) * 600 / 16.6;
-             } else if (currentProgress <= 66) {
-               totalSec = (66 - currentProgress) * 600 / 16.6;
-             } else if (currentProgress <= 83) {
-               totalSec = (83 - currentProgress) * 600 / 16.6;
-             } else if (currentProgress <= 100) {
-               totalSec = (100 - currentProgress) * 600 / 16.6;
-             }
-          } else {
-          totalSec = (currentProgress < 50) ? (50 - currentProgress) * 36 : (100 - currentProgress) * 36 + 10;
-          }
-          totalSec = Math.floor(totalSec);
-          min = Math.trunc(totalSec / 60);
-          sec = totalSec % 60;
-          margin = 20;
-        }
-        str = '（残り' + min + '分' + sec + '秒 \xb1' + margin + '秒）';
-      }
-      progressBarBody.textContent = currentProgress + '%';
-      progressBarBody.style.width = currentProgress + '%';
-      progressBarInfo.textContent = `${MODENAME}第${currentPeriod}期${str}`;
-
-      const statBlock = doc.querySelector('.stat-block');
-      wood = statBlock.textContent.match(/木材の数: (\d+)/)[1];
-      steel = statBlock.textContent.match(/鉄の数: (\d+)/)[1];
-    } catch (e) {
-      console.error(e+' drawProgressBar()')
-    }
-  }
-
-  drawProgressBar();
-  function startAutoJoin() {
-    clearInterval(progressBarIntervalId);
-    progressBarIntervalId = null;
-    autoJoin();
-  }
-  let progressBarIntervalId = setInterval(drawProgressBar, 18000);
-  (()=>{ // autoJoinとprogressBarのinterval管理
-    function stopAutoJoin() {
-      if (autoJoinIntervalId) {
-        clearInterval(autoJoinIntervalId);
-        autoJoinIntervalId = null;
-      }
-      isAutoJoinRunning = false;
-    }
-    const dialog = document.querySelector('.auto-join');
-    const observer = new MutationObserver(() => {
-      if (!dialog.open) {
-        stopAutoJoin();
-        drawProgressBar();
-        if (!progressBarIntervalId) {
-          progressBarIntervalId = setInterval(drawProgressBar, 18000);
-        }
-      }
-    });
-
-    observer.observe(dialog, {
-      attributes: true,
-      attributeFilter: ['open']
-    });
-  })();
-
 })();
