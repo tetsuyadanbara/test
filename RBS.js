@@ -2021,76 +2021,90 @@
   }
 
   
-  async function autoEquipAndChallenge (row, col) {
+  
+async function autoEquipAndChallenge (row, col, rank, mode = 'normal') {
+  // mode: 'normal' (cell click / manual) or 'autojoin' (auto join mode)
+  try {
     if (shouldSkipAutoEquip) {
-      return arenaChallenge(row, col);
+      await arenaChallenge(row, col);
+      return;
     }
 
-    // rankがセルに無い/古い場合に備えて、対象セルの装備条件を都度取得する
-    let rank = '';
-    try {
-      const url = `https://donguri.5ch.net/teambattle?r=${row}&c=${col}&` + MODE;
-      const res = await fetch(url, { cache: 'no-store' });
-      if (!res.ok) throw new Error(`[${res.status}] /teambattle?r=${row}&c=${col}`);
-      const text = await res.text();
-      const doc = new DOMParser().parseFromString(text, 'text/html');
-      const headerText = doc?.querySelector('header')?.textContent || '';
-      if (!headerText.includes('どんぐりチーム戦い')) throw new Error('title.ng');
-      const table = doc.querySelector('table');
-      const equipCond = table?.querySelector('td small')?.textContent || '';
-      rank = equipCond
-        .replace('エリート','e')
-        .replace(/.+から|\w+-|まで|だけ|警備員|警|\s|\[|\]|\|/g,'');
-    } catch (e) {
-      console.error(e);
-      // 取得失敗時はそのまま挑戦
-      return arenaChallenge(row, col);
-    }
+    const normalizedRank = (rank || '')
+      .toString()
+      .replace('エリート', 'e')
+      .replace(/.+から|\w+-|まで|だけ|警備員|警|\s|\[|\]|\|/g, '');
 
     const autoEquipItems = JSON.parse(localStorage.getItem('autoEquipItems')) || {};
     const autoEquipItemsAutojoin = JSON.parse(localStorage.getItem('autoEquipItemsAutojoin')) || {};
-    const list = (mode === 'autojoin' && autoEquipItemsAutojoin[rank]?.length) ? autoEquipItemsAutojoin : autoEquipItems;
-    if (list[rank] && !list[rank]?.includes(currentEquipName)) {
-      if (list[rank].length === 0) {
-        return arenaChallenge(row, col);
-      } else if (list[rank].length === 1) {
-        await setPresetItems(list[rank][0]);
-        return arenaChallenge(row, col);
-      } else if (settings.autoEquipRandomly) {
-        const index = Math.floor(Math.random() * list[rank].length);
-        await setPresetItems(list[rank][index]);
-        return arenaChallenge(row, col);
-      } else {
-        // 選択UI（簡易版）
-        while (autoEquipDialog.firstChild) autoEquipDialog.firstChild.remove();
-        const ul = document.createElement('ul');
-        ul.style.background = '#fff';
-        ul.style.listStyle = 'none';
-        ul.style.padding = '2px';
-        ul.style.textAlign = 'left';
-        ul.style.margin = '0';
-        const liTemplate = document.createElement('li');
-        liTemplate.style.borderBottom = 'solid 1px #000';
-        liTemplate.style.color = '#428bca';
-        liTemplate.style.cursor = 'pointer';
 
-        list[rank].forEach(v => {
-          const li = liTemplate.cloneNode();
-          li.textContent = v;
-          li.addEventListener('click', async()=> {
-            autoEquipDialog.close();
-            await setPresetItems(v);
-            arenaChallenge(row, col);
-          });
-          ul.append(li);
-        });
-        autoEquipDialog.append(ul);
-        autoEquipDialog.showModal();
-      }
+    let list = [];
+    if (
+      mode === 'autojoin' &&
+      Array.isArray(autoEquipItemsAutojoin[normalizedRank]) &&
+      autoEquipItemsAutojoin[normalizedRank].length > 0
+    ) {
+      list = autoEquipItemsAutojoin[normalizedRank];
+    } else if (
+      Array.isArray(autoEquipItems[normalizedRank]) &&
+      autoEquipItems[normalizedRank].length > 0
+    ) {
+      list = autoEquipItems[normalizedRank];
     } else {
-      return arenaChallenge(row, col);
+      await arenaChallenge(row, col);
+      return;
     }
+
+    // already equipped
+    if (currentEquipName && list.includes(currentEquipName)) {
+      await arenaChallenge(row, col);
+      return;
+    }
+
+    // choose preset
+    if (list.length === 1 || settings.autoEquipRandomly) {
+      const idx = (list.length === 1) ? 0 : Math.floor(Math.random() * list.length);
+      await setPresetItems(list[idx]);
+      await arenaChallenge(row, col);
+      return;
+    }
+
+    // manual select dialog (multiple presets)
+    while (autoEquipDialog.firstChild) autoEquipDialog.firstChild.remove();
+
+    const ul = document.createElement('ul');
+    ul.style.background = '#fff';
+    ul.style.listStyle = 'none';
+    ul.style.padding = '2px';
+    ul.style.textAlign = 'left';
+    ul.style.margin = '0';
+
+    const liTemplate = document.createElement('li');
+    liTemplate.style.borderBottom = 'solid 1px #000';
+    liTemplate.style.color = '#428bca';
+    liTemplate.style.cursor = 'pointer';
+
+    list.forEach(name => {
+      const li = liTemplate.cloneNode();
+      li.textContent = name;
+      li.addEventListener('click', async () => {
+        autoEquipDialog.close();
+        await setPresetItems(name);
+        await arenaChallenge(row, col);
+      });
+      ul.append(li);
+    });
+
+    autoEquipDialog.append(ul);
+    autoEquipDialog.showModal();
+  } catch (e) {
+    console.error(e);
+    try {
+      arenaResult.innerText = e?.message || String(e);
+      arenaResult.show();
+    } catch (_) {}
   }
+}
 
 async function arenaChallenge (row, col){
     const options = {
