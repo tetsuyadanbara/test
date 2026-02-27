@@ -1881,15 +1881,22 @@
 
       const gridWrap = document.getElementById('gridWrap');
       if (!gridWrap) throw new Error('gridWrap not found');
+      // ★元マップは「消す」ではなく「透明化」する（サイズを潰さない）
       (() => {
-      const base = document.getElementById('gridBase');
-      if (base) base.style.display = 'none';
-
       const outer = document.querySelector('.gridCanvasOuter');
-      const original = outer?.querySelector('canvas, svg, img');
-      if (original) original.style.display = 'none';
-      })();
+      if (!outer) return;
 
+     // 元描画本体（canvas/svg/img）だけを透明化して無効化
+     const original = outer.querySelector('canvas, svg, img');
+     if (original) {
+     original.style.opacity = '0';
+     original.style.pointerEvents = 'none';
+     }
+
+    // もし gridBase があるならそれもクリック無効（見た目は残ってもOK）
+    const base = document.getElementById('gridBase');
+    if (base) base.style.pointerEvents = 'none';
+    })();
       let toolLayer = document.getElementById('aat_tool_layer');
       if (!toolLayer) {
         toolLayer = document.createElement('div');
