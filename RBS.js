@@ -805,60 +805,79 @@
   });
   document.body.append(arenaResult);
   document.body.append(arenaField);
-  
-  // --- 新仕様対応のグリッド生成ロジック追加 ---
-  if (!document.querySelector('.grid') && document.querySelector('.gridCanvasOuter')) {
-    const gridOuter = document.querySelector('.gridCanvasOuter');
-    let GRID_SIZE = 16; // 初期値
-    let cellColors = {};
-    const scripts = document.querySelectorAll('script');
-    for (let s of scripts) {
-      if (s.textContent.includes('const cellColors =')) {
-        const cellColorsMatch = s.textContent.match(/const cellColors = ({.+?});/s);
-        if (cellColorsMatch) {
-          const validJsonStr = cellColorsMatch[1].replace(/'/g, '"').replace(/,\s*}/, '}');
-          cellColors = JSON.parse(validJsonStr);
-        }
-        const gridMatch = s.textContent.match(/const GRID_SIZE = (\d+);/);
-        if (gridMatch) {
-          GRID_SIZE = parseInt(gridMatch[1]);
-        }
-        break;
-      }
-    }
 
+  // --- 新マップ(キャンバス)表示はResBlue1.3のまま維持し、クリック用の透明レイヤーだけ被せる ---
+  function ensureCanvasClickLayer() {
     const wrap = document.getElementById('gridWrap');
-    if (wrap) wrap.style.display = 'none';
+    const outer = document.querySelector('.gridCanvasOuter');
+    if (!wrap || !outer) return;
 
-    const newGrid = document.createElement('div');
-    newGrid.className = 'grid';
-    newGrid.style.display = 'grid';
-    newGrid.style.gridTemplateColumns = `repeat(${GRID_SIZE}, 35px)`;
-    newGrid.style.gridTemplateRows = `repeat(${GRID_SIZE}, 35px)`;
-    newGrid.style.gap = '2px';
-    for (let i = 0; i < GRID_SIZE; i++) {
-      for (let j = 0; j < GRID_SIZE; j++) {
-        const cell = document.createElement('div');
-        cell.className = 'cell';
-        cell.dataset.row = i;
-        cell.dataset.col = j;
-        cell.style.width = '30px';
-        cell.style.height = '30px';
-        cell.style.border = '1px solid #ccc';
-        cell.style.cursor = 'pointer';
-        cell.style.transition = 'background-color 0.3s';
-        const cellKey = `${i}-${j}`;
-        if (cellColors[cellKey]) {
-          cell.style.backgroundColor = cellColors[cellKey];
-        } else {
-          cell.style.backgroundColor = 'transparent';
+    const base = wrap.querySelector('#gridBase') || wrap.querySelector('canvas');
+    if (!base) return;
+
+    // GRID_SIZE を script から取得（見つからなければ既存セル数から推定）
+    let gridSize = 0;
+    const scripts = [...wrap.querySelectorAll('script:not([src])')].map(s => s.textContent || '').join('\n');
+    const mSize = scripts.match(/const\s+GRID_SIZE\s*=\s*(\d+)\s*;/);
+    if (mSize) gridSize = Number(mSize[1]);
+
+    // fallback: canvas 幅/高さからおおよそ（32px/35pxセル想定は危険なので、最低 6）
+    if (!gridSize || !Number.isFinite(gridSize)) gridSize = 6;
+
+    const rect = base.getBoundingClientRect();
+    if (!rect.width || !rect.height) return;
+
+    let layer = document.getElementById('aat_click_layer');
+    if (!layer) {
+      layer = document.createElement('div');
+      layer.id = 'aat_click_layer';
+      // outer が position:relative の想定（無ければ付ける）
+      const cs = getComputedStyle(outer);
+      if (cs.position === 'static') outer.style.position = 'relative';
+      layer.style.position = 'absolute';
+      layer.style.left = '0';
+      layer.style.top = '0';
+      layer.style.zIndex = '9999';
+      layer.style.pointerEvents = 'auto';
+      layer.style.display = 'grid';
+      layer.style.background = 'transparent';
+      outer.appendChild(layer);
+    }
+
+    // サイズ同期
+    layer.style.width = rect.width + 'px';
+    layer.style.height = rect.height + 'px';
+    layer.style.gridTemplateColumns = `repeat(${gridSize}, ${rect.width / gridSize}px)`;
+    layer.style.gridTemplateRows = `repeat(${gridSize}, ${rect.height / gridSize}px)`;
+
+    // 再生成（サイズ/GRID_SIZE変更に追従）
+    const expected = gridSize * gridSize;
+    if (layer.childElementCount !== expected) {
+      layer.innerHTML = '';
+      for (let r = 0; r < gridSize; r++) {
+        for (let c = 0; c < gridSize; c++) {
+          const cell = document.createElement('div');
+          cell.className = 'cell';
+          cell.dataset.row = String(r);
+          cell.dataset.col = String(c);
+          cell.style.boxSizing = 'border-box';
+          cell.style.border = '1px solid rgba(204, 204, 204, 0.35)';
+          cell.style.background = 'transparent';   // 下のキャンバス表示を隠さない
+          cell.style.cursor = 'pointer';
+          cell.style.pointerEvents = 'auto';
+          cell.addEventListener('click', (e) => {
+            e.stopPropagation();
+            handleCellClick(cell);
+          });
+          layer.appendChild(cell);
         }
-        newGrid.appendChild(cell);
       }
     }
-    gridOuter.appendChild(newGrid);
   }
+  ensureCanvasClickLayer();
+  window.addEventListener('resize', () => ensureCanvasClickLayer());
   // --- ここまで ---
+
 
   const grid = document.querySelector('.grid');
   if(grid) {
@@ -1353,7 +1372,7 @@
       if(!presetLi) return;
       const presetName = presetLi.querySelector('span').textContent;
       if(currentMode === 'equip') {
-        window.window.setPresetItems(presetName);
+        setPresetItems(presetName);
       } else if (currentMode === 'remove') {
         removePresetItems(presetName);
       } else if (currentMode === 'edit') {
@@ -2288,26 +2307,56 @@ const autoEquipDialog = document.createElement('dialog');
   autoEquipDialog.style.padding = '0';
   autoEquipDialog.style.background = '#fff';
   document.body.append(autoEquipDialog);
+  // rank が無い(クリックレイヤー直後など)場合に取得する
+  async function fetchArenaRankText(row, col) {
+    const url = `https://donguri.5ch.net/teambattle?r=${row}&c=${col}&` + MODE;
+    const res = await fetch(url, { cache: 'no-store' });
+    if (!res.ok) throw new Error(res.status);
+    const html = await res.text();
+    const doc = new DOMParser().parseFromString(html, 'text/html');
+    const headerText = doc?.querySelector('header')?.textContent || '';
+    if (!headerText.includes('どんぐりチーム戦い')) throw new Error('title.ng');
+    // まず small（ランク条件）を優先
+    const small = doc.querySelector('small')?.textContent || '';
+    if (small) return small;
+    // fallback: テーブル内 small
+    return doc.querySelector('table td small')?.textContent || '';
+  }
+
+  
   async function autoEquipAndChallenge (row, col, rank) {
     if (shouldSkipAutoEquip) {
       arenaChallenge(row, col);
       return;
     }
-    rank = rank
+
+    // rank が未取得の場合は取得（キャンバスクリックレイヤー直後など）
+    if (!rank) {
+      try {
+        rank = await fetchArenaRankText(row, col);
+      } catch (e) {
+        console.error(e);
+        arenaChallenge(row, col);
+        return;
+      }
+    }
+
+    rank = String(rank)
       .replace('エリート','e')
       .replace(/.+から|\w+-|まで|だけ|警備員|警|\s|\[|\]|\|/g,'');
+
     const autoEquipItems = JSON.parse(localStorage.getItem('autoEquipItems')) || {};
     if (autoEquipItems[rank] && !autoEquipItems[rank]?.includes(currentEquipName)) {
       if (autoEquipItems[rank].length === 0) {
         arenaChallenge(row, col);
         return;
       } else if (autoEquipItems[rank].length === 1) {
-        await window.window.setPresetItems(autoEquipItems[rank][0]);
+        await setPresetItems(autoEquipItems[rank][0]);
         arenaChallenge(row, col);
         return;
       } else if (settings.autoEquipRandomly) {
         const index = Math.floor(Math.random() * autoEquipItems[rank].length);
-        await window.window.setPresetItems(autoEquipItems[rank][index]);
+        await setPresetItems(autoEquipItems[rank][index]);
         arenaChallenge(row, col);
       } else {
         while (autoEquipDialog.firstChild) {
@@ -2329,11 +2378,11 @@ const autoEquipDialog = document.createElement('dialog');
           li.textContent = v;
           li.addEventListener('click', async()=>{
             autoEquipDialog.close();
-            await window.window.setPresetItems(v);
+            await setPresetItems(v);
             arenaChallenge(row, col);
-          })
+          });
           ul.append(li);
-        })
+        });
         autoEquipDialog.append(ul);
         autoEquipDialog.showModal();
       }
@@ -3155,11 +3204,11 @@ const autoEquipDialog = document.createElement('dialog');
 
         if (autoEquipItemsAutojoin[rank]?.length > 0) {
           const index = Math.floor(Math.random() * autoEquipItemsAutojoin[rank].length);
-          await window.window.setPresetItems(autoEquipItemsAutojoin[rank][index]);
+          await setPresetItems(autoEquipItemsAutojoin[rank][index]);
           return [rank, 'success'];
         } else if (autoEquipItems[rank]?.length > 0) {
           const index = Math.floor(Math.random() * autoEquipItems[rank].length);
-          await window.window.setPresetItems(autoEquipItems[rank][index]);
+          await setPresetItems(autoEquipItems[rank][index]);
           return [rank, 'success'];
         } else {
           return [rank, 'noEquip'];
