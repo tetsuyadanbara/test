@@ -1943,7 +1943,7 @@
 
       const gridBase = document.getElementById('gridBase');
       const currentCellSize = gridBase ? (parseInt(gridBase.style.width) / rows) + 'px' : '32px';
-      const currentCells = grid.querySelectorAll('.cell');
+      // NOTE: currentCells is already declared above; don't redeclare (it stops the whole script).
   
       if (currentCells.length !== rows * cols) {
       grid.style.gridTemplateRows = `repeat(${rows}, ${currentCellSize})`;
