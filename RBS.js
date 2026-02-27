@@ -3,9 +3,7 @@
 // @version      1.2.2d改 Red vs Blue 新マップ仕様
 // @description  fix arena ui and add functions
 // @author       ぱふぱふ
-// @match        https://donguri.5ch.net/teambattle?m=hc
-// @match        https://donguri.5ch.net/teambattle?m=l
-// @match        https://donguri.5ch.net/teambattle?m=rb
+// @match        https://donguri.5ch.net/teambattle*
 // @match        https://donguri.5ch.net/bag
 // ==/UserScript==
 
@@ -31,7 +29,9 @@
     return;
   }
 
-  const MODE = location.search.slice(1);
+  const __params = new URLSearchParams(location.search);
+  const __m = __params.get('m') || 'rb';
+  const MODE = `m=${__m}`;
 
   let MODENAME;
   if (MODE === 'm=hc') {
@@ -275,7 +275,7 @@
       autoJoinSettingsDialog.style.background = '#fff';
       autoJoinSettingsDialog.style.color = '#000';
       autoJoinSettingsDialog.style.textAlign = 'left';
-      document.body.append(autoJoinSettingsDialog);
+      autoJoinDialog.append(autoJoinSettingsDialog);
 
       (()=>{ // autoJoinSettingsDialog
         const div = document.createElement('div');
@@ -1864,72 +1864,41 @@
     scaleContentsToFit(grid.parentNode, grid);
   }
 
-  
-  async function ensureCellMeta(elm) {
-    if (!elm || !elm.dataset) return;
-    // already has meta
-    if (elm.dataset.rank && elm.dataset.team && elm.dataset.leader) return;
-
-    const { row, col } = elm.dataset;
-    if (row === undefined || col === undefined) return;
-
-    const url = `https://donguri.5ch.net/teambattle?r=${row}&c=${col}&` + MODE;
-    const res = await fetch(url, { cache: 'no-store' });
-    if (!res.ok) throw new Error(res.status + ' res.ng');
-    const text = await res.text();
-    const doc = new DOMParser().parseFromString(text, 'text/html');
-
-    const headerText = doc?.querySelector('header')?.textContent || '';
-    if (!headerText.includes('どんぐりチーム戦い')) throw new Error(`title.ng [${row}][${col}]`);
-
-    const rankText = doc.querySelector('small')?.textContent || '';
-    const leader = doc.querySelector('strong')?.textContent || '';
-    const table = doc.querySelector('table');
-    const teamname = table?.rows?.[1]?.cells?.[2]?.textContent || '';
-
-    const shortenRank = (rankText || '')
-      .replace('[エリート]', 'e')
-      .replace('[警備員]だけ', '警')
-      .replace('から', '-')
-      .replace(/(まで|\[|\]|\||\s)/g, '');
-
-    elm.dataset.rank = shortenRank;
-    elm.dataset.leader = leader;
-    elm.dataset.team = teamname;
-    return elm;
-  }
-
   function includesCoord(arr, row, col) {
     return arr.some(([r, c]) => r === Number(row) && c === Number(col));
   }
 
   async function refreshArenaInfo() {
     const refreshedCells = [];
-  
     try {
       const res = await fetch('');
       if (!res.ok) throw new Error('res.ng');
-  
+
       const text = await res.text();
       const doc = new DOMParser().parseFromString(text, 'text/html');
-      
-      const h1Text = doc.querySelector('h1')?.textContent || '';
-      const divText = doc.querySelector('header > div')?.textContent || '';
-      if (h1Text !== 'どんぐりチーム戦い' && !divText.includes('どんぐりチーム戦い')) {
-         throw new Error('title.ng info');
+      const headerText = doc?.querySelector('header')?.textContent || '';
+      if (!headerText.includes('どんぐりチーム戦い')) throw new Error('title.ng info');
+
+      const gridWrap = document.getElementById('gridWrap');
+      if (!gridWrap) throw new Error('gridWrap not found');
+
+      let toolLayer = document.getElementById('aat_tool_layer');
+      if (!toolLayer) {
+        toolLayer = document.createElement('div');
+        toolLayer.id = 'aat_tool_layer';
+        toolLayer.style.position = 'absolute';
+        toolLayer.style.top = '1.8vh'
+        toolLayer.style.left = '0'; // 左端に配置
+        toolLayer.style.display = 'grid';
+        toolLayer.style.zIndex = '100';
+        toolLayer.style.pointerEvents = 'none';// 他の要素がクリックできるように
+        gridWrap.appendChild(toolLayer);
       }
-  
-      const currentCells = grid.querySelectorAll('.cell');
-      
-      let scriptContent = '';
-      for (let s of doc.querySelectorAll('script')) {
-        if (s.textContent.includes('const cellColors =')) {
-          scriptContent = s.textContent;
-          break;
-        }
-      }
-      
-      const cellColorsString = scriptContent.match(/const cellColors = ({.+?})/s)[1];
+      const grid = toolLayer;
+
+      const scriptContent = doc.querySelector('script:not([src])')?.textContent || "";
+      const cellColorsMatch = scriptContent.match(/const cellColors = ({.+?});/s);
+      const cellColorsString = cellColorsMatch ? cellColorsMatch[1] : '{}';
       const validJsonStr = cellColorsString.replace(/'/g, '"').replace(/,\s*}/, '}');
       const cellColors = JSON.parse(validJsonStr);
 
@@ -1943,7 +1912,7 @@
 
       const gridBase = document.getElementById('gridBase');
       const currentCellSize = gridBase ? (parseInt(gridBase.style.width) / rows) + 'px' : '32px';
-      // NOTE: currentCells is already declared above; don't redeclare (it stops the whole script).
+      const currentCells = grid.querySelectorAll('.cell');
   
       if (currentCells.length !== rows * cols) {
       grid.style.gridTemplateRows = `repeat(${rows}, ${currentCellSize})`;
@@ -1998,30 +1967,34 @@
 
   async function fetchAreaInfo(refreshAll) {
     try {
-      await refreshArenaInfo(); // ResBlue1.3 style map rebuild (colors + capitals)
-      const grid = document.getElementById('aat_tool_layer');
-      if (!grid) return;
+      const refreshedCells = await refreshArenaInfo();
 
-      // keep existing spacing like ResBlue1.3
+      const grid = document.getElementById('aat_tool_layer');
+      if (!grid) {
+        console.log('aat_tool_layerが見つからないため、処理を中断します');
+        return;
+      }
+
+      if (currentViewMode === 'detail') {
+        grid.style.gridTemplateRows = grid.style.gridTemplateRows.replace('35px', '65px');
+        grid.style.gridTemplateColumns = grid.style.gridTemplateColumns.replace('35px', '105px');
+      }
+
       if (grid.parentNode) {
         grid.parentNode.style.height = null;
         grid.parentNode.style.padding = '20px 0';
       }
 
-      // If you want to prefetch cell info, do it only when refreshAll === true.
-      // (We intentionally avoid painting rank/leader text on the map, preserving ResBlue1.3 look.)
-      if (refreshAll) {
-        // populate dataset.rank/team/leader silently for auto-equip & area dialog speed-up
-        const cells = [...grid.querySelectorAll('.cell')];
-        for (const cell of cells) {
-          if (!cell?.dataset?.row) continue;
-          await ensureCellMeta(cell).catch(()=>{});
-          // small throttle to avoid "too fast"
-          await new Promise(r=>setTimeout(r, 120));
+      const cells = grid.querySelectorAll('.cell');
+      cells.forEach(async (elm) => {
+        const hasInfo = elm.dataset.rank !== undefined;
+        const isRefreshed = (refreshedCells || []).includes(elm);
+        if (refreshAll || !hasInfo || isRefreshed) {
+          fetchSingleArenaInfo(elm);
         }
-      }
-    } catch (e) {
-      console.error('fetchAreaInfo failed:', e);
+      });
+    } catch (error) {
+      console.error('Error in fetchAreaInfo:', error);
     }
   }
 
@@ -2035,14 +2008,84 @@
   });
 
   async function fetchSingleArenaInfo(elm) {
-    // Compatibility shim: keep old callers safe.
-    // We do NOT paint rank/leader onto the map (ResBlue1.3 look).
     try {
-      await ensureCellMeta(elm);
-    } catch (e) {
-      console.error(e);
+      const { row, col } = elm.dataset;
+      const url = `https://donguri.5ch.net/teambattle?r=${row}&c=${col}&` + MODE;
+      const res = await fetch(url);
+      if (!res.ok) throw new Error(res.status + ' res.ng');
+      const text = await res.text();
+      const doc = new DOMParser().parseFromString(text, 'text/html');
+
+      const headerText = doc?.querySelector('header')?.textContent || '';
+      if (!headerText.includes('どんぐりチーム戦い')) throw new Error(`title.ng [${row}][${col}]`);
+
+      const rank = doc.querySelector('small')?.textContent || '';
+      if (!rank) return Promise.reject(`rank.ng [${row}][${col}]`);
+
+      const leader = doc.querySelector('strong')?.textContent || '';
+
+      const shortenRank = rank.replace('[エリート]', 'e').replace('[警備員]だけ', '警').replace('から', '-').replace(/(まで|\[|\]|\||\s)/g, '');
+
+      const table = doc.querySelector('table');
+      if (!table) throw new Error(`table not found in [${row}][${col}]`);
+
+      const teamname = table.rows[1] && table.rows[1].cells[2] ? table.rows[1].cells[2].textContent : null;
+      if (!teamname) throw new Error(`teamname not found in [${row}][${col}]`);
+
+      const cell = elm.cloneNode();
+      cell.style.width = elm.style.width;
+      cell.style.height = elm.style.height;
+
+      if (currentViewMode === 'detail') {
+        const p = [document.createElement('p'), document.createElement('p')];
+        p[0].textContent = shortenRank;
+        p[1].textContent = leader;
+        p[0].style.cssText = 'margin:0; line-height:1.1; color:#000; text-shadow:1px 1px 0 #fff; font-weight:bold; pointer-events:none;';
+        p[1].style.cssText = 'margin:0; line-height:1.1; color:#000; text-shadow:1px 1px 0 #fff; font-size:12px; pointer-events:none;';
+        cell.style.borderWidth = '3px';
+        cell.append(p[0], p[1]);
+      } else {
+        const p = document.createElement('p');
+        p.style.cssText = 'margin:0; display:flex; align-items:center; justify-content:center; width:100%; height:100%; color:#000; text-shadow:1px 1px 0 #fff; font-weight:bold; pointer-events:none;';
+        const str = shortenRank.replace(/\w+-|だけ/g, '');
+        p.textContent = str;
+        if (str.length === 3) p.style.fontSize = '14px';
+        else if (str.length >= 4) p.style.fontSize = '12px';
+        else p.style.fontSize = '16px';
+        cell.append(p);
+      }
+
+    cell.dataset.rank = shortenRank;
+    cell.dataset.leader = leader;
+    cell.dataset.team = teamname;
+
+    // 強制可視化設定
+    cell.style.opacity = '1';
+    cell.style.visibility = 'visible';
+    cell.style.display = 'flex';
+    cell.style.flexDirection = 'column';
+    cell.style.alignItems = 'center';
+    cell.style.justifyContent = 'center';
+    cell.style.zIndex = '9999';
+    cell.style.pointerEvents = 'auto';
+    cell.style.overflow = 'visible';
+
+    if ('customColors' in settings && teamname in settings.customColors) {
+      cell.style.backgroundColor = '#' + settings.customColors[teamname];
+    } else {
+      cell.style.backgroundColor = cell.style.backgroundColor || 'rgba(255,255,255,0.5)';
     }
+
+    cell.addEventListener('click', (e) => {
+      e.stopPropagation();
+      handleCellClick(cell);
+    });
+
+    elm.replaceWith(cell);
+  } catch (e) {
+    console.error(e);
   }
+}
 
   function addCustomColor() {
     const teamTable = document.querySelector('table');
@@ -2264,23 +2307,7 @@
       arenaChallenge(row, col);
       return;
     }
-    // rank may be empty on ResBlue1.3-style map (no cell text). Fetch once if needed.
-    if (!rank || String(rank).trim() === '') {
-      const cell = document.querySelector(`.cell[data-row="${row}"][data-col="${col}"]`);
-      if (cell) {
-        try { await ensureCellMeta(cell); rank = cell.dataset.rank || rank; } catch (e) {}
-      } else {
-        // fallback: fetch directly
-        try {
-          const tmp = document.createElement('div');
-          tmp.dataset.row = row; tmp.dataset.col = col;
-          await ensureCellMeta(tmp);
-          rank = tmp.dataset.rank || rank;
-        } catch (e) {}
-      }
-    }
-
-    rank = String(rank)
+    rank = rank
       .replace('エリート','e')
       .replace(/.+から|\w+-|まで|だけ|警備員|警|\s|\[|\]|\|/g,'');
     const autoEquipItems = JSON.parse(localStorage.getItem('autoEquipItems')) || {};
@@ -2466,32 +2493,59 @@
   }
 
   let currentViewMode = 'detail';
-  function toggleCellViewMode() {
-    // ResBlue1.3 map look: just change cell size (no rank/leader text on tiles)
-    const grid = document.getElementById('aat_tool_layer') || document.querySelector('.grid');
+  function toggleCellViewMode () {
+    const grid = document.querySelector('.grid');
     if (!grid) return;
-
     const cells = grid.querySelectorAll('.cell');
-    if (currentViewMode === 'detail') {
+
+    if(currentViewMode === 'detail') {
       currentViewMode = 'compact';
-      // try to shrink
+
       grid.style.gridTemplateRows = grid.style.gridTemplateRows.replace('65px','35px');
       grid.style.gridTemplateColumns = grid.style.gridTemplateColumns.replace('105px','35px');
-      cells.forEach(cell=>{
-        cell.style.width = '32px';
-        cell.style.height = '32px';
+
+      for (const cell of cells) {
+        cell.style.width = '30px';
+        cell.style.height = '30px';
         cell.style.borderWidth = '1px';
-        // keep background / outline
-      });
+        while (cell.firstChild) {
+          cell.firstChild.remove();
+        }
+        const p = document.createElement('p');
+        p.style.height = '28px'; // cellsize - borderWidth*2
+        p.style.width = '28px';
+        p.style.margin = '0';
+        p.style.display = 'flex';
+        p.style.alignItems = 'center';
+        p.style.lineHeight = '1';
+        p.style.justifyContent = 'center';
+        const rank = cell.dataset.rank.replace(/\w+-|だけ/g,'');
+        p.textContent = rank;
+        if (rank.length === 3) p.style.fontSize = '14px';
+        if (rank.length === 4) p.style.fontSize = '13px';
+        cell.append(p);
+      }
     } else {
       currentViewMode = 'detail';
+
       grid.style.gridTemplateRows = grid.style.gridTemplateRows.replace('35px','65px');
       grid.style.gridTemplateColumns = grid.style.gridTemplateColumns.replace('35px','105px');
-      cells.forEach(cell=>{
-        cell.style.width = '65px';
-        cell.style.height = '65px';
-        cell.style.borderWidth = '1px';
-      });
+
+      for (const cell of cells) {
+        while (cell.firstChild) {
+          cell.firstChild.remove();
+        }
+        const {rank, leader } = cell.dataset;
+        const p = [document.createElement('p'), document.createElement('p')];
+        p[0].textContent = rank;
+        p[1].textContent = leader;
+        p[0].style.margin = '0';
+        p[1].style.margin = '0';
+        cell.style.width = '100px';
+        cell.style.height = '60px';
+        cell.style.borderWidth = '3px';
+        cell.append(p[0],p[1]);
+      }
     }
   }
 
@@ -2505,15 +2559,6 @@
     const headers = { 'Content-Type': 'application/x-www-form-urlencoded' };
     let teamColor = settings.teamColor;
     let teamName = settings.teamName;
-
-    // --- autoJoin timing init ---
-    // nextProgress is the scheduled progress target (e.g. 26/43/60/76/93/10). If unset, initialize to currentProgress.
-    if (typeof nextProgress === 'undefined' || nextProgress === null) {
-      try {
-        await drawProgressBar();
-        nextProgress = currentProgress;
-      } catch (e) {}
-    }
 
 
     function logMessage(region, message, next) {
@@ -2570,9 +2615,7 @@
         '最初にチームに参加する必要があります。',
         'どんぐりが見つかりませんでした。',
         'あなたのどんぐりが理解できませんでした。',
-        'レベルが低すぎます。',
-        '参戦',
-        'どんぐりシステム'
+        'レベルが低すぎます。'
       ],
       guardError: [
         '[警備員]だけ'
@@ -2616,22 +2659,11 @@
     let nextProgress;
     async function attackRegion () {
       await drawProgressBar();
-      if (nextProgress === undefined || nextProgress === null || Number.isNaN(nextProgress)) {
-        nextProgress = currentProgress;
-      }
-      // Wait until we're close to the scheduled progress window (±2%).
       if (isAutoJoinRunning || Math.abs(nextProgress - currentProgress) >= 3) {
         return;
       }
-      // Skip map-update moments to avoid spam.
-      if (
-        currentProgress === 0 || currentProgress === 50 ||
-        (location.href.includes('/teambattle?m=rb') && (currentProgress === 16 || currentProgress === 33 || currentProgress === 66 || currentProgress === 83))
-      ) {
-        return;
-      }
 
-    if (location.href.includes('/teambattle?m=rb')) {
+    if ((__m==='rb')) {
         try {
           const res = await fetch(`/teambattle?m=rb&t=${Date.now()}`, { cache: 'no-store' });
           if (res.ok) {
@@ -2979,10 +3011,6 @@
 
         if(!res.ok) throw new Error(res.status);
         const text = await res.text();
-        // If the server returned an HTML page (e.g. not logged in / redirected), treat as a system message.
-        if (/<html[\s>]/i.test(text) || /<form[\s>]/i.test(text)) {
-          return [ text, 'どんぐりシステム' ];
-        }
         const lastLine = text.trim().split('\n').pop();
         return [ text, lastLine ];
       } catch (e) {
@@ -3044,7 +3072,7 @@
       currentProgress = parseInt(container.lastElementChild.textContent);
       let str,min,totalSec,sec,margin;
 
-      if (currentProgress === 0 || currentProgress === 50 || (location.href.includes('/teambattle?m=rb') && (currentProgress === 16 || currentProgress === 33 || currentProgress === 66 || currentProgress === 83))) {
+      if (currentProgress === 0 || currentProgress === 50 || ((__m==='rb') && (currentProgress === 16 || currentProgress === 33 || currentProgress === 66 || currentProgress === 83))) {
         str = '（マップ更新）';
       } else {
         if (currentProgress === 100) {
@@ -3052,7 +3080,7 @@
           sec = 20;
           margin = 10;
         } else {
-          if (location.href.includes('/teambattle?m=rb')) {
+          if ((__m==='rb')) {
              if (currentProgress <= 16) {
                totalSec = (16 - currentProgress) * 600 / 16.6;
              } else if (currentProgress <= 33) {
