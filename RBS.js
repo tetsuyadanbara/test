@@ -9,29 +9,6 @@
 
 
 (()=>{
-
-  // ===== Bag: save current equip (from Red Blue new) =====
-  if(location.href === 'https://donguri.5ch.net/bag') {
-      function saveCurrentEquip(url, index) {
-        let currentEquip = JSON.parse(localStorage.getItem('current_equip')) || [];
-        const regex = /https:\/\/donguri\.5ch\.net\/equip\/(\d+)/;
-        const equipId = url.match(regex)[1];
-        currentEquip[index] = equipId;
-        localStorage.setItem('current_equip', JSON.stringify(currentEquip));
-      }
-      const tableIds = ['weaponTable', 'armorTable', 'necklaceTable'];
-      tableIds.forEach((elm, index)=>{
-        const equipLinks = document.querySelectorAll(`#${elm} a[href^="https://donguri.5ch.net/equip/"]`);
-        [...equipLinks].forEach(link => {
-          link.addEventListener('click', ()=>{
-            saveCurrentEquip(link.href, index);
-          })
-        })
-      })
-      return;
-    }
-  
-
   if(location.pathname === '/bag') {
     function saveCurrentEquip(url, index) {
       let currentEquip = JSON.parse(localStorage.getItem('current_equip')) || [];
@@ -55,13 +32,6 @@
   // 現在のモードクエリ（m=hc / m=l / m=rb）
   const _mParam = new URLSearchParams(location.search).get('m') || 'rb';
   const MODE = `m=${_mParam}`;
-
-  let currentPeriod = 0;
-  let currentProgress = 0;
-  let nextProgress = null;
-  let wood = 0;
-  let steel = 0;
-
   const BASE_BATTLE_URL = `https://donguri.5ch.net/teambattle?${MODE}`;
 let MODENAME;
   if (MODE === 'm=hc') MODENAME = '［ハード］';
@@ -112,33 +82,6 @@ let MODENAME;
   if(h4) h4.style.display = 'none';
   header.append(toolbar);
   const progressBarContainer = document.createElement('div');
-  const progressBar = document.createElement('div');
-  const progressBarBody = document.createElement('div');
-  const progressBarInfo = document.createElement('p');
-  progressBar.classList.add('progress-bar');
-  progressBar.style.display = 'inline-block';
-  progressBar.style.width = '400px';
-  progressBar.style.maxWidth = '100vw';
-  progressBar.style.height = '20px';
-  progressBar.style.background = '#ccc';
-  progressBar.style.borderRadius = '8px';
-  progressBar.style.fontSize = '16px';
-  progressBar.style.overflow = 'hidden';
-  progressBar.style.marginTop = '5px';
-  progressBarBody.style.height = '100%';
-  progressBarBody.style.lineHeight = 'normal';
-  progressBarBody.style.background = '#428bca';
-  progressBarBody.style.textAlign = 'right';
-  progressBarBody.style.paddingRight = '5px';
-  progressBarBody.style.boxSizing = 'border-box';
-  progressBarBody.style.color = 'white';
-  progressBarInfo.style.marginTop = '0';
-  progressBarInfo.style.marginBottom = '0';
-  progressBarInfo.style.overflow = 'auto';
-  progressBarInfo.style.whiteSpace = 'nowrap';
-
-  progressBarContainer.append(progressBarInfo,progressBar);
-  progressBar.append(progressBarBody)
   toolbar.append(progressBarContainer);
 
   // add buttons and select to custom menu
@@ -795,10 +738,1226 @@ let MODENAME;
   });
 
   
-  
-  // (ResBlue1.3 map preserved: removed auto grid regeneration block)
+  // --- 新仕様対応のグリッド生成ロジック追加 ---
+  if (!document.querySelector('.grid') && document.querySelector('.gridCanvasOuter')) {
+    const gridOuter = document.querySelector('.gridCanvasOuter');
+    let GRID_SIZE = 16; // 初期値
+    let cellColors = {};
+    const scripts = document.querySelectorAll('script');
+    for (let s of scripts) {
+      if (s.textContent.includes('const cellColors =')) {
+        const cellColorsMatch = s.textContent.match(/const cellColors = ({.+?});/s);
+        if (cellColorsMatch) {
+          const validJsonStr = cellColorsMatch[1].replace(/'/g, '"').replace(/,\s*}/, '}');
+          cellColors = JSON.parse(validJsonStr);
+        }
+        const gridMatch = s.textContent.match(/const GRID_SIZE = (\d+);/);
+        if (gridMatch) {
+          GRID_SIZE = parseInt(gridMatch[1]);
+        }
+        break;
+      }
+    }
 
-async function fetchArenaTable(row, col){
+    const wrap = document.getElementById('gridWrap');
+    if (wrap) wrap.style.display = 'none';
+
+    const newGrid = document.createElement('div');
+    newGrid.className = 'grid';
+    newGrid.style.display = 'grid';
+    newGrid.style.gridTemplateColumns = `repeat(${GRID_SIZE}, 35px)`;
+    newGrid.style.gridTemplateRows = `repeat(${GRID_SIZE}, 35px)`;
+    newGrid.style.gap = '2px';
+    for (let i = 0; i < GRID_SIZE; i++) {
+      for (let j = 0; j < GRID_SIZE; j++) {
+        const cell = document.createElement('div');
+        cell.className = 'cell';
+        cell.dataset.row = i;
+        cell.dataset.col = j;
+        cell.style.width = '30px';
+        cell.style.height = '30px';
+        cell.style.border = '1px solid #ccc';
+        cell.style.cursor = 'pointer';
+        cell.style.transition = 'background-color 0.3s';
+        const cellKey = `${i}-${j}`;
+        if (cellColors[cellKey]) {
+          cell.style.backgroundColor = cellColors[cellKey];
+        } else {
+          cell.style.backgroundColor = 'transparent';
+        }
+        newGrid.appendChild(cell);
+      }
+    }
+    gridOuter.appendChild(newGrid);
+  }
+  // --- ここまで ---
+
+  const grid = document.querySelector('.grid');
+  if(grid) {
+    grid.parentNode.style.height = null;
+    grid.style.maxWidth = '100%';
+  }
+
+  const table = document.querySelector('table');
+  if(table) {
+    table.parentNode.style.maxWidth = '100%';
+    table.parentNode.style.overflow = 'auto';
+    table.parentNode.style.height = '60vh';
+  }
+
+  //-- settings --//
+  const settingsDialog = document.createElement('dialog');
+  settingsDialog.style.position = 'fixed';
+  settingsDialog.style.top = '0';
+  settingsDialog.style.background = '#f0f0f0';
+  settingsDialog.style.border = 'solid 1px #000';
+  settingsDialog.style.padding = '2px';
+  settingsDialog.style.margin = '0';
+  settingsDialog.style.zIndex = '2';
+  settingsDialog.style.textAlign = 'left';
+  (()=>{
+    if (settings.settingsPanelPosition === 'left') {
+      settingsDialog.style.left = '0';
+    } else {
+      settingsDialog.style.left = 'auto';
+    }
+
+    if (settings.settingsPanelWidth) {
+      settingsDialog.style.width = settings.settingsPanelWidth;
+      settingsDialog.style.minWidth = '20vw';
+      settingsDialog.style.maxWidth = '100vw';
+    } else {
+      settingsDialog.style.width = '400px';
+      settingsDialog.style.maxWidth = '75vw';
+    }
+
+    if (settings.settingsPanelHeight) {
+      settingsDialog.style.height = settings.settingsPanelHeight;
+      settingsDialog.style.maxHeight = '100vh';
+      settingsDialog.style.minHeight = '20vw';
+    } else {
+      settingsDialog.style.height = '96vh';
+    }
+  })();
+  (()=>{
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.style.borderRadius = 'unset';
+    button.style.border = 'solid 1px #000';
+    button.style.background = '#ccc';
+    button.style.color = '#000';
+    button.style.margin = '2px';
+    button.style.height = '42px';
+    button.style.lineHeight = '1';
+    button.style.whiteSpace = 'nowrap';
+    button.style.overflowX = 'hidden';
+
+    const container = document.createElement('div');
+    container.style.display = 'flex';
+    container.style.flexDirection = 'column';
+    container.style.height = '100%';
+    container.style.color = '#000';
+
+    const header = document.createElement('div');
+    header.style.display = 'flex';
+    
+    const h2 = document.createElement('h2');
+    h2.textContent = '設定'
+    h2.style.fontSize = '1.2rem';
+    h2.style.margin = '2px';
+
+    const closeButton = button.cloneNode();
+    closeButton.textContent = '×';
+    closeButton.style.marginLeft = 'auto';
+    closeButton.style.background = 'none';
+    closeButton.style.border = 'none';
+    closeButton.style.height = '40px';
+    closeButton.style.width = '40px';
+    closeButton.style.fontSize = '32px';
+    closeButton.style.lineHeight = '1';
+    closeButton.addEventListener('click', ()=>{
+      settingsDialog.close();
+    })
+
+    const settingsMenu = document.createElement('div');
+    settingsMenu.style.flexGrow = '1';
+    settingsMenu.style.overflowY = 'auto';
+    settingsMenu.style.overflowX = 'hidden';
+
+    const settingsButtons = document.createElement('div');
+    settingsButtons.style.display = 'flex';
+
+    (()=>{
+      const saveButton = button.cloneNode();
+      saveButton.textContent = '保存';
+      saveButton.addEventListener('click', ()=>{
+        const settingElements = settingsMenu.querySelectorAll('[data-setting]');
+        settingElements.forEach(elm => {
+          if (elm.dataset.type === 'value') {
+            if(elm.value !== '') {
+              settings[elm.dataset.setting] = elm.value;
+            } else {
+              settings[elm.dataset.setting] = null;
+            }
+          }
+          if (elm.dataset.type === 'unit') {
+            const input = elm.querySelector('input');
+            const unit = elm.querySelector('select');
+            if(input.value !== '') {
+              settings[elm.dataset.setting] = input.value + unit.value;
+            } else {
+              settings[elm.dataset.setting] = null;
+            }
+          }
+        })
+        localStorage.setItem('aat_settings', JSON.stringify(settings));
+        location.reload();
+      })
+
+      const cancelButton = button.cloneNode();
+      cancelButton.textContent = 'キャンセル';
+      cancelButton.addEventListener('click', ()=>{
+        refreshSettings();
+        settingsDialog.close();
+      })
+      function refreshSettings (){
+        const settingElements = settingsMenu.querySelectorAll('[data-setting]');
+        settingElements.forEach(elm => {
+          if (elm.dataset.type === 'value') {
+            if (settings[elm.dataset.setting]) elm.value = settings[elm.dataset.setting];
+            else if (elm.tagName === 'SELECT') elm.selectedIndex = 0;
+            else elm.value = '';
+          }
+          if (elm.dataset.type === 'unit') {
+            const value = settings[elm.dataset.setting];
+            const input = elm.querySelector('input');
+            const unit = elm.querySelector('select');
+            if (value) {
+              const match = value.match(/(\d+)(\D+)/);
+              input.value = match[1];
+              unit.value = match[2];
+            } else {
+              input.value = '';
+              unit.selectedIndex = 0;
+            }
+          }
+        })
+      }
+      settingsButtons.append(saveButton, cancelButton);
+
+      const container = document.createElement('div');
+      container.style.background = 'none';
+      container.style.color = '#000';
+      container.style.padding = '0';
+      container.style.margin = '2px';
+      container.style.border = 'none';
+      container.style.display = 'flex';
+      container.style.flexDirection = 'column';
+      const h3 = document.createElement('h3');
+      h3.style.margin = '8px 0';
+      h3.style.fontSize = '1.1em';
+      h3.style.textDecoration = 'underline';
+      const select = document.createElement('select');
+      select.style.background = '#ddd';
+      select.style.color = '#000';
+      select.style.lineHeight = '1';
+      select.style.width = 'fit-content';
+      const wrapper = document.createElement('div');
+      wrapper.style.display = 'flex';
+      wrapper.style.justifyContent = 'space-between';
+      wrapper.style.whiteSpace = 'nowrap';
+      wrapper.style.padding = '0 2px';
+      const span = document.createElement('span');
+      span.style.flexGrow = '1';
+      span.style.overflowX = 'auto';
+
+      function addHeader (text, elm) {
+        const header = h3.cloneNode();
+        header.textContent = text;
+        elm.append(header);
+      }
+      function createOptions (select, items){
+        if (Array.isArray(items)) {
+          items.forEach(value => select.add(new Option(value, value)));
+        } else if (typeof items === 'object' && items !== null) {
+          Object.entries(items)
+            .forEach(([key, value]) => select.add(new Option(value, key)));
+        }
+      }
+      function wrappingItems (text, elm, parent){
+        const wrapper_ = wrapper.cloneNode();
+        const span_ = span.cloneNode();
+        span_.textContent = text;
+        wrapper_.append(span_, elm);
+        parent.append(wrapper_);
+      }
+      const widthUnit = select.cloneNode();
+      const heightUnit = select.cloneNode();
+      createOptions(widthUnit, ['px','%','vw']);
+      createOptions(heightUnit, ['px','%','vh']);
+      const number = document.createElement('input');
+      number.type = 'number';
+      number.style.background = '#ddd';
+      number.style.color = '#000';
+      number.style.height = '2em';
+      number.style.width = '4em';
+      
+      const toolbar = container.cloneNode();
+      addHeader('toolbar', toolbar);
+      const arenaResult = container.cloneNode();
+      addHeader('アリーナログ', arenaResult);
+      const arenaField = container.cloneNode();
+      addHeader('アリーナ情報', arenaField);
+      const gridPanel = container.cloneNode();
+      addHeader('グリッド', gridPanel);
+      const settingsPanel = container.cloneNode();
+      addHeader('設定パネル', settingsPanel);
+      const equipPanel = container.cloneNode();
+      addHeader('装備パネル', equipPanel);
+
+      const settingItems = {
+        toolbarPosition: {
+          text: '位置:',
+          type: 'select',
+          options: {
+            left: '左寄せ',
+            right: '右寄せ',
+            center: '中央寄せ'
+          },
+          parent: toolbar
+        },
+        toolbarPositionLength: {
+          text: '端の距離:',
+          type: 'width',
+          parent: toolbar
+        },
+        arenaResultScrollPosition: {
+          text: 'スクロール位置:',
+          type: 'select',
+          options: {
+            top: '上',
+            bottom: '下'
+          },
+          parent: arenaResult
+        },
+        arenaResultBottom: {
+          text: '下部の距離:',
+          type: 'height',
+          parent: arenaResult
+        },
+        arenaResultPosition: {
+          text: '位置:',
+          type: 'select',
+          options: {
+            right: '右寄せ',
+            left: '左寄せ'
+          },
+          parent: arenaResult
+        },
+        arenaResultPositionLength: {
+          text: '左端からの距離:',
+          type: 'width',
+          parent: arenaResult
+        },
+        arenaResultHeight: {
+          text: 'ログの高さ:',
+          type: 'height',
+          parent: arenaResult
+        },
+        arenaResultWidth: {
+          text: 'ログの横幅:',
+          type: 'width',
+          parent: arenaResult
+        },
+        arenaFieldBottom: {
+          text: '下部の距離:',
+          type: 'height',
+          parent: arenaField
+        },
+        arenaFieldPosition: {
+          text: '位置:',
+          type: 'select',
+          options: {
+            left: '左寄せ',
+            right: '右寄せ',
+            center: '中央寄せ'
+          },
+          parent: arenaField
+        },
+        arenaFieldPositionLength: {
+          text: '端からの距離:',
+          type: 'width',
+          parent: arenaField
+        },
+        arenaFieldWidth: {
+          text: '横幅:',
+          type: 'width',
+          parent: arenaField
+        },
+        gridColumns: {
+          text: '1行の最大セル数:',
+          type: 'number',
+          parent: gridPanel
+        },
+        settingsPanelPosition: {
+          text: '位置',
+          type: 'select',
+          options: {
+            right: '右寄せ',
+            left: '左寄せ'
+          },
+          parent: settingsPanel
+        },
+        settingsPanelHeight: {
+          text: '高さ',
+          type: 'height',
+          parent: settingsPanel
+        },
+        settingsPanelWidth: {
+          text: '横幅',
+          type: 'width',
+          parent: settingsPanel
+        },
+        equipPanelPosition: {
+          text: '位置',
+          type: 'select',
+          options: {
+            right: '右寄せ',
+            left: '左寄せ'
+          },
+          parent: equipPanel
+        },
+        equipPanelHeight: {
+          text: '高さ',
+          type: 'height',
+          parent: equipPanel
+        },
+        equipPanelWidth: {
+          text: '横幅',
+          type: 'width',
+          parent: equipPanel
+        }
+      }
+
+      Object.entries(settingItems).forEach(([key,item]) => {
+        if (item.type === 'select') {
+          const elm = select.cloneNode();
+          elm.dataset.setting = key;
+          elm.dataset.type = 'value';
+          createOptions(elm, item.options);
+          wrappingItems(item.text, elm, item.parent);
+        } else if (item.type === 'number') {
+          const elm = number.cloneNode();
+          elm.dataset.setting = key;
+          elm.dataset.type = 'value';
+          wrappingItems(item.text, elm, item.parent);
+        } else if (item.type === 'width') {
+          const elm = document.createElement('div');
+          elm.dataset.setting = key;
+          elm.dataset.type = 'unit';
+          elm.append(number.cloneNode(), widthUnit.cloneNode(true));
+          wrappingItems(item.text, elm, item.parent);
+        } else if (item.type === 'height') {
+          const elm = document.createElement('div');
+          elm.dataset.setting = key;
+          elm.dataset.type = 'unit';
+          elm.append(number.cloneNode(), heightUnit.cloneNode(true));
+          wrappingItems(item.text, elm, item.parent);
+        }
+      })
+
+      settingsMenu.append(toolbar, arenaResult, arenaField, gridPanel, settingsPanel, equipPanel);
+      refreshSettings();
+    })();
+    
+    const footer = document.createElement('div');
+    footer.style.fontSize = '80%';
+    footer.style.textAlign = 'right';
+
+    (()=>{
+      const link = document.createElement('a');
+      link.style.color = '#666';
+      link.style.textDecoration = 'underline';
+      link.textContent = 'arena assist tool - v1.3';
+      link.href = 'https://donguri-k.github.io/tools/arena-assist-tool';
+      link.target = '_blank';
+      const author = document.createElement('input');
+      author.value = '作者 [ID: 7234e634]';
+      author.style.color = '#666';
+      author.style.background = 'none';
+      author.style.margin = '2px';
+      author.style.padding = '2px';
+      author.style.width = 'fit-content';
+      author.readOnly = 'true';
+      author.addEventListener('click',()=>{
+        author.select();
+        navigator.clipboard.writeText('7234e634');
+      })
+      footer.append(link, author);
+    })();
+
+    header.append(h2, closeButton);
+    container.append(header, settingsButtons, settingsMenu, footer)
+    settingsDialog.append(container);
+  })();
+  
+  document.body.append(settingsDialog);
+
+  //-- 装備 --//
+  const panel = document.createElement('div');
+  panel.style.position = 'fixed';
+  panel.style.top = '0';
+  panel.style.background = '#f0f0f0';
+  panel.style.border = 'solid 1px #000';
+  panel.style.padding = '2px';
+  panel.style.zIndex = '1';
+  panel.style.textAlign = 'left';
+  panel.style.display = 'none';
+  panel.style.flexDirection = 'column';
+  (()=>{
+    if (settings.equipPanelPosition === 'left') {
+      panel.style.left = '0';
+    } else {
+      panel.style.right = '0';
+    }
+  
+    if (settings.equipPanelWidth) {
+      panel.style.width = settings.equipPanelWidth;
+      panel.style.minWidth = '20vw';
+      panel.style.maxWidth = '100vw';
+    } else {
+      panel.style.width = '400px';
+      panel.style.maxWidth = '75vw';
+    }
+  
+    if (settings.equipPanelHeight) {
+      panel.style.height = settings.equipPanelHeight;
+      panel.style.maxHeight = '100vh';
+      panel.style.minHeight = '20vw';
+    } else {
+      panel.style.height = '96vh';
+    }
+  })();  
+
+  (()=>{
+    const input = document.createElement('input');
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.style.borderRadius = 'unset';
+    button.style.border = 'solid 1px #000';
+    button.style.background = '#ccc';
+    button.style.color = '#000';
+    button.style.margin = '2px';
+    button.style.width = '6em';
+    button.style.fontSize = '65%';
+    button.style.whiteSpace = 'nowrap';
+    button.style.overflow = 'hidden';
+    button.style.lineHeight = '1';
+
+    let currentMode = 'equip';
+    const presetList = document.createElement('ul');
+    presetList.style.listStyle = 'none';
+    presetList.style.margin = '0';
+    presetList.style.padding = '0';
+    presetList.style.borderTop = 'solid 1px #000';
+    presetList.style.overflowY = 'auto';
+    presetList.style.flexGrow = '1';
+    showEquipPreset();
+
+    const resetCurrentEquip = document.createElement('div');
+    resetCurrentEquip.textContent = '装備情報をリセット';
+    resetCurrentEquip.style.borderTop = 'solid 1px #000';
+    resetCurrentEquip.style.cursor = 'pointer';
+    resetCurrentEquip.style.color = '#a62';
+    resetCurrentEquip.style.whiteSpace = 'nowrap';
+    resetCurrentEquip.style.overflow = 'hidden';
+    resetCurrentEquip.addEventListener('click', ()=>{
+      localStorage.removeItem('current_equip');
+      const stat = document.querySelector('.equip-preset-stat');
+      stat.textContent = '現在の装備情報を初期化';
+      weaponTable = null;
+      armorTable = null;
+      necklaceTable = null;
+    })
+
+    presetList.addEventListener('click', (event)=>{
+      const presetLi = event.target.closest('li');
+      if(!presetLi) return;
+      const presetName = presetLi.querySelector('span').textContent;
+      if(currentMode === 'equip') {
+        window.setPresetItems(presetName);
+      } else if (currentMode === 'remove') {
+        removePresetItems(presetName);
+      } else if (currentMode === 'edit') {
+        alert('未実装');
+      }
+    });
+
+    (()=>{
+      const div = document.createElement('div');
+      div.style.marginTop = '2px';
+      div.style.lineHeight = 'normal';
+      const buttonsContainer = document.createElement('div');
+      buttonsContainer.style.display = 'flex';
+  
+      const closeButton = button.cloneNode();
+      closeButton.textContent = '×';
+      closeButton.style.marginLeft = 'auto';
+      closeButton.style.background = 'none';
+      closeButton.style.border = 'none';
+      closeButton.style.height = '40px';
+      closeButton.style.width = '40px';
+      closeButton.style.fontSize = '32px';
+      closeButton.style.lineHeight = '1';
+      closeButton.addEventListener('click', ()=>{
+        panel.style.display = 'none';
+      })
+  
+      const addButton = button.cloneNode();
+      addButton.textContent = '追加';
+      addButton.addEventListener('click', async()=>{
+        selectedEquips = {id:[], rank:[]};
+        addButton.disabled = true;
+        await showEquipList();
+        addButton.disabled = false;
+      })
+
+      const removeButton = button.cloneNode();
+      removeButton.textContent = '削除';
+      removeButton.dataset.text = '削除';
+      removeButton.dataset.mode = 'remove';
+      
+      const backupButton = button.cloneNode();
+      backupButton.innerText = 'バック\nアップ';
+
+      const backupDialog = document.createElement('dialog');
+      backupDialog.style.background = '#fff';
+      backupDialog.style.color = '#000';
+      backupDialog.style.left = 'auto';
+      (()=>{
+        const textarea = document.createElement('textarea');
+        textarea.style.background = '#fff';
+        textarea.style.color = '#000';
+        textarea.style.whiteSpace = 'nowrap';
+        textarea.style.width = '70vw';
+        textarea.style.height = '50vh';
+        textarea.style.overflowX = 'auto';
+
+        const div = document.createElement('div');
+        const saveButton = button.cloneNode();
+        saveButton.textContent = '保存';
+        saveButton.addEventListener('click', ()=>{
+          const isSuccess = importEquipPresets(textarea.value);
+          if(isSuccess) backupDialog.close();
+        });
+        const copyButton = button.cloneNode();
+        copyButton.textContent = 'コピー';
+        copyButton.addEventListener('click', ()=>{navigator.clipboard.writeText(textarea.value).then(alert('copy'));})
+        const closeButton = button.cloneNode();
+        closeButton.textContent = '閉じる';
+        closeButton.addEventListener('click', ()=>{backupDialog.close()})
+        div.append(saveButton, copyButton, closeButton);
+        backupDialog.append(textarea, div);
+        backupButton.addEventListener('click', ()=>{
+          const data = localStorage.getItem('equipPresets');
+          if(data) {
+            const json = JSON.parse(data);
+            const formattedString = Object.entries(json)
+              .map(([key, value]) => {return `  "${key.replace(/"/g,'\\"')}": ${JSON.stringify(value)}`;})
+              .join(',\n');
+            textarea.value = `{\n${formattedString}\n}`;
+          }
+          backupDialog.showModal();
+        })
+      })();
+
+      [removeButton].forEach(button => {
+        button.addEventListener('click', () => {
+          const mode = button.dataset.mode;
+          if (currentMode === mode) {
+            resetMode(); 
+            return;
+          }
+          setMode(mode, button);
+        })
+      });
+
+      function setMode(mode, button) {
+        resetMode(); 
+        currentMode = mode;
+        button.textContent = '終了';
+        button.classList.add('active');
+        if(mode === 'remove') stat.textContent = '削除したいものを選択';
+        else if (mode === 'edit') stat.textContent = 'クリックで編集';
+      }
+
+      function resetMode() {
+        if (currentMode) {
+          const activeButton = document.querySelector('.active');
+          if (activeButton) {
+            activeButton.textContent = activeButton.dataset.text;
+            activeButton.classList.remove('active');
+          }
+        }
+        currentMode = 'equip';
+        stat.textContent = '';
+      }
+
+      const stat = document.createElement('p');
+      stat.style.margin = '0';
+      stat.style.height = '24px';
+      stat.style.fontSize = '16px';
+      stat.style.whiteSpace = 'nowrap';
+      stat.style.overflow = 'hidden';
+      stat.classList.add('equip-preset-stat');
+  
+      buttonsContainer.append(addButton, removeButton, backupButton, closeButton);
+      div.append(buttonsContainer, backupDialog, stat);
+      panel.append(div);
+    })();
+  
+    panel.append(resetCurrentEquip, presetList);
+    document.body.append(panel);
+
+    // equip item table dialog
+    const equipField = document.createElement('dialog');
+    equipField.style.background = '#fff';
+    equipField.style.color = '#000';
+    equipField.style.maxWidth = '90vw';
+    equipField.style.height = '95vh';
+    const closeButton = button.cloneNode();
+    closeButton.textContent = '×';
+    closeButton.style.position = 'absolute';
+    closeButton.style.background = 'none';
+    closeButton.style.border = 'none';
+    closeButton.style.height = '40px';
+    closeButton.style.width = '40px';
+    closeButton.style.fontSize = '32px';
+    closeButton.style.top = '2px';
+    closeButton.style.right = '2px';
+    closeButton.style.lineHeight = '1';
+    closeButton.addEventListener('click', ()=>{equipField.close()});
+    const tableContainer = document.createElement('div');
+    tableContainer.style.height = '75vh';
+    tableContainer.style.overflow = 'auto';
+    const rankSelect = document.createElement('select');
+    rankSelect.style.maxWidth = '64px';
+    const ranks = ['N','R','SR','SSR','UR'];
+    ranks.forEach(rank => {
+      const option = document.createElement('option');
+      option.textContent = rank;
+      option.value = rank;
+      rankSelect.append(option);
+    })
+    rankSelect.addEventListener('change', ()=>{filterItemsByRank(rankSelect.value)});
+    const bar = document.createElement('div');
+    bar.style.textAlign = 'center';
+    const p = document.createElement('p');
+    p.classList.add('equip-preset-selected');
+    p.style.background = '#fff';
+    p.style.color = '#000';
+    p.style.margin = '2px';
+    p.style.height = '28px';
+
+    const equipSwitchButton = button.cloneNode();
+    equipSwitchButton.textContent = '?武器';
+    equipSwitchButton.style.width = '4em';
+    equipSwitchButton.style.height = '42px';
+    equipSwitchButton.style.fontSize = '';
+
+    equipSwitchButton.style.whiteSpace = 'nowrap';
+    equipSwitchButton.addEventListener('click', (event)=>{
+      if(!weaponTable.style.display) {
+        weaponTable.style.display = 'none';
+        armorTable.style.display = '';
+        necklaceTable.style.display = 'none';
+        event.target.textContent = '?防具';
+      } else if (!armorTable.style.display) {
+        weaponTable.style.display = 'none';
+        armorTable.style.display = 'none';
+        necklaceTable.style.display = '';
+        event.target.textContent = '?首';
+      } else if (!necklaceTable.style.display) {
+        weaponTable.style.display = '';
+        armorTable.style.display = 'none';
+        necklaceTable.style.display = 'none';
+        event.target.textContent = '?武器';
+      }
+    });
+
+    // register
+    const registerButton = button.cloneNode();
+    registerButton.textContent = '登録';
+    registerButton.style.width = '4em';
+    registerButton.style.height = '42px';
+    registerButton.style.fontSize = '';
+
+    (()=>{
+      const dialog = document.createElement('dialog');
+      dialog.style.background = '#fff';
+      dialog.style.border = 'solid 1px #000';
+      dialog.style.color = '#000';
+      dialog.style.textAlign = 'center';
+      const presetNameInput = document.createElement('input');
+      presetNameInput.placeholder = 'プリセット名';
+      presetNameInput.style.background = '#fff';
+      presetNameInput.style.color = '#000';
+      const p = document.createElement('p');
+      p.textContent = '同名のプリセットが存在する場合は上書きされます。';
+      p.style.margin = '0';
+      const confirmButton = button.cloneNode();
+      confirmButton.textContent = '保存';
+      confirmButton.addEventListener('click', ()=>{
+        if(presetNameInput.value.trim() === '') return;
+        saveEquipPreset(presetNameInput.value.substring(0,32), selectedEquips);
+        dialog.close();
+        presetNameInput.value = '';
+      })
+      presetNameInput.addEventListener('keydown', (e)=>{
+        if (e.key === "Enter") {
+          e.preventDefault(); // これが無いとdialogが閉じない
+          if(presetNameInput.value.trim() === '') return;
+          saveEquipPreset(presetNameInput.value.substring(0,32), selectedEquips);
+          dialog.close();
+          presetNameInput.value = '';  
+        }
+      })
+      const cancelButton = button.cloneNode();
+      cancelButton.textContent = 'キャンセル';
+      cancelButton.addEventListener('click', ()=>{dialog.close()});
+      dialog.append(presetNameInput, confirmButton, cancelButton, p);
+      equipField.append(dialog);
+      registerButton.addEventListener('click', ()=>{
+        if(!selectedEquips.id[0] && !selectedEquips.id[1] && !selectedEquips.id[2]) {
+          alert('装備が未選択です');
+          return;
+        }
+        dialog.showModal();
+      });
+    })();
+
+    bar.append(rankSelect, equipSwitchButton, registerButton, p);
+    equipField.append(bar, tableContainer, closeButton);
+    panel.append(equipField);
+
+    let weaponTable, armorTable, necklaceTable;
+    let selectedEquips = {id:[], rank:[]};
+
+    function sortTable(table){
+      const tbody = table.querySelector('tbody');
+      const rows = Array.from(tbody.rows);
+      rows.sort((a,b) => {
+        const nameA = a.cells[0].textContent;
+        const nameB = b.cells[0].textContent;
+        return nameA.localeCompare(nameB);
+      })
+      rows.forEach(row => tbody.appendChild(row));
+    }
+
+    async function showEquipList(){
+      if(!weaponTable || !armorTable || !necklaceTable) {
+        try {
+          const res = await fetch('https://donguri.5ch.net/bag');
+          if(!res.ok) throw new Error('bag response error');
+          const text = await res.text();
+          const doc = new DOMParser().parseFromString(text, 'text/html');
+          const h1 = doc.querySelector('h1');
+          if(h1?.textContent !== 'アイテムバッグ') throw new Error(text);
+          weaponTable = doc.querySelector('#weaponTable');
+          armorTable = doc.querySelector('#armorTable');
+          necklaceTable = doc.querySelector('#necklaceTable');
+          if(!weaponTable || !armorTable || !necklaceTable) throw new Error('failed to find weapon/armor table');
+
+          [weaponTable,armorTable,necklaceTable].forEach((table,index) => {
+            sortTable(table);
+            table.style.color = '#000';
+            table.style.margin = '0';
+            const rows = table.querySelectorAll('tr');
+            rows.forEach(row => {
+              const id = row.cells[1].querySelector('a')?.href.replace('https://donguri.5ch.net/equip/','');
+              row.cells[0].style.textDecorationLine = 'underline';
+              row.cells[0].style.cursor = 'pointer';
+              row.cells[0].dataset.id = id;
+              row.cells[1].style.display = 'none';
+              row.cells[2].style.display = 'none';
+              if(index !== 2) {
+                const modLink = row.cells[7].querySelector('a');
+                if(modLink) modLink.target = '_blank';
+                row.cells[9].style.display = 'none';
+              } else if (index === 2) {
+                row.cells[3].style.whiteSpace = 'nowrap';
+                const ul = row.cells[3].querySelector('ul');
+                if(ul) ul.style.padding = '0';
+                row.cells[5].style.display = 'none';
+              }
+              row.cells[0].addEventListener('click', (event)=>{
+                if(!event.target.closest('td')) return;
+                const target = event.target.closest('td');
+                const itemName = target.textContent;
+                const rank = itemName.match(/\[(.+?)\]/)[1];
+                const id = target.dataset.id;
+                selectedEquips.id[index] = id;
+                selectedEquips.rank[index] = rank;
+                document.querySelector('.equip-preset-selected').textContent = selectedEquips.id;
+              })
+            })
+          })
+          tableContainer.append(weaponTable, armorTable, necklaceTable);
+        } catch(e) {
+          console.error(e);
+          return;
+        }
+      }
+
+      equipSwitchButton.textContent = '?武器';
+      weaponTable.style.display = '';
+      armorTable.style.display = 'none';
+      necklaceTable.style.display = 'none';
+      filterItemsByRank(rankSelect.value);
+      document.querySelector('.equip-preset-selected').textContent = '';
+      equipField.showModal();
+    }
+    function filterItemsByRank (rank){
+      [weaponTable, armorTable].forEach(table => {
+        table.querySelectorAll('tbody > tr').forEach(row => {
+          const itemName = row.cells[0].textContent;
+          row.style.display = itemName.includes(`[${rank}]`) ? null : 'none';
+        })
+      })
+    }
+    function saveEquipPreset(name, obj){
+      let equipPresets = JSON.parse(localStorage.getItem('equipPresets')) || {};
+      equipPresets[name] = obj;
+      localStorage.setItem('equipPresets', JSON.stringify(equipPresets));
+      showEquipPreset();
+    }
+    function showEquipPreset(){
+      let equipPresets = JSON.parse(localStorage.getItem('equipPresets')) || {};
+      const liTemplate = document.createElement('li');
+      liTemplate.style.display = 'flex';
+      liTemplate.style.justifyContent = 'space-between';
+      liTemplate.style.borderBottom = 'solid 1px #000';
+      liTemplate.style.color = '#428bca';
+      liTemplate.style.cursor = 'pointer';
+      const span1 = document.createElement('span');
+      span1.style.flexGrow = '1';
+      span1.style.whiteSpace = 'nowrap';
+      span1.style.overflowX = 'hidden';
+      const span2 = document.createElement('span');
+      span2.style.whiteSpace = 'nowrap';
+      span2.style.textAlign = 'right';
+      span2.style.fontSize = '90%';
+      liTemplate.append(span1,span2);
+      const fragment = document.createDocumentFragment();
+      Object.entries(equipPresets).forEach(([key, value])=>{
+        const li = liTemplate.cloneNode(true);
+        const span = li.querySelectorAll('span');
+        span[0].textContent = key;
+        span[1].textContent = value.rank.join(',');
+        fragment.append(li);
+      })
+      presetList.replaceChildren(fragment);
+    }
+    function importEquipPresets(text){
+      try{
+        if(text.trim() === ''){
+          localStorage.removeItem('equipPresets');
+          showEquipPreset();
+          return true;
+        }
+        const json = JSON.parse(text);
+        localStorage.setItem('equipPresets', JSON.stringify(json));
+        showEquipPreset();
+        return true;
+      } catch (e) {
+        if (e instanceof SyntaxError) {
+          alert('書式エラー');
+        }
+        return false;
+      }
+
+    }
+  setPresetItems = async function (presetName) {
+      let currentEquip = JSON.parse(localStorage.getItem('current_equip')) || [];
+      const stat = document.querySelector('.equip-preset-stat');
+      if (stat.textContent === '装備中...') return;
+      const equipPresets = JSON.parse(localStorage.getItem('equipPresets')) || [];
+      const fetchPromises = equipPresets[presetName].id
+        .filter(id => id !== undefined && id !== null && !currentEquip.includes(id)) // 未登録or既に装備中の部位は除外
+        .map(id => fetch('https://donguri.5ch.net/equip/' + id));
+
+      stat.textContent = '装備中...';
+
+      try {
+        const responses = await Promise.all(fetchPromises);
+        const texts = await Promise.all(
+          responses.map(async response => {
+            if (!response.ok) {
+              throw new Error('読み込み失敗');
+            }
+            return response.text();
+          })
+        );
+        
+        if(texts.includes('どんぐりが見つかりませんでした。')) {
+          throw new Error('再ログインしてください');
+        } else if(texts.includes('アイテムが見つかりませんでした。')) {
+          throw new Error('アイテムが見つかりませんでした');
+        }
+
+        const docs = texts.map(text => new DOMParser().parseFromString(text,'text/html'));
+        const titles = docs.map(doc => doc.querySelector('h1')?.textContent);
+        if(titles.includes('どんぐり基地')) {
+          throw new Error('再ログインしてください');
+        } else if (!titles.every(title => title === 'アイテムバッグ')) {
+          throw new Error('装備エラー');
+        }
+        stat.textContent = '完了: ' + presetName;
+        localStorage.setItem('current_equip', JSON.stringify(equipPresets[presetName].id));
+        currentEquipName = presetName;  
+      } catch (e) {
+        stat.textContent = e;
+        localStorage.removeItem('current_equip');
+      }
+    }
+    function removePresetItems(presetName) {
+      const userConfirmed = confirm(presetName + ' を削除しますか？');
+      if(!userConfirmed) return;
+      const stat = document.querySelector('.equip-preset-stat');
+      const equipPresets = JSON.parse(localStorage.getItem('equipPresets')) || [];
+      if(!equipPresets || !equipPresets[presetName]) {
+        stat.textContent = '';
+        return;
+      }
+      delete equipPresets[presetName];
+      localStorage.setItem('equipPresets', JSON.stringify(equipPresets));
+      showEquipPreset();
+    }  
+  })();
+
+  
+  // expose for other modules (auto-equip / auto-join)
+  window.setPresetItems = setPresetItems;
+
+  function scaleContentsToFit(container, contents){
+    const containerWidth = container.clientWidth;
+    const contentsWidth = contents.scrollWidth;
+    if (contentsWidth === 0) return;
+    const scaleFactor = Math.min(1, containerWidth / contentsWidth);
+    contents.style.transform = `scale(${scaleFactor})`;
+    contents.style.transformOrigin = 'top left';
+
+    const scaledHeight = contents.scrollHeight * scaleFactor;
+  
+    contents.style.height = `${scaledHeight}px`;
+  }
+
+  async function refreshArenaInfo() {
+    const refreshedCells = [];
+  
+    try {
+      const res = await fetch(`${BASE_BATTLE_URL}&t=${Date.now()}`, { cache: 'no-store' });
+      if (!res.ok) throw new Error('res.ng');
+  
+      const text = await res.text();
+      const doc = new DOMParser().parseFromString(text, 'text/html');
+      
+      const h1Text = doc.querySelector('h1')?.textContent || '';
+      const divText = doc.querySelector('header > div')?.textContent || '';
+      if (h1Text !== 'どんぐりチーム戦い' && !divText.includes('どんぐりチーム戦い')) {
+         throw new Error('title.ng info');
+      }
+  
+      const currentCells = grid.querySelectorAll('.cell');
+      
+      let scriptContent = '';
+      for (let s of doc.querySelectorAll('script')) {
+        if (s.textContent.includes('const cellColors =')) {
+          scriptContent = s.textContent;
+          break;
+        }
+      }
+      
+      const cellColorsString = scriptContent.match(/const cellColors = ({.+?})/s)[1];
+      const validJsonStr = cellColorsString.replace(/'/g, '"').replace(/,\s*}/, '}');
+      const cellColors = JSON.parse(validJsonStr);
+  
+      let rows = 8, cols = 8;
+      const gridMatch = scriptContent.match(/const GRID_SIZE = (\d+);/);
+      if (gridMatch) {
+        rows = cols = parseInt(gridMatch[1]);
+      } else {
+        const newGrid = doc.querySelector('.grid');
+        if (newGrid) {
+          rows = Number(newGrid.style.gridTemplateRows.match(/repeat\((\d+), 35px\)/)[1]);
+          cols = Number(newGrid.style.gridTemplateColumns.match(/repeat\((\d+), 35px\)/)[1]);
+        }
+      }
+  
+      if (currentCells.length !== rows * cols) {
+        grid.style.gridTemplateRows = `repeat(${rows}, 35px)`;
+        grid.style.gridTemplateColumns = `repeat(${cols}, 35px)`;
+        grid.innerHTML = '';
+  
+        for (let i = 0; i < rows; i++) {
+          for (let j = 0; j < cols; j++) {
+            const cell = document.createElement('div');
+            cell.className = 'cell';
+            cell.dataset.row = i;
+            cell.dataset.col = j;
+            cell.style.width = '30px';
+            cell.style.height = '30px';
+            cell.style.border = '1px solid #ccc';
+            cell.style.cursor = 'pointer';
+            cell.style.transition = 'background-color 0.3s';
+  
+            const cellKey = `${i}-${j}`;
+            if (cellColors[cellKey]) {
+              cell.style.backgroundColor = cellColors[cellKey];
+            } else {
+              cell.style.backgroundColor = 'transparent';
+            }
+  
+            grid.appendChild(cell);
+            refreshedCells.push(cell);
+          }
+        }
+      } else {
+        currentCells.forEach(cell => {
+          const row = cell.dataset.row;
+          const col = cell.dataset.col;
+          const cellKey = `${row}-${col}`;
+
+          let cellColorCode = '';
+          const rgbMatchCell = cell.style.backgroundColor.match(/\d+/g);
+          if (rgbMatchCell && rgbMatchCell.length >= 3) {
+            cellColorCode = '#' + rgbMatchCell
+              .map(v => Number(v).toString(16).toLowerCase().padStart(2, '0'))
+              .join('');
+          }
+  
+          if (cellColors[cellKey]) {
+            if (cellColorCode !== cellColors[cellKey].toLowerCase()) {
+              cell.style.backgroundColor = cellColors[cellKey];
+              refreshedCells.push(cell);
+            }
+          } else if (cellColorCode !== '' && cellColorCode !== '#ffffff00' && cell.style.backgroundColor !== 'transparent') {
+            cell.style.backgroundColor = 'transparent';
+            refreshedCells.push(cell);
+          }
+          
+          const rgb = cell.style.backgroundColor.match(/\d+/g);
+          if (rgb && rgb.length >= 3) {
+            const brightness = 0.2126 * rgb[0] + 0.7152 * rgb[1] + 0.0722 * rgb[2];
+            cell.style.color = brightness > 128 ? '#000' : '#fff';
+          } else {
+            cell.style.color = '#000';
+          }
+        });
+      }
+  
+      const tables = document.querySelectorAll('table');
+      const newTables = doc.querySelectorAll('table');
+      newTables.forEach((table, i) => {
+        if (tables[i]) tables[i].replaceWith(table);
+      });
+      console.log(refreshedCells);
+      return refreshedCells;
+    } catch (e) {
+      console.error(e);
+    }
+  }
+  
+  async function fetchAreaInfo(refreshAll){
+    const refreshedCells = await refreshArenaInfo();
+    grid.style.gridTemplateRows = grid.style.gridTemplateRows.replace('35px','65px');
+    grid.style.gridTemplateColumns = grid.style.gridTemplateColumns.replace('35px','105px');
+    grid.parentNode.style.height = null;
+    grid.parentNode.style.padding = '20px 0';
+
+    let maxGridColumns;
+    if (settings.gridColumns >= 1) {
+      maxGridColumns = Math.trunc(settings.gridColumns);
+    } else if (vw < 768) {
+      maxGridColumns = 8;
+    }
+    const cols = Number(grid.style.gridTemplateColumns.match(/repeat\((\d+),/)[1]);
+    if (cols > maxGridColumns) {
+      grid.style.gridTemplateColumns = `repeat(${maxGridColumns}, 105px)`;
+    }
+
+    const cells = grid.querySelectorAll('.cell');
+    cells.forEach(elm => {
+      const hasInfo = elm.querySelector('p') !== null;
+      const isRefreshed = refreshedCells.includes(elm);
+      if(refreshAll || !hasInfo || isRefreshed) {
+        let row = elm.dataset.row,
+        col = elm.dataset.col;
+        const searchParams = new URLSearchParams(window.location.search);
+        searchParams.set('r', row);
+        searchParams.set('c', col);
+        const url = `https://donguri.5ch.net/teambattle?${searchParams.toString()}`;
+        fetch(url)
+          .then(res =>
+            res.ok?res.text():Promise.reject('res.ng')
+          )
+          .then(text => {
+            let doc = new DOMParser().parseFromString(text, 'text/html');
+            const h1Text = doc.querySelector('h1')?.textContent || '';
+            const divText = doc.querySelector('header > div')?.textContent || '';
+            if (h1Text !== 'どんぐりチーム戦い' && !divText.includes('どんぐりチーム戦い')) {
+              return Promise.reject(`title.ng [${row}][${col}]`);
+            }
+            let cond = doc.querySelector('small')?.textContent || '';
+            if(!cond) return Promise.reject(`cond.ng [${row}][${col}]`);
+            let holder = doc.querySelector('strong')?.textContent || '',
+            shortenCond = cond.replace('[エリート]','e').replace('から','-').replace(/(まで|\[|\]|\||\s)/g,'');
+            const p = [document.createElement('p'), document.createElement('p')];
+            p[0].textContent = shortenCond;
+            p[1].textContent = holder;
+            p[0].style.margin = '0';
+            p[1].style.margin = '0';
+            const cell = elm.cloneNode();
+            cell.append(p[0],p[1]);
+            cell.style.overflow = 'hidden';
+            cell.style.width = '100px';
+            cell.style.height = '60px';
+            cell.style.borderWidth = '3px';
+            const rgb = cell.style.backgroundColor.match(/\d+/g);
+            if(rgb && rgb.length >= 3){
+              const brightness = 0.2126 * rgb[0] + 0.7152 * rgb[1] + 0.0722 * rgb[2];
+              cell.style.color = brightness > 128 ? '#000' : '#fff';
+            } else {
+              cell.style.color = '#000';
+            }
+  
+            cell.addEventListener('click', ()=>{
+              handleCellClick (cell);
+            });
+            elm.replaceWith(cell);
+          })
+          .catch(e=>console.error(e))
+      }
+    })
+  }
+
+  const observer = new MutationObserver(() => {
+    if(grid) scaleContentsToFit(grid.parentNode, grid);
+  });
+  
+  if(grid) observer.observe(grid, { attributes: true, childList: true, subtree: true });
+
+  (()=>{
+    [...document.querySelectorAll('.cell')].forEach(elm => {
+      const cell = elm.cloneNode();
+      elm.replaceWith(cell);
+      cell.addEventListener('click', ()=>{
+        handleCellClick(cell);
+      })
+    })
+  })();
+
+  async function fetchArenaTable(row, col){
     const searchParams = new URLSearchParams(window.location.search);
     searchParams.set('r', row);
     searchParams.set('c', col);
@@ -950,7 +2109,7 @@ async function autoEquipAndChallenge (row, col, rank, mode = 'normal') {
     // choose preset
     if (list.length === 1 || settings.autoEquipRandomly) {
       const idx = (list.length === 1) ? 0 : Math.floor(Math.random() * list.length);
-      await setPresetItems(list[idx]);
+      await window.window.setPresetItems(list[idx]);
       await arenaChallenge(row, col);
       return;
     }
@@ -975,7 +2134,7 @@ async function autoEquipAndChallenge (row, col, rank, mode = 'normal') {
       li.textContent = name;
       li.addEventListener('click', async () => {
         autoEquipDialog.close();
-        await setPresetItems(name);
+        await window.window.setPresetItems(name);
         await arenaChallenge(row, col);
       });
       ul.append(li);
@@ -1034,8 +2193,6 @@ async function arenaChallenge (row, col){
       arenaResult.innerText = e;
       arenaResult.show();
     }
-  
-    return arenaResult;
   }
 
   let rangeAttackQueue = [];
@@ -1188,573 +2345,265 @@ async function arenaChallenge (row, col){
   
   
   // ===== Auto Join core =====
-  let autoJoinIntervalId;
+  let autoJoinIntervalId = null;
   let isAutoJoinRunning = false;
-  const sleep = s => new Promise(r=>setTimeout(r,s));
+
+  function stopAutoJoin() {
+    if (autoJoinIntervalId) {
+      clearInterval(autoJoinIntervalId);
+      autoJoinIntervalId = null;
+    }
+    isAutoJoinRunning = false;
+  }
+
+  function startAutoJoin() {
+    stopAutoJoin();
+    // start immediately and then every 60s
+    autoJoin().catch(console.error);
+    autoJoinIntervalId = setInterval(() => {
+      autoJoin().catch(console.error);
+    }, 60000);
+  }
+
+  function shuffle(arr) {
+    for (let i = arr.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [arr[i], arr[j]] = [arr[j], arr[i]];
+    }
+    return arr;
+  }
+
   async function autoJoin() {
     const dialog = document.querySelector('.auto-join');
+    if (!dialog || !dialog.open) {
+      stopAutoJoin();
+      return;
+    }
+    if (isAutoJoinRunning) return;
+    isAutoJoinRunning = true;
 
     const logArea = dialog.querySelector('.auto-join-log');
-    const headers = { 'Content-Type': 'application/x-www-form-urlencoded' };
-    let teamColor = settings.teamColor;
-    let teamName = settings.teamName;
-
-
-    function logMessage(region, message, next) {
-      const date = new Date();
-      const ymd = date.toLocaleDateString('sv-SE').slice(2);
-      const time = date.toLocaleTimeString('sv-SE');
-      const timestamp = document.createElement('div');
-      timestamp.innerText = `${ymd}\n${time}`;
-      timestamp.style.fontSize = '90%';
-      timestamp.style.color = '#666';
-      timestamp.style.borderRight = 'solid 0.5px #888';
-      timestamp.style.whiteSpace = 'nowrap';
-
-      const regionDiv = document.createElement('div');
-      const progress = `${currentPeriod}期 ${currentProgress}%`;
-      if (region) regionDiv.innerText = `${progress}\ntarget: ${region}\n${next}`;
-      else regionDiv.innerText = next;
-      regionDiv.style.fontSize = '90%';
-      regionDiv.style.color = '#444';
-      regionDiv.style.borderRight = 'dotted 0.5px #888';
-      regionDiv.style.whiteSpace = 'nowrap';
-
-      const messageDiv = document.createElement('div');
-      messageDiv.textContent = message;
-
+    const log = (msg) => {
       const div = document.createElement('div');
-      div.style.display = 'flex';
-      div.style.gap = '4px';
-      div.style.alignItems = 'center';
-      div.style.marginBottom = '-0.5px';
-      div.style.marginTop = '-0.5px';
-      div.style.border = 'solid 0.5px #888';
+      div.style.borderBottom = 'solid 0.5px #888';
+      div.style.padding = '2px';
+      const t = new Date().toLocaleTimeString('sv-SE');
+      div.textContent = `[${t}] ${msg}`;
+      if (logArea) logArea.prepend(div);
+    };
 
-      div.append(timestamp, regionDiv, messageDiv);
-      logArea.prepend(div);
-    }
+    try {
+      // 進捗表示も更新（失敗しても続行）
+      try { await drawProgressBar(); } catch (e) {}
 
-    const messageTypes = {
-      breaktime: [
-        'チームに参加または離脱してから間もないため、次のバトルが始まるまでお待ちください。',
-        'もう一度バトルに参加する前に、待たなければなりません。',
-        'ng: ちょっとゆっくり'
-      ],
-      toofast: [
-        'ng<>too fast'
-      ],
-      retry: [
-        'あなたのチームは動きを使い果たしました。しばらくお待ちください。'
-      ],
-      reset: [
-        'このタイルは攻撃できません。範囲外です。'
-      ],
-      quit: [
-        '最初にチームに参加する必要があります。',
-        'どんぐりが見つかりませんでした。',
-        'あなたのどんぐりが理解できませんでした。',
-        'レベルが低すぎます。'
-      ],
-      guardError: [
-        '[警備員]だけ'
-      ],
-      equipError: [
-        '武器と防具を装備しなければなりません。',
-        '装備している防具と武器が力不足です。',
-        '装備している防具と武器が強すぎます',
-        '装備しているものは改造が多すぎます。改造の少ない他のものをお試しください',
-        '参加するには、装備中の武器と防具のアイテムID'
-      ],
-      nonAdjacent: [
-        'このタイルは攻撃できません。あなたのチームが首都を持つまで、どの首都にも隣接するタイルを主張することはできません。',
-        'あなたのチームは首都を持っていないため、他のチームの首都に攻撃できません。'
-      ],
-      teamAdjacent: [
-        'このタイルは攻撃できません。あなたのチームの制御領土に隣接していなければなりません。',
-        'このタイルは攻撃できません。首都を奪取するには、隣接タイルを少なくとも3つ支配している必要があります。',
-        'このタイルは攻撃できません。首都を奪取するには、隣接タイルを少なくとも2つ支配している必要があります。',
-        'このタイルは攻撃できません。首都を奪取するには、隣接タイルを少なくとも1つ支配している必要があります。',
-        'このタイルは攻撃できません。自分の首都は攻撃できません。',
-        'この首都は攻撃できません。相手の総タイル数の少なくとも'
-      ],
-      capitalAdjacent: [
-        'このタイルは攻撃できません。混雑したマップでは、初期主張は正確に1つの首都に隣接していなければなりません。'
-      ],
-      mapEdge: [
-        'このタイルは攻撃できません。混雑したマップでは、初期主張はマップの端でなければなりません。'
-      ]
-    }
+      const regions = await getRegionsForAutoJoin();
+      if (!regions) { log('地域取得に失敗'); return; }
 
-    function getMessageType (text) {
-      const result = Object.keys(messageTypes)
-        .find(key => messageTypes[key]
-          .some(v => text.includes(v))
-        )
-      return result;
-    }
-
-
-    let nextProgress;
-    async function attackRegion () {
-      await drawProgressBar();
-      if (isAutoJoinRunning || Math.abs(nextProgress - currentProgress) >= 3) {
-        return;
+      const priority = ['teamAdjacent','capitalAdjacent','mapEdge','nonAdjacent'];
+      let pool = [];
+      for (const k of priority) {
+        if (regions[k]?.length) { pool = regions[k]; break; }
       }
+      if (!pool.length) { log('攻撃候補がありません'); return; }
 
-    if (location.href.includes('/teambattle?m=rb')) {
+      // 1回のtickで最大3回試す（too fast対策）
+      const maxTry = 3;
+      for (let i=0; i<Math.min(maxTry, pool.length); i++) {
+        const [row, col] = pool[i];
+        // 必要ランク取得→自動装備→挑戦
+        let rank = '';
         try {
-          const res = await fetch(`/teambattle?m=rb&t=${Date.now()}`, { cache: 'no-store' });
-          if (res.ok) {
-            const text = await res.text();
-            const doc = new DOMParser().parseFromString(text, 'text/html');
-            const target = Array.from(doc.querySelectorAll('header span')).find(s => s.textContent.includes('チーム:'));
-            if (target) {
-              const raw = target.textContent;
-              if (raw.includes('レッド')) {
-                teamName = 'レッド';
-                teamColor = 'd32f2f';
-              } else if (raw.includes('ブルー')) {
-                teamName = 'ブルー';
-                teamColor = '1976d2';
-              }
-            }
-          }
-        } catch (e) { console.error(e); }
-      }
-
-      let regions = await getRegions();
-      const excludeSet = new Set();
-
-      let cellType;
-      if (regions.nonAdjacent.length > 0) {
-        cellType = 'nonAdjacent';
-      } else if (regions.teamAdjacent.length > 0) {
-        cellType = 'teamAdjacent';
-      } else if (regions.capitalAdjacent.length > 0) {
-        cellType = 'capitalAdjacent';
-      } else {
-        cellType = 'mapEdge';
-      }
-
-      while(dialog.open) {
-        let success = false;
-        isAutoJoinRunning = true;
-
-        regions[cellType] = regions[cellType]
-          .filter(e => !excludeSet.has(e.join(',')));
-        for (const region of regions[cellType]) {
-          let errorCount = 0;
-          let next;
-          try {
-            const [cellRank, equipChangeStat] = await equipChange(region);
-            if (equipChangeStat === 'noEquip') {
-              excludeSet.add(region.join(','));
-              continue;
-            }
-
-            const [ text, lastLine ] = await challenge(region);
-            const messageType = getMessageType(lastLine);
-            let message = lastLine;
-            let processType;
-            let sleepTime = 2;
-
-            if (text.startsWith('アリーナチャレンジ開始')||text.startsWith('リーダーになった')) {
-              success = true;
-              message = '[成功] ' + lastLine;
-              processType = 'return';
-            } else if (messageType === 'breaktime') {
-              success = true;
-              message = lastLine;
-              processType = 'return';
-            } else if (messageType === 'toofast') {
-              sleepTime = 3;
-              processType = 'continue';
-            } else if (messageType === 'retry') {
-              sleepTime = 20;
-              processType = 'continue';
-            } else if (messageType === 'guardError') {
-              message = lastLine;
-              processType = 'continue';
-            } else if (messageType === 'equipError') {
-              message += ` (${cellRank}, ${currentEquipName})`;
-              processType = 'continue';
-            } else if (lastLine.length > 100) {
-              message = 'どんぐりシステム';
-              processType = 'continue';
-            } else if (messageType === 'quit') {
-              message = '[停止] ' + lastLine;
-              processType = 'return';
-              clearInterval(autoJoinIntervalId);
-            } else if (messageType === 'reset') {
-              processType = 'break';
-            } else if (messageType in regions) {
-              excludeSet.add(region.join(','));
-              if (messageType === cellType) {
-                processType = 'continue';
-              } else if (messageType === 'nonAdjacent') {
-                cellType = 'nonAdjacent';
-                processType = 'break';
-              } else if (messageType === 'teamAdjacent') {
-                cellType = 'teamAdjacent';
-                processType = 'break';
-              } else if (messageType === 'capitalAdjacent') {
-                cellType = 'capitalAdjacent';
-                processType = 'break';
-              } else if (messageType === 'mapEdge') {
-                cellType = 'mapEdge';
-                processType = 'break';
-              }
-            }
-
-            if (success) {
-              if (currentProgress < 16) {
-                nextProgress = 26;
-               } else if (currentProgress < 33) {
-                nextProgress = 43;
-               } else if (currentProgress < 50) {
-                nextProgress = 60;
-               } else if (currentProgress < 66) {
-                nextProgress = 76;
-               } else if (currentProgress < 83) {
-                nextProgress = 93;
-               } else {
-                nextProgress = 10;
-               }
-              next = `→ ${nextProgress}±2%`;
-              isAutoJoinRunning = false;
-            } else if (processType === 'return') {
-              next = '';
-              isAutoJoinRunning = false;
-            } else {
-              next = `→ ${sleepTime}s`;
-            }
-
-            logMessage(region, message, next);
-            await sleep(sleepTime * 1000);
-
-            if (processType === 'break') {
-              regions = await getRegions();
-              break;
-            } else if (processType === 'return') {
-              return;
-            }
-          } catch (e){
-            let message = '';
-            switch (e) {
-              case 403:
-                message = `[403] Forbidden`;
-                break;
-              case 404:
-                message = `[404] Not Found`;
-                break;
-              case 500:
-                message = `[500] Internal Server Error`;
-                break;
-              case 502:
-                message = `[502] Bad Gateway`;
-                break;
-              default:
-                message = e;
-                break;
-            }
-            if (e.message === '再ログインしてください') {
-              logMessage(region, '[停止] どんぐりが見つかりませんでした', '');
-              isAutoJoinRunning = false;
-              clearInterval(autoJoinIntervalId);
-              return;
-            } else if (e === 403) {
-              logMessage(region, message, '');
-              isAutoJoinRunning = false;
-              clearInterval(autoJoinIntervalId);
-              return;
-            } else if ([404,500,502].includes(e)) {
-              errorCount++;
-              let sleepTime = 20 * errorCount;
-              if(sleepTime > 600) sleepTime = 600;
-              logMessage(region, message, `→ ${sleepTime}s`);
-              await sleep(sleepTime * 1000);
-            } else {
-              let sleepTime = 20;
-              logMessage(region, e, `→ ${sleepTime}s`);
-              await sleep(sleepTime * 1000);
-            }
-          }
+          rank = await fetchRequiredRank(row, col);
+        } catch (e) {
+          log(`(${row},${col}) ランク取得失敗: ${e}`);
+          continue;
         }
-        if (!success && regions[cellType].length === 0) {
-              if (currentProgress < 16) {
-                nextProgress = 26;
-               } else if (currentProgress < 33) {
-                nextProgress = 43;
-               } else if (currentProgress < 50) {
-                nextProgress = 60;
-               } else if (currentProgress < 66) {
-                nextProgress = 76;
-               } else if (currentProgress < 83) {
-                nextProgress = 93;
-               } else {
-                nextProgress = 10;
-               }
-          const next = `→ ${nextProgress}±2%`;
-          isAutoJoinRunning = false;
-          logMessage(null, '攻撃可能なタイルが見つかりませんでした。', next);
-          return;
+        try {
+          await autoEquipAndChallenge(row, col, rank, 'autojoin');
+          log(`(${row},${col}) 参戦`);
+          break;
+        } catch (e) {
+          log(`(${row},${col}) 失敗: ${e}`);
+          // too fast等は次tickへ
         }
       }
+    } finally {
+      isAutoJoinRunning = false;
+    }
+  }
+
+  async function fetchRequiredRank(row, col) {
+    const url = `https://donguri.5ch.net/teambattle?r=${row}&c=${col}&` + MODE;
+    const res = await fetch(url, { cache: 'no-store' });
+    if (!res.ok) throw res.status;
+    const text = await res.text();
+    const doc = new DOMParser().parseFromString(text, 'text/html');
+    const table = doc.querySelector('table');
+    if (!table) throw 'table.ng';
+    const equipCond = table.querySelector('td small')?.textContent || '';
+    if (!equipCond) throw 'rank.ng';
+    return equipCond;
+  }
+
+  async function getRegionsForAutoJoin() {
+    const res = await fetch('', { cache: 'no-store' });
+    if (!res.ok) throw `[${res.status}] /teambattle`;
+    const text = await res.text();
+    const doc = new DOMParser().parseFromString(text, 'text/html');
+
+    // scriptから cellColors / capitalMap / GRID_SIZE を取得（新マップ/旧マップ混在対応）
+    const scriptContent = doc.querySelector('.grid > script, #gridWrap + script, script:not([src])')?.textContent || '';
+
+    let cellColors = {};
+    const cellColorsMatch = scriptContent.match(/const cellColors = ({.+?});/s) || scriptContent.match(/const cellColors = ({.+?})/s);
+    if (cellColorsMatch) {
+      const validJsonStr = cellColorsMatch[1].replace(/'/g, '"').replace(/,\s*}/, '}');
+      try { cellColors = JSON.parse(validJsonStr); } catch(e) { cellColors = {}; }
     }
 
-    async function getRegions () {
+    let capitalMap = [];
+    const capList = scriptContent.match(/const capitalList = (\[.*?\]);/s);
+    const capMap = scriptContent.match(/const capitalMap = (\[.*?\]);/s);
+    if (capList) {
       try {
-        const res = await fetch('');
-        if (!res.ok) throw new Error(`[${res.status}] /teambattle`);
-        const text = await res.text();
-        const doc = new DOMParser().parseFromString(text, 'text/html');
-        const headerText = doc?.querySelector('header')?.textContent || '';
-        if (!headerText.includes('どんぐりチーム戦い')) throw new Error('title.ng info');
-
-        const scriptContent = doc.querySelector('.grid > script, #gridWrap + script')?.textContent || '';
-
-        let cellColors, capitalMap, rows, cols;
-
-        if (location.href.includes('m=rb')) {
-          //rb
-          const cellColorsMatch = scriptContent.match(/const cellColors = ({.+?});/s);
-          const validJsonStr = cellColorsMatch[1].replace(/'/g, '"').replace(/,\s*}/, '}');
-          cellColors = JSON.parse(validJsonStr);
-
-          const capitalListMatch = scriptContent.match(/const capitalList = (\[.*?\]);/s);
-          capitalMap = JSON.parse(capitalListMatch[1]);
-
-          const gridSizeMatch = scriptContent.match(/const GRID_SIZE = (\d+);/);
-          rows = cols = Number(gridSizeMatch[1]);
-        } else {
-          //hc/l
-          const cellColorsString = scriptContent.match(/const cellColors = ({.+?})/s)[1];
-          const validJsonStr = cellColorsString.replace(/'/g, '"').replace(/,\s*}/, '}');
-          cellColors = JSON.parse(validJsonStr);
-          const capitalMapString = scriptContent.match(/const capitalMap = (\[.*?\]);/s)[1];
-          capitalMap = JSON.parse(capitalMapString);
-
-          const grid = doc.querySelector('.grid');
-          if (!grid) return;
-          rows = Number(grid.style.gridTemplateRows.match(/repeat\((\d+), 35px\)/)[1]);
-          cols = Number(grid.style.gridTemplateColumns.match(/repeat\((\d+), 35px\)/)[1]);
-        }
-
-        const cells = [];
-        for (let r = 0; r < rows; r++) {
-          for (let c = 0; c < cols; c++) {
-            cells.push([r, c]);
-          }
-        }
-
-        const directions = [
-          [-1, 0],
-          [1, 0],
-          [0, -1],
-          [0, 1]
-        ];
-
-        const adjacentSet = new Set();
-        for (const [cr, cc] of capitalMap) {
-          for (const [dr, dc] of directions) {
-            const nr = cr + dr;
-            const nc = cc + dc;
-            if (nr >= 0 && nr < rows && nc >= 0 && nc < cols) {
-              adjacentSet.add(`${nr}-${nc}`);
-            }
-          }
-        }
-
-        const capitalSet = new Set(capitalMap.map(([r, c]) => `${r}-${c}`));
-
-        const nonAdjacentCells = cells.filter(([r, c]) => {
-          const key = `${r}-${c}`;
-          return !capitalSet.has(key) && !adjacentSet.has(key);
-        });
-
-        const capitalAdjacentCells = cells.filter(([r, c]) => {
-          const key = `${r}-${c}`;
-          return adjacentSet.has(key);
-        });
-
-        const teamColorSet = new Set();
-        for(const [key, value] of Object.entries(cellColors)) {
-          if (teamColor === value.replace('#','')) {
-            teamColorSet.add(key);
-          }
-        }
-
-        const teamAdjacentSet = new Set();
-        for (const key of [...teamColorSet]) {
-          const [tr, tc] = key.split('-');
-          for (const [dr, dc] of directions) {
-            const nr = Number(tr) + dr;
-            const nc = Number(tc) + dc;
-            if (nr >= 0 && nr < rows && nc >= 0 && nc < cols) {
-              teamAdjacentSet.add(`${nr}-${nc}`);
-            }
-          }
-        }
-
-        const teamAdjacentCells = cells.filter(([r, c]) => {
-          const key = `${r}-${c}`;
-          return teamColorSet.has(key) || teamAdjacentSet.has(key);
-        })
-
-        const mapEdgeSet = new Set();
-        for (let i=0; i<rows; i++) {
-          mapEdgeSet.add(`${i}-0`);
-          mapEdgeSet.add(`${i}-${cols-1}`);
-        }
-        for (let i=0; i<cols; i++) {
-          mapEdgeSet.add(`0-${i}`);
-          mapEdgeSet.add(`${rows-1}-${i}`);
-        }
-
-        const mapEdgeCells = cells.filter(([r, c]) => {
-          const key = `${r}-${c}`;
-          return mapEdgeSet.has(key) && !capitalSet.has(key);
-        })
-
-        function shuffle(arr) {
-          for (let i = arr.length - 1; i > 0; i--) {
-            const j = Math.floor(Math.random() * (i + 1));
-            [arr[i], arr[j]] = [arr[j], arr[i]];
-          }
-          return arr;
-        }
-
-        const regions = {
-          nonAdjacent: shuffle(nonAdjacentCells),
-          capitalAdjacent: shuffle(capitalAdjacentCells),
-          teamAdjacent: shuffle(teamAdjacentCells),
-          mapEdge: shuffle(mapEdgeCells)
-        };
-        return regions;
-      } catch (e) {
-        console.error(e);
-        return;
-      }
+        const s = capList[1].replace(/'/g, '"').replace(/,\s*]/g, ']');
+        capitalMap = JSON.parse(s);
+      } catch (e) { capitalMap = []; }
     }
-
-    async function challenge (region) {
-      const [ row, col ] = region;
-      const body = `row=${row}&col=${col}`;
+    else if (capMap) {
       try {
-        const res = await fetch('/teamchallenge?'+MODE, {
-          method: 'POST',
-          body: body,
-          headers: headers
-        })
-
-        if(!res.ok) throw new Error(res.status);
-        const text = await res.text();
-        const lastLine = text.trim().split('\n').pop();
-        return [ text, lastLine ];
-      } catch (e) {
-        console.error(e);
-        throw e;
-      }
-
+        const s = capMap[1].replace(/'/g, '"').replace(/,\s*]/g, ']');
+        capitalMap = JSON.parse(s);
+      } catch (e) { capitalMap = []; }
     }
-    async function equipChange (region) {
-      const [ row, col ] = region;
-      const url = `https://donguri.5ch.net/teambattle?r=${row}&c=${col}&`+MODE;
-      try {
-        const res = await fetch(url);
-        if(!res.ok) throw new Error(`[${res.status}] /teambattle?r=${row}&c=${col}`);
-        const text = await res.text();
-        const doc = new DOMParser().parseFromString(text,'text/html');
-        const headerText = doc?.querySelector('header')?.textContent || '';
-        if(!headerText.includes('どんぐりチーム戦い')) return Promise.reject(`title.ng`);
-        const table = doc.querySelector('table');
-        if(!table) throw new Error('table.ng');
-        const equipCond = table.querySelector('td small').textContent;
-        const rank = equipCond
-          .replace('エリート','e')
-          .replace(/.+から|\w+-|まで|だけ|警備員|警|\s|\[|\]|\|/g,'');
-        const autoEquipItems = JSON.parse(localStorage.getItem('autoEquipItems')) || {};
-        const autoEquipItemsAutojoin = JSON.parse(localStorage.getItem('autoEquipItemsAutojoin')) || {};
 
-        if (autoEquipItemsAutojoin[rank]?.length > 0) {
-          const index = Math.floor(Math.random() * autoEquipItemsAutojoin[rank].length);
-          await setPresetItems(autoEquipItemsAutojoin[rank][index]);
-          return [rank, 'success'];
-        } else if (autoEquipItems[rank]?.length > 0) {
-          const index = Math.floor(Math.random() * autoEquipItems[rank].length);
-          await setPresetItems(autoEquipItems[rank][index]);
-          return [rank, 'success'];
-        } else {
-          return [rank, 'noEquip'];
-        }
-      } catch (e) {
-        console.error(e);
-        throw e;
+    let rows = 0, cols = 0;
+    const gridSizeMatch = scriptContent.match(/const GRID_SIZE = (\d+);/);
+    if (gridSizeMatch) {
+      rows = cols = Number(gridSizeMatch[1]);
+    } else {
+      const grid = doc.querySelector('.grid');
+      if (!grid) return null;
+      const r = grid.style.gridTemplateRows.match(/repeat\((\d+),/);
+      const c = grid.style.gridTemplateColumns.match(/repeat\((\d+),/);
+      rows = r ? Number(r[1]) : 6;
+      cols = c ? Number(c[1]) : rows;
+    }
+
+    const cells = [];
+    for (let r=0; r<rows; r++) for (let c=0; c<cols; c++) cells.push([r,c]);
+
+    const directions = [[-1,0],[1,0],[0,-1],[0,1]];
+    const adjacentSet = new Set();
+    for (const [cr, cc] of capitalMap) {
+      for (const [dr, dc] of directions) {
+        const nr = cr + dr, nc = cc + dc;
+        if (nr>=0 && nr<rows && nc>=0 && nc<cols) adjacentSet.add(`${nr}-${nc}`);
       }
     }
+    const capitalSet = new Set(capitalMap.map(([r,c])=>`${r}-${c}`));
 
-    if (!isAutoJoinRunning) {
-      attackRegion();
+    const nonAdjacent = cells.filter(([r,c])=>{
+      const key=`${r}-${c}`;
+      return !capitalSet.has(key) && !adjacentSet.has(key);
+    });
+    const capitalAdjacent = cells.filter(([r,c])=>adjacentSet.has(`${r}-${c}`));
+
+    // team adjacent
+    const teamColor = (settings.teamColor || '').replace('#','');
+    const teamColorSet = new Set();
+    if (teamColor) {
+      for (const [key,val] of Object.entries(cellColors)) {
+        if (val.replace('#','') === teamColor) teamColorSet.add(key);
+      }
     }
-    autoJoinIntervalId = setInterval(attackRegion,60000);
-  };
+    const teamAdjSet = new Set();
+    for (const key of teamColorSet) {
+      const [tr, tc] = key.split('-').map(Number);
+      for (const [dr,dc] of directions) {
+        const nr=tr+dr, nc=tc+dc;
+        if (nr>=0 && nr<rows && nc>=0 && nc<cols) teamAdjSet.add(`${nr}-${nc}`);
+      }
+    }
+    const teamAdjacent = cells.filter(([r,c])=>{
+      const key=`${r}-${c}`;
+      return teamColorSet.has(key) || teamAdjSet.has(key);
+    });
 
-  
+    // map edge
+    const mapEdgeSet = new Set();
+    for (let i=0;i<rows;i++){ mapEdgeSet.add(`${i}-0`); mapEdgeSet.add(`${i}-${cols-1}`); }
+    for (let i=0;i<cols;i++){ mapEdgeSet.add(`0-${i}`); mapEdgeSet.add(`${rows-1}-${i}`); }
+    const mapEdge = cells.filter(([r,c])=>{
+      const key=`${r}-${c}`;
+      return mapEdgeSet.has(key) && !capitalSet.has(key);
+    });
+
+    return {
+      nonAdjacent: shuffle(nonAdjacent),
+      capitalAdjacent: shuffle(capitalAdjacent),
+      teamAdjacent: shuffle(teamAdjacent),
+      mapEdge: shuffle(mapEdge)
+    };
+  }
 
 function drawProgressBar(){
-    try {
-      const res = await fetch('https://donguri.5ch.net/');
-      if (!res.ok) throw new Error(res.status);
-      const text = await res.text();
+    fetch('https://donguri.5ch.net/')
+    .then(res => res.ok ? res.text() : Promise.reject('res.ng'))
+    .then(text => {
       const doc = new DOMParser().parseFromString(text, 'text/html');
-      const container = doc.querySelector('div.stat-block:nth-child(2)>div:nth-child(5)').cloneNode(true);
-      currentPeriod = Number(container.firstChild.textContent.match(/\d+/)[0]);
-      currentProgress = parseInt(container.lastElementChild.textContent);
+      const statBlockDiv = doc.querySelector('div.stat-block:nth-child(2)>div:nth-child(5)');
+      if(!statBlockDiv) return;
+      const container = statBlockDiv.cloneNode(true);
+      const progressBar = container.lastElementChild;
+      if(!progressBar) return;
+      const barBody = progressBar.lastElementChild;
+      const percentage = parseInt(barBody.textContent);
       let str,min,totalSec,sec,margin;
-
-      if (currentProgress === 0 || currentProgress === 50 || (location.href.includes('/teambattle?m=rb') && (currentProgress === 16 || currentProgress === 33 || currentProgress === 66 || currentProgress === 83))) {
-        str = '（マップ更新）';
+      if (percentage === 0 || percentage === 50) {
+        str = '（マップ更新時）';
       } else {
-        if (currentProgress === 100) {
+        if (percentage === 100) {
           min = 0;
           sec = 20;
           margin = 10;
         } else {
-          if (location.href.includes('/teambattle?m=rb')) {
-             if (currentProgress <= 16) {
-               totalSec = (16 - currentProgress) * 600 / 16.6;
-             } else if (currentProgress <= 33) {
-               totalSec = (33 - currentProgress) * 600 / 16.6;
-             } else if (currentProgress <= 50) {
-               totalSec = (50 - currentProgress) * 600 / 16.6;
-             } else if (currentProgress <= 66) {
-               totalSec = (66 - currentProgress) * 600 / 16.6;
-             } else if (currentProgress <= 83) {
-               totalSec = (83 - currentProgress) * 600 / 16.6;
-             } else if (currentProgress <= 100) {
-               totalSec = (100 - currentProgress) * 600 / 16.6;
-             }
-          } else {
-          totalSec = (currentProgress < 50) ? (50 - currentProgress) * 36 : (100 - currentProgress) * 36 + 10;
-          }
-          totalSec = Math.floor(totalSec);
+          totalSec = (percentage < 50) ? (50 - percentage) * 36 : (100 - percentage) * 36 + 10;
           min = Math.trunc(totalSec / 60);
           sec = totalSec % 60;
           margin = 20;
         }
-        str = '（残り' + min + '分' + sec + '秒 \xb1' + margin + '秒）';
+        str = '（マップ更新まで' + min + '分' + sec + '秒 \xb1' + margin + '秒）';
       }
-      progressBarBody.textContent = currentProgress + '%';
-      progressBarBody.style.width = currentProgress + '%';
-      progressBarInfo.textContent = `${MODENAME}第${currentPeriod}期${str}`;
+      progressBar.before(str, document.createElement('br'));
+      progressBar.style.display = 'inline-block';
+      progressBar.style.width = '400px';
+      progressBar.style.maxWidth = '100vw';
+      progressBar.style.height = '20px';
+      progressBar.style.background = '#ccc';
+      progressBar.style.borderRadius = '8px';
+      progressBar.style.fontSize = '16px';
+      progressBar.style.overflow = 'hidden';
+      progressBar.style.marginTop = '5px';
+      barBody.style.height = '100%';
+      barBody.style.lineHeight = 'normal';
+      barBody.style.background = '#428bca';
+      barBody.style.textAlign = 'right';
+      barBody.style.paddingRight = '5px';
+      barBody.style.boxSizing = 'border-box';
+      barBody.style.color = 'white';
+      barBody.style.width = barBody.style.width;
+      progressBarContainer.replaceChildren(container);
 
       const statBlock = doc.querySelector('.stat-block');
-      wood = statBlock.textContent.match(/木材の数: (\d+)/)[1];
-      steel = statBlock.textContent.match(/鉄の数: (\d+)/)[1];
-    } catch (e) {
-      console.error(e+' drawProgressBar()')
-    }
+      if(statBlock) {
+        const woodMatch = statBlock.textContent.match(/木材の数: (\d+)/);
+        const steelMatch = statBlock.textContent.match(/鉄の数: (\d+)/);
+        if(woodMatch) wood = woodMatch[1];
+        if(steelMatch) steel = steelMatch[1];
+      }
+    })
+    .catch(e => console.error(e))
   }
 
   drawProgressBar();
