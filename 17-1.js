@@ -361,7 +361,7 @@ let MODENAME;
         ok.addEventListener('click', ()=>{
           autoJoinSettingsDialog.close();
           if (!autoJoinDialog.open) autoJoinDialog.showModal();
-          startAutoJoin();
+          startAutoJoin(true);
         });
 
         div.append(p, ok);
@@ -410,16 +410,16 @@ let MODENAME;
 
       autoJoinButton.addEventListener('click', ()=>{
         autoJoinDialog.showModal();
-        // Start immediately if settings are already present
-        setTimeout(() => { if (settings.teamColor) { try { startAutoJoin(); } catch(e){ console.error(e);} } }, 0);
+        // If team color isn't configured yet, open settings first and do not start.
         if (!settings.teamColor) {
           autoJoinSettingsDialog.showModal();
-        } else {
-          startAutoJoin();
+          return;
         }
+        // Start and try the first attack immediately.
+        startAutoJoin(true);
       });
 
-      const closeSlideMenuButton = subButton.cloneNode();
+const closeSlideMenuButton = subButton.cloneNode();
       closeSlideMenuButton.textContent = 'やめる';
       closeSlideMenuButton.style.background = '#888';
       closeSlideMenuButton.style.color = '#fff';
@@ -2595,7 +2595,7 @@ async function arenaChallenge (row, col){
   let autoJoinIntervalId;
   let isAutoJoinRunning = false;
   const sleep = s => new Promise(r=>setTimeout(r,s));
-  async function autoJoin() {
+  async function autoJoin({ immediate=false } = {}) {
     const dialog = document.querySelector('.auto-join');
 
     const logArea = dialog.querySelector('.auto-join-log');
@@ -2712,7 +2712,7 @@ async function arenaChallenge (row, col){
     // 現在進行度から次の目標進行度を初期化（未初期化だと常時発射してしまう）
     let nextProgress = null;
     let firstAutoJoinRun = true;
-async function attackRegion () {
+async function attackRegion(force=false) {
       await drawProgressBar();
       if (isAutoJoinRunning) return;
       // nextProgress未設定/NaN対策
@@ -3100,9 +3100,10 @@ if (location.href.includes('/teambattle?m=rb')) {
     }
 
     if (!isAutoJoinRunning) {
-      attackRegion();
+      // First run: try immediately if requested
+      attackRegion(!!immediate);
     }
-    autoJoinIntervalId = setInterval(attackRegion,60000);
+    autoJoinIntervalId = setInterval(()=>attackRegion(false), 60000);
   };
 
   
@@ -3176,13 +3177,30 @@ async function drawProgressBar(){
     }
   }
 
-  function startAutoJoin() {
-    // avoid duplicate runs
-    stopAutoJoin();
+  function startAutoJoin(immediate=true) {
+    // Stop any existing auto-join loop first
+    if (autoJoinIntervalId) {
+      clearInterval(autoJoinIntervalId);
+      autoJoinIntervalId = null;
+    }
+    isAutoJoinRunning = false;
+
+    // Stop progress bar updates during auto join (avoid overlap)
     if (progressBarIntervalId) {
       clearInterval(progressBarIntervalId);
       progressBarIntervalId = null;
     }
+
+    // Kick off auto join loop
+    autoJoin({ immediate });
+  }
+
+    // Reset flags so the first attack can run
+    isAutoJoinRunning = false;
+
+    // Kick off auto join loop
+    autoJoin({ immediate });
+  }
     // kick once immediately + schedule inside autoJoin()
     autoJoin();
   }
