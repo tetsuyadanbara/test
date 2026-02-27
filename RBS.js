@@ -8,8 +8,7 @@
 // ==/UserScript==
 
 
-((()=>{
-  const MODE = location.search.replace(/^\?/, '');
+(()=>{
   if(location.href === 'https://donguri.5ch.net/bag') {
     function saveCurrentEquip(url, index) {
       let currentEquip = JSON.parse(localStorage.getItem('current_equip')) || [];
@@ -29,6 +28,11 @@
     })
     return;
   }
+
+  // --- mode query (e.g., m=rb / m=hc / m=l) ---
+  const MODE = location.search.replace(/^\?/, '');
+  // expose for any dynamically-evaluated code
+  globalThis.MODE = MODE;
 
   const vw = Math.min(document.documentElement.clientWidth, window.innerWidth || 0);
   const vh = Math.min(document.documentElement.clientHeight, window.innerHeight || 0);
@@ -1744,11 +1748,6 @@
       }
   
       const currentCells = grid.querySelectorAll('.cell');
-      // ensure click handlers exist (map preserved)
-      currentCells.forEach(cell => {
-        cell.style.pointerEvents = 'auto';
-        cell.addEventListener('click', (e) => { e.stopPropagation(); handleCellClick(cell); });
-      });
       
       let scriptContent = '';
       for (let s of doc.querySelectorAll('script')) {
@@ -1790,12 +1789,7 @@
             cell.style.border = '1px solid #ccc';
             cell.style.cursor = 'pointer';
             cell.style.transition = 'background-color 0.3s';
-
-            cell.addEventListener('click', (e) => {
-              e.stopPropagation();
-              handleCellClick(cell);
-            });
-
+  
             const cellKey = `${i}-${j}`;
             if (cellColors[cellKey]) {
               cell.style.backgroundColor = cellColors[cellKey];
@@ -2146,6 +2140,20 @@ const observer = new MutationObserver(() => {
       fetchArenaTable(row, col);
     }
   }
+  // --- robust click handling (event delegation) ---
+  // Some map renderers replace/clone cells; delegation keeps clicks working.
+  if (!window.__aat_delegated_click__) {
+    window.__aat_delegated_click__ = true;
+    document.addEventListener('click', (ev) => {
+      const cell = ev.target && ev.target.closest ? ev.target.closest('.cell') : null;
+      if (!cell) return;
+      if (cell.dataset && cell.dataset.row !== undefined && cell.dataset.col !== undefined) {
+        // If the cell has its own click handler, let it run too; we only ensure at least one path works.
+        try { handleCellClick(cell); } catch (e) { console.error(e); }
+      }
+    }, true);
+  }
+
 
   const autoEquipDialog = document.createElement('dialog');
   autoEquipDialog.style.padding = '0';
