@@ -30,8 +30,10 @@
   }
 
   // 現在のモードクエリ（m=hc / m=l / m=rb）
-  const MODE = location.search.slice(1);
-  let MODENAME;
+  const _mParam = new URLSearchParams(location.search).get('m') || 'rb';
+  const MODE = `m=${_mParam}`;
+  const BASE_BATTLE_URL = `https://donguri.5ch.net/teambattle?${MODE}`;
+let MODENAME;
   if (MODE === 'm=hc') MODENAME = '［ハード］';
   else if (MODE === 'm=l') MODENAME = '［ラダー］';
   else if (MODE === 'm=rb') MODENAME = '［赤vs青］';
@@ -1749,7 +1751,7 @@
     const refreshedCells = [];
   
     try {
-      const res = await fetch('');
+      const res = await fetch(`${BASE_BATTLE_URL}&t=${Date.now()}`, { cache: 'no-store' });
       if (!res.ok) throw new Error('res.ng');
   
       const text = await res.text();
