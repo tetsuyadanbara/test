@@ -34,6 +34,90 @@
   // expose for any dynamically-evaluated code
   window.MODE = MODE;
 
+  // --- Canvas map click layer (ResBlue1.3) ---
+  // ResBlue1.3 uses <canvas id="gridBase"> for the map, so there are no clickable ".cell" elements.
+  // We add an invisible grid layer with ".cell" divs on top of the canvas so existing handlers work.
+  function initCanvasClickLayer() {
+    const gridWrap = document.getElementById('gridWrap');
+    const gridBase = document.getElementById('gridBase'); // canvas (ResBlue1.3)
+    if (!gridWrap || !gridBase || gridWrap.querySelector('.grid')) return; // normal HTML grid or missing canvas
+
+    // Detect GRID_SIZE from inline scripts
+    const scriptsText = [...document.querySelectorAll('script:not([src])')].map(s => s.textContent || '').join('\n');
+    const m = scriptsText.match(/const\s+GRID_SIZE\s*=\s*(\d+)\s*;/);
+    const size = m ? Number(m[1]) : 6;
+
+    let layer = document.getElementById('aat_tool_layer');
+    if (!layer) {
+      layer = document.createElement('div');
+      layer.id = 'aat_tool_layer';
+      gridWrap.style.position = gridWrap.style.position || 'relative';
+      layer.style.position = 'absolute';
+      layer.style.inset = '0';
+      layer.style.zIndex = '1000';
+      layer.style.display = 'grid';
+      layer.style.pointerEvents = 'auto';
+      // allow the canvas to keep rendering behind
+      layer.style.background = 'transparent';
+      gridWrap.appendChild(layer);
+    }
+
+    // Match the visible canvas size
+    const rect = gridBase.getBoundingClientRect();
+    // Use fixed pixel sizing so coordinates stay aligned even if the page scales
+    layer.style.width = rect.width + 'px';
+    layer.style.height = rect.height + 'px';
+    layer.style.left = (gridBase.offsetLeft || 0) + 'px';
+    layer.style.top = (gridBase.offsetTop || 0) + 'px';
+
+    layer.style.gridTemplateRows = `repeat(${size}, 1fr)`;
+    layer.style.gridTemplateColumns = `repeat(${size}, 1fr)`;
+
+    // Build cells only if missing or size changed
+    const existing = layer.querySelectorAll('.cell');
+    if (existing.length !== size * size) {
+      layer.textContent = '';
+      for (let r = 0; r < size; r++) {
+        for (let c = 0; c < size; c++) {
+          const cell = document.createElement('div');
+          cell.className = 'cell';
+          cell.dataset.row = String(r);
+          cell.dataset.col = String(c);
+          cell.style.boxSizing = 'border-box';
+          cell.style.border = '1px solid rgba(204, 204, 204, 0.10)';
+          cell.style.cursor = 'pointer';
+          cell.style.userSelect = 'none';
+          cell.style.background = 'transparent';
+          cell.style.display = 'flex';
+          cell.style.alignItems = 'center';
+          cell.style.justifyContent = 'center';
+          // keep text hidden; info is shown by the canvas
+          cell.style.color = 'transparent';
+
+          // IMPORTANT: click must reach our handler
+          cell.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            handleCellClick(cell);
+          });
+
+          layer.appendChild(cell);
+        }
+      }
+    }
+
+    // Keep aligned on resize/zoom
+    const sync = () => {
+      const r = gridBase.getBoundingClientRect();
+      layer.style.width = r.width + 'px';
+      layer.style.height = r.height + 'px';
+      layer.style.left = (gridBase.offsetLeft || 0) + 'px';
+      layer.style.top = (gridBase.offsetTop || 0) + 'px';
+    };
+    window.addEventListener('resize', sync);
+    sync();
+  }
+
   const vw = Math.min(document.documentElement.clientWidth, window.innerWidth || 0);
   const vh = Math.min(document.documentElement.clientHeight, window.innerHeight || 0);
 
@@ -2158,7 +2242,10 @@ const observer = new MutationObserver(() => {
   }
 
 
-  const autoEquipDialog = document.createElement('dialog');
+  
+  // Initialize click layer for canvas-based map (ResBlue1.3)
+  initCanvasClickLayer();
+const autoEquipDialog = document.createElement('dialog');
   autoEquipDialog.style.padding = '0';
   autoEquipDialog.style.background = '#fff';
   document.body.append(autoEquipDialog);
