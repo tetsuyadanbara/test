@@ -2711,6 +2711,7 @@ async function arenaChallenge (row, col){
 
     // 現在進行度から次の目標進行度を初期化（未初期化だと常時発射してしまう）
     let nextProgress = null;
+    let firstAutoJoinRun = true;
 async function attackRegion () {
       await drawProgressBar();
       if (isAutoJoinRunning) return;
@@ -2718,12 +2719,15 @@ async function attackRegion () {
       if (nextProgress === null || Number.isNaN(Number(nextProgress))) {
         nextProgress = location.href.includes('/teambattle?m=rb') ? computeNextProgressRB(currentProgress) : nextProgress;
       }
-      // 目標進行度±2%に入っていない時は何もしない
-      if (nextProgress !== null && Math.abs(nextProgress - currentProgress) >= 3) {
+      // 目標進行度±2%に入っていない時は待機（ただし開始直後の1回目はすぐ試す）
+      if (!firstAutoJoinRun && nextProgress !== null && Math.abs(nextProgress - currentProgress) >= 3) {
+        try {
+          logMessage(null, `待機中: ${currentProgress}% → ${nextProgress}±2%`, '');
+        } catch(e) {}
         return;
       }
-
-    if (location.href.includes('/teambattle?m=rb')) {
+      firstAutoJoinRun = false;
+if (location.href.includes('/teambattle?m=rb')) {
         try {
           const res = await fetch(`/teambattle?m=rb&t=${Date.now()}`, { cache: 'no-store' });
           if (res.ok) {
