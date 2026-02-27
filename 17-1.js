@@ -361,7 +361,7 @@ let MODENAME;
         ok.addEventListener('click', ()=>{
           autoJoinSettingsDialog.close();
           if (!autoJoinDialog.open) autoJoinDialog.showModal();
-          startAutoJoin(true);
+          startAutoJoin();
         });
 
         div.append(p, ok);
@@ -410,23 +410,19 @@ let MODENAME;
 
       autoJoinButton.addEventListener('click', ()=>{
         autoJoinDialog.showModal();
-        // If team color isn't configured yet, open settings first and do not start.
-        if (!settings.teamColor) {
+
+        // In Red vs Blue (m=rb), team color/name can be detected automatically,
+        // so we don't require pre-setting teamColor to start.
+        const isRB = location.href.includes('/teambattle?m=rb');
+
+        if (!settings.teamColor && !isRB) {
           autoJoinSettingsDialog.showModal();
           return;
         }
-        // Start and try the first attack immediately.
-        startAutoJoin(true);
-      });
 
-const closeSlideMenuButton = subButton.cloneNode();
-      closeSlideMenuButton.textContent = 'やめる';
-      closeSlideMenuButton.style.background = '#888';
-      closeSlideMenuButton.style.color = '#fff';
-      closeSlideMenuButton.addEventListener('click', ()=>{
-        slideMenu.style.transform = 'translateX(0)';
-        cellSelectorActivate = false;
-      })
+        // Start immediately after the dialog is opened.
+        try { startAutoJoin(); } catch(e){ console.error(e); }
+      });
       
       const startRangeAttackButton = subButton.cloneNode();
       startRangeAttackButton.textContent = '攻撃開始';
@@ -2595,7 +2591,7 @@ async function arenaChallenge (row, col){
   let autoJoinIntervalId;
   let isAutoJoinRunning = false;
   const sleep = s => new Promise(r=>setTimeout(r,s));
-  async function autoJoin({ immediate=false } = {}) {
+  async function autoJoin() {
     const dialog = document.querySelector('.auto-join');
 
     const logArea = dialog.querySelector('.auto-join-log');
@@ -2712,7 +2708,7 @@ async function arenaChallenge (row, col){
     // 現在進行度から次の目標進行度を初期化（未初期化だと常時発射してしまう）
     let nextProgress = null;
     let firstAutoJoinRun = true;
-async function attackRegion(force=false) {
+async function attackRegion () {
       await drawProgressBar();
       if (isAutoJoinRunning) return;
       // nextProgress未設定/NaN対策
@@ -3100,10 +3096,9 @@ if (location.href.includes('/teambattle?m=rb')) {
     }
 
     if (!isAutoJoinRunning) {
-      // First run: try immediately if requested
-      attackRegion(!!immediate);
+      attackRegion();
     }
-    autoJoinIntervalId = setInterval(()=>attackRegion(false), 60000);
+    autoJoinIntervalId = setInterval(attackRegion,60000);
   };
 
   
@@ -3177,30 +3172,13 @@ async function drawProgressBar(){
     }
   }
 
-  function startAutoJoin(immediate=true) {
-    // Stop any existing auto-join loop first
-    if (autoJoinIntervalId) {
-      clearInterval(autoJoinIntervalId);
-      autoJoinIntervalId = null;
-    }
-    isAutoJoinRunning = false;
-
-    // Stop progress bar updates during auto join (avoid overlap)
+  function startAutoJoin() {
+    // avoid duplicate runs
+    stopAutoJoin();
     if (progressBarIntervalId) {
       clearInterval(progressBarIntervalId);
       progressBarIntervalId = null;
     }
-
-    // Kick off auto join loop
-    autoJoin({ immediate });
-  }
-
-    // Reset flags so the first attack can run
-    isAutoJoinRunning = false;
-
-    // Kick off auto join loop
-    autoJoin({ immediate });
-  }
     // kick once immediately + schedule inside autoJoin()
     autoJoin();
   }
