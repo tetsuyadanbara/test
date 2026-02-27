@@ -1,27 +1,42 @@
 // ==UserScript==
 // @name         donguri arena assist tool
-// @version      1.2.2d改 Red vs Blue 新マップ仕様 (ResBlue1.3 map style + RBnew menu/autoequip/autojoin)
-// @description  ResBlue1.3 map rendering + RBnew features (auto equip / auto join / tools)
-// @author       ぱふぱふ + 7234e634 (merged)
+// @version      1.3
+// @description  fix arena ui and add functions (updated specs & removed auto join)
+// @author       7234e634
 // @match        https://donguri.5ch.net/teambattle*
 // @match        https://donguri.5ch.net/bag*
-// @run-at       document-idle
 // ==/UserScript==
 
 
 (()=>{
-  const __params = new URLSearchParams(location.search);
-  const __m = __params.get('m') || 'rb'; // default rb if missing
-  const MODE = `m=${__m}`;
 
-  // bag page: save current equip ids when clicking equip links
-  if (location.pathname === '/bag') {
+  // ===== Bag: save current equip (from Red Blue new) =====
+  if(location.href === 'https://donguri.5ch.net/bag') {
+      function saveCurrentEquip(url, index) {
+        let currentEquip = JSON.parse(localStorage.getItem('current_equip')) || [];
+        const regex = /https:\/\/donguri\.5ch\.net\/equip\/(\d+)/;
+        const equipId = url.match(regex)[1];
+        currentEquip[index] = equipId;
+        localStorage.setItem('current_equip', JSON.stringify(currentEquip));
+      }
+      const tableIds = ['weaponTable', 'armorTable', 'necklaceTable'];
+      tableIds.forEach((elm, index)=>{
+        const equipLinks = document.querySelectorAll(`#${elm} a[href^="https://donguri.5ch.net/equip/"]`);
+        [...equipLinks].forEach(link => {
+          link.addEventListener('click', ()=>{
+            saveCurrentEquip(link.href, index);
+          })
+        })
+      })
+      return;
+    }
+  
+
+  if(location.pathname === '/bag') {
     function saveCurrentEquip(url, index) {
-      const currentEquip = JSON.parse(localStorage.getItem('current_equip')) || [];
+      let currentEquip = JSON.parse(localStorage.getItem('current_equip')) || [];
       const regex = /https:\/\/donguri\.5ch\.net\/equip\/(\d+)/;
-      const m = url.match(regex);
-      if (!m) return;
-      const equipId = m[1];
+      const equipId = url.match(regex)[1];
       currentEquip[index] = equipId;
       localStorage.setItem('current_equip', JSON.stringify(currentEquip));
     }
@@ -31,12 +46,15 @@
       [...equipLinks].forEach(link => {
         link.addEventListener('click', ()=>{
           saveCurrentEquip(link.href, index);
-        });
-      });
-    });
+        })
+      })
+    })
     return;
   }
 
+  // 現在のモードクエリ（m=hc / m=l / m=rb）
+  const _mParam = new URLSearchParams(location.search).get('m') || 'rb';
+  const MODE = `m=${_mParam}`;
 
   let currentPeriod = 0;
   let currentProgress = 0;
@@ -392,19 +410,23 @@ let MODENAME;
 
       autoJoinButton.addEventListener('click', ()=>{
         autoJoinDialog.showModal();
-
-        // In Red vs Blue (m=rb), team color/name can be detected automatically,
-        // so we don't require pre-setting teamColor to start.
-        const isRB = location.href.includes('/teambattle?m=rb');
-
-        if (!settings.teamColor && !isRB) {
+        // Start immediately if settings are already present
+        setTimeout(() => { if (settings.teamColor) { try { startAutoJoin(); } catch(e){ console.error(e);} } }, 0);
+        if (!settings.teamColor) {
           autoJoinSettingsDialog.showModal();
-          return;
+        } else {
+          startAutoJoin();
         }
-
-        // Start immediately after the dialog is opened.
-        try { startAutoJoin(); } catch(e){ console.error(e); }
       });
+
+      const closeSlideMenuButton = subButton.cloneNode();
+      closeSlideMenuButton.textContent = 'やめる';
+      closeSlideMenuButton.style.background = '#888';
+      closeSlideMenuButton.style.color = '#fff';
+      closeSlideMenuButton.addEventListener('click', ()=>{
+        slideMenu.style.transform = 'translateX(0)';
+        cellSelectorActivate = false;
+      })
       
       const startRangeAttackButton = subButton.cloneNode();
       startRangeAttackButton.textContent = '攻撃開始';
@@ -2573,7 +2595,7 @@ async function arenaChallenge (row, col){
   let autoJoinIntervalId;
   let isAutoJoinRunning = false;
   const sleep = s => new Promise(r=>setTimeout(r,s));
-  async function autoJoin() {
+  async function autoJoin(forceFirst = false) {
     const dialog = document.querySelector('.auto-join');
 
     const logArea = dialog.querySelector('.auto-join-log');
@@ -2690,7 +2712,7 @@ async function arenaChallenge (row, col){
     // 現在進行度から次の目標進行度を初期化（未初期化だと常時発射してしまう）
     let nextProgress = null;
     let firstAutoJoinRun = true;
-async function attackRegion () {
+async function attackRegion(force = false) {
       await drawProgressBar();
       if (isAutoJoinRunning) return;
       // nextProgress未設定/NaN対策
@@ -2727,6 +2749,11 @@ if (location.href.includes('/teambattle?m=rb')) {
       }
 
       let regions = await getRegions();
+      if (!regions) {
+        logMessage(null, '[待機] マップ情報取得に失敗 (getRegions)', '→ 20s');
+        await sleep(20000);
+        return;
+      }
       const excludeSet = new Set();
 
       let cellType;
@@ -3078,9 +3105,10 @@ if (location.href.includes('/teambattle?m=rb')) {
     }
 
     if (!isAutoJoinRunning) {
-      attackRegion();
+      // 初回はボタン押下直後に一度だけ即実行（進捗待機判定を無視）
+      setTimeout(() => attackRegion(!!forceFirst), 0);
     }
-    autoJoinIntervalId = setInterval(attackRegion,60000);
+    autoJoinIntervalId = setInterval(() => attackRegion(false), 60000);
   };
 
   
@@ -3162,7 +3190,7 @@ async function drawProgressBar(){
       progressBarIntervalId = null;
     }
     // kick once immediately + schedule inside autoJoin()
-    autoJoin();
+    autoJoin(true);
   }
 
   // When Auto Join dialog is closed, stop auto-join and resume progress bar updates
