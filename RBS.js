@@ -1881,8 +1881,14 @@
 
       const gridWrap = document.getElementById('gridWrap');
       if (!gridWrap) throw new Error('gridWrap not found');
-      const wrap = document.querySelector('.gridCanvasOuter');
-      if (wrap) wrap.style.display = 'none';
+      (() => {
+      const base = document.getElementById('gridBase');
+      if (base) base.style.display = 'none';
+
+      const outer = document.querySelector('.gridCanvasOuter');
+      const original = outer?.querySelector('canvas, svg, img');
+      if (original) original.style.display = 'none';
+      })();
 
       let toolLayer = document.getElementById('aat_tool_layer');
       if (!toolLayer) {
