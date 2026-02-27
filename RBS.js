@@ -87,6 +87,7 @@ let MODENAME;
   // add buttons and select to custom menu
   let shouldSkipAreaInfo, shouldSkipAutoEquip, cellSelectorActivate, rangeAttackProcessing, currentPeriod, currentProgress;
   let currentEquipName = '';
+  let setPresetItems;
   (()=>{
     const button = document.createElement('button');
     button.type = 'button';
@@ -487,7 +488,7 @@ let MODENAME;
         batchSelectMenu.prepend(closeButton);
       })();
 
-      div.append(skipAreaInfoButton, skipAutoEquipButton, rangeAttackButton, settingsButton);
+      div.append(skipAutoEquipButton, rangeAttackButton, autoJoinButton, settingsButton, cellButton);
       slideMenu.append(closeSlideMenuButton, startRangeAttackButton, pauseRangeAttackButton, resumeRangeAttackButton, batchSelectButton, deselectButton, batchSelectMenu);
       subMenu.append(div, slideMenu);
 
@@ -1284,7 +1285,7 @@ let MODENAME;
       if(!presetLi) return;
       const presetName = presetLi.querySelector('span').textContent;
       if(currentMode === 'equip') {
-        setPresetItems(presetName);
+        window.setPresetItems(presetName);
       } else if (currentMode === 'remove') {
         removePresetItems(presetName);
       } else if (currentMode === 'edit') {
@@ -1676,7 +1677,7 @@ let MODENAME;
       }
 
     }
-    async function setPresetItems (presetName) {
+  setPresetItems = async function (presetName) {
       let currentEquip = JSON.parse(localStorage.getItem('current_equip')) || [];
       const stat = document.querySelector('.equip-preset-stat');
       if (stat.textContent === '装備中...') return;
@@ -1733,6 +1734,10 @@ let MODENAME;
       showEquipPreset();
     }  
   })();
+
+  
+  // expose for other modules (auto-equip / auto-join)
+  window.setPresetItems = setPresetItems;
 
   function scaleContentsToFit(container, contents){
     const containerWidth = container.clientWidth;
@@ -2104,7 +2109,7 @@ async function autoEquipAndChallenge (row, col, rank, mode = 'normal') {
     // choose preset
     if (list.length === 1 || settings.autoEquipRandomly) {
       const idx = (list.length === 1) ? 0 : Math.floor(Math.random() * list.length);
-      await setPresetItems(list[idx]);
+      await window.window.setPresetItems(list[idx]);
       await arenaChallenge(row, col);
       return;
     }
@@ -2129,7 +2134,7 @@ async function autoEquipAndChallenge (row, col, rank, mode = 'normal') {
       li.textContent = name;
       li.addEventListener('click', async () => {
         autoEquipDialog.close();
-        await setPresetItems(name);
+        await window.window.setPresetItems(name);
         await arenaChallenge(row, col);
       });
       ul.append(li);
