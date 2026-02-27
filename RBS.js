@@ -4,12 +4,12 @@
 // @description  fix arena ui and add functions (updated specs & removed auto join)
 // @author       7234e634
 // @match        https://donguri.5ch.net/teambattle*
-// @match        https://donguri.5ch.net/bag
+// @match        https://donguri.5ch.net/bag*
 // ==/UserScript==
 
 
 (()=>{
-  if(location.href === 'https://donguri.5ch.net/bag') {
+  if(location.pathname === '/bag') {
     function saveCurrentEquip(url, index) {
       let currentEquip = JSON.parse(localStorage.getItem('current_equip')) || [];
       const regex = /https:\/\/donguri\.5ch\.net\/equip\/(\d+)/;
