@@ -301,6 +301,7 @@
         ok.textContent = 'OK';
         ok.addEventListener('click', ()=>{
           autoJoinSettingsDialog.close();
+          if (!autoJoinDialog.open) autoJoinDialog.showModal();
           startAutoJoin();
         });
 
@@ -716,6 +717,23 @@
   document.body.append(autoEquipDialog);
 
   document.body.append(arenaField);
+
+  // Click on the info table to challenge that cell (and auto-equip if enabled)
+  arenaField.addEventListener('click', (e) => {
+    const table = e.target.closest('table');
+    if (!table || !table.dataset.row || !table.dataset.col) return;
+    const row = Number(table.dataset.row);
+    const col = Number(table.dataset.col);
+    const rank = table.dataset.rank;
+    if (Number.isNaN(row) || Number.isNaN(col)) return;
+
+    if (shouldSkipAutoEquip) {
+      arenaChallenge(row, col);
+    } else {
+      autoEquipAndChallenge(row, col, rank);
+    }
+  });
+
   
   // --- 新仕様対応のグリッド生成ロジック追加 ---
   if (!document.querySelector('.grid') && document.querySelector('.gridCanvasOuter')) {
@@ -1992,6 +2010,8 @@
       } else {
         newTable.dataset.row = row;
         newTable.dataset.col = col;
+    const equipCond = newTable.querySelector('td small')?.textContent || '';
+    if (equipCond) newTable.dataset.rank = equipCond;
       }
       newTable.style.background = '#fff';
       newTable.style.color = '#000';
@@ -2437,8 +2457,18 @@ async function arenaChallenge (row, col){
     let capitalMap = [];
     const capList = scriptContent.match(/const capitalList = (\[.*?\]);/s);
     const capMap = scriptContent.match(/const capitalMap = (\[.*?\]);/s);
-    if (capList) capitalMap = JSON.parse(capList[1]);
-    else if (capMap) capitalMap = JSON.parse(capMap[1]);
+    if (capList) {
+      try {
+        const s = capList[1].replace(/'/g, '"').replace(/,\s*]/g, ']');
+        capitalMap = JSON.parse(s);
+      } catch (e) { capitalMap = []; }
+    }
+    else if (capMap) {
+      try {
+        const s = capMap[1].replace(/'/g, '"').replace(/,\s*]/g, ']');
+        capitalMap = JSON.parse(s);
+      } catch (e) { capitalMap = []; }
+    }
 
     let rows = 0, cols = 0;
     const gridSizeMatch = scriptContent.match(/const GRID_SIZE = (\d+);/);
