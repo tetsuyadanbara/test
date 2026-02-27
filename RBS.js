@@ -29,6 +29,14 @@
     return;
   }
 
+  // 現在のモードクエリ（m=hc / m=l / m=rb）
+  const MODE = location.search.slice(1);
+  let MODENAME;
+  if (MODE === 'm=hc') MODENAME = '［ハード］';
+  else if (MODE === 'm=l') MODENAME = '［ラダー］';
+  else if (MODE === 'm=rb') MODENAME = '［赤vs青］';
+  else MODENAME = '［アリーナ］';
+
   const vw = Math.min(document.documentElement.clientWidth, window.innerWidth || 0);
   const vh = Math.min(document.documentElement.clientHeight, window.innerHeight || 0);
 
@@ -227,6 +235,127 @@
         slideMenu.style.transform = 'translateX(-100%)';
         cellSelectorActivate = true;
       })
+
+      // --- Auto Join (from Red/Blue new) ---
+      const autoJoinButton = subButton.cloneNode();
+      autoJoinButton.innerText = '自動参加\nモード';
+      autoJoinButton.style.background = '#ffb300';
+      autoJoinButton.style.color = '#000';
+
+      const autoJoinDialog = document.createElement('dialog');
+      autoJoinDialog.classList.add('auto-join');
+      autoJoinDialog.style.background = '#fff';
+      autoJoinDialog.style.color = '#000';
+      autoJoinDialog.style.width = '90vw';
+      autoJoinDialog.style.height = '90vh';
+      autoJoinDialog.style.fontSize = '80%';
+      autoJoinDialog.style.textAlign = 'center';
+      autoJoinDialog.style.marginTop = '2vh';
+
+      const autoJoinSettingsDialog = document.createElement('dialog');
+      autoJoinSettingsDialog.style.background = '#fff';
+      autoJoinSettingsDialog.style.color = '#000';
+      autoJoinSettingsDialog.style.textAlign = 'left';
+
+      // settings inputs
+      (()=>{
+        const div = document.createElement('div');
+        const label = document.createElement('label');
+        label.style.display = 'flex';
+        label.style.width = '100%';
+        const span = document.createElement('span');
+        span.style.whiteSpace = 'nowrap';
+        span.style.width = '50%';
+        const span2 = document.createElement('span');
+        span2.style.width = '50%';
+        const inputT = document.createElement('input');
+        const inputC = document.createElement('input');
+
+        const inputs = {
+          teamName: [inputT,'チーム名'],
+          teamColor: [inputC,'チームカラー(6桁HEX)']
+        };
+        for (const key of Object.keys(inputs)) {
+          const l = label.cloneNode();
+          const s1 = span.cloneNode();
+          const s2 = span2.cloneNode();
+          s1.textContent = inputs[key][1];
+          s2.append(inputs[key][0]);
+          l.append(s1, s2);
+          div.append(l);
+
+          inputs[key][0].value = settings[key] || '';
+          inputs[key][0].addEventListener('input', ()=>{
+            if (key === 'teamColor') inputs[key][0].value = inputs[key][0].value.replace(/[^0-9a-fA-F]/g,'').slice(0,6);
+            settings[key] = inputs[key][0].value;
+            localStorage.setItem('aat_settings', JSON.stringify(settings));
+          });
+        }
+
+        const p = document.createElement('p');
+        p.style.fontSize = '90%';
+        p.innerText = 'チームカラーは 6桁HEX（例: d32f2f）で入力してください。\n自動装備パネルで各ランクの装備セットを登録しておくと成功率が上がります。';
+
+        const ok = document.createElement('button');
+        ok.type = 'button';
+        ok.textContent = 'OK';
+        ok.addEventListener('click', ()=>{
+          autoJoinSettingsDialog.close();
+          startAutoJoin();
+        });
+
+        div.append(p, ok);
+        autoJoinSettingsDialog.append(div);
+      })();
+
+      // auto join main dialog UI
+      (()=>{
+        const container = document.createElement('div');
+        container.style.display = 'flex';
+        container.style.flexDirection = 'column';
+        container.style.height = '100%';
+        container.style.color = '#000';
+
+        const log = document.createElement('div');
+        log.classList.add('auto-join-log');
+        log.style.margin = '2px';
+        log.style.border = 'solid 1px #000';
+        log.style.overflow = 'auto';
+        log.style.flexGrow = '1';
+        log.style.textAlign = 'left';
+
+        const p = document.createElement('p');
+        p.textContent = 'この画面を開いたままにしておくこと';
+        p.style.margin = '0';
+
+        const settingsBtn = document.createElement('button');
+        settingsBtn.textContent = '設定';
+        settingsBtn.addEventListener('click', ()=>{
+          autoJoinSettingsDialog.showModal();
+          stopAutoJoin();
+        });
+
+        const closeBtn = document.createElement('button');
+        closeBtn.textContent = '自動参加モードを終了';
+        closeBtn.addEventListener('click', ()=>{
+          autoJoinDialog.close();
+          stopAutoJoin();
+        });
+
+        container.append(log, p, settingsBtn, closeBtn);
+        autoJoinDialog.append(container);
+        autoJoinDialog.append(autoJoinSettingsDialog);
+        document.body.append(autoJoinDialog);
+      })();
+
+      autoJoinButton.addEventListener('click', ()=>{
+        autoJoinDialog.showModal();
+        if (!settings.teamColor) {
+          autoJoinSettingsDialog.showModal();
+        } else {
+          startAutoJoin();
+        }
+      });
 
       const closeSlideMenuButton = subButton.cloneNode();
       closeSlideMenuButton.textContent = 'やめる';
@@ -1871,7 +2000,7 @@
     }
   }
 
-  function handleCellClick (cell){
+  async function handleCellClick (cell){
     if (cellSelectorActivate) {
       if (cell.classList.contains('selected')) {
         cell.style.borderColor = '#ccc';
@@ -1881,10 +2010,9 @@
         cell.classList.add('selected');
       }
     } else if (shouldSkipAreaInfo) {
-      const row = cell.dataset.row;
-      const col = cell.dataset.col;
+      const { row, col, rank } = cell.dataset;
       if (arenaField.open) fetchArenaTable(row, col);
-      arenaChallenge(row, col);
+      await autoEquipAndChallenge(row, col, rank, 'normal');
     } else {
       const row = cell.dataset.row;
       const col = cell.dataset.col;
@@ -1920,15 +2048,17 @@
     }
 
     const autoEquipItems = JSON.parse(localStorage.getItem('autoEquipItems')) || {};
-    if (autoEquipItems[rank] && !autoEquipItems[rank]?.includes(currentEquipName)) {
-      if (autoEquipItems[rank].length === 0) {
+    const autoEquipItemsAutojoin = JSON.parse(localStorage.getItem('autoEquipItemsAutojoin')) || {};
+    const list = (mode === 'autojoin' && autoEquipItemsAutojoin[rank]?.length) ? autoEquipItemsAutojoin : autoEquipItems;
+    if (list[rank] && !list[rank]?.includes(currentEquipName)) {
+      if (list[rank].length === 0) {
         return arenaChallenge(row, col);
-      } else if (autoEquipItems[rank].length === 1) {
-        await setPresetItems(autoEquipItems[rank][0]);
+      } else if (list[rank].length === 1) {
+        await setPresetItems(list[rank][0]);
         return arenaChallenge(row, col);
       } else if (settings.autoEquipRandomly) {
-        const index = Math.floor(Math.random() * autoEquipItems[rank].length);
-        await setPresetItems(autoEquipItems[rank][index]);
+        const index = Math.floor(Math.random() * list[rank].length);
+        await setPresetItems(list[rank][index]);
         return arenaChallenge(row, col);
       } else {
         // 選択UI（簡易版）
@@ -1944,7 +2074,7 @@
         liTemplate.style.color = '#428bca';
         liTemplate.style.cursor = 'pointer';
 
-        autoEquipItems[rank].forEach(v => {
+        list[rank].forEach(v => {
           const li = liTemplate.cloneNode();
           li.textContent = v;
           li.addEventListener('click', async()=> {
@@ -2154,7 +2284,201 @@ async function arenaChallenge (row, col){
     cells.forEach(cell => grid.append(cell));
   }
   
-  function drawProgressBar(){
+  
+  // ===== Auto Join core =====
+  let autoJoinIntervalId = null;
+  let isAutoJoinRunning = false;
+
+  function stopAutoJoin() {
+    if (autoJoinIntervalId) {
+      clearInterval(autoJoinIntervalId);
+      autoJoinIntervalId = null;
+    }
+    isAutoJoinRunning = false;
+  }
+
+  function startAutoJoin() {
+    stopAutoJoin();
+    // start immediately and then every 60s
+    autoJoin().catch(console.error);
+    autoJoinIntervalId = setInterval(() => {
+      autoJoin().catch(console.error);
+    }, 60000);
+  }
+
+  function shuffle(arr) {
+    for (let i = arr.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [arr[i], arr[j]] = [arr[j], arr[i]];
+    }
+    return arr;
+  }
+
+  async function autoJoin() {
+    const dialog = document.querySelector('.auto-join');
+    if (!dialog || !dialog.open) {
+      stopAutoJoin();
+      return;
+    }
+    if (isAutoJoinRunning) return;
+    isAutoJoinRunning = true;
+
+    const logArea = dialog.querySelector('.auto-join-log');
+    const log = (msg) => {
+      const div = document.createElement('div');
+      div.style.borderBottom = 'solid 0.5px #888';
+      div.style.padding = '2px';
+      const t = new Date().toLocaleTimeString('sv-SE');
+      div.textContent = `[${t}] ${msg}`;
+      if (logArea) logArea.prepend(div);
+    };
+
+    try {
+      // 進捗表示も更新（失敗しても続行）
+      try { await drawProgressBar(); } catch (e) {}
+
+      const regions = await getRegionsForAutoJoin();
+      if (!regions) { log('地域取得に失敗'); return; }
+
+      const priority = ['teamAdjacent','capitalAdjacent','mapEdge','nonAdjacent'];
+      let pool = [];
+      for (const k of priority) {
+        if (regions[k]?.length) { pool = regions[k]; break; }
+      }
+      if (!pool.length) { log('攻撃候補がありません'); return; }
+
+      // 1回のtickで最大3回試す（too fast対策）
+      const maxTry = 3;
+      for (let i=0; i<Math.min(maxTry, pool.length); i++) {
+        const [row, col] = pool[i];
+        // 必要ランク取得→自動装備→挑戦
+        let rank = '';
+        try {
+          rank = await fetchRequiredRank(row, col);
+        } catch (e) {
+          log(`(${row},${col}) ランク取得失敗: ${e}`);
+          continue;
+        }
+        try {
+          await autoEquipAndChallenge(row, col, rank, 'autojoin');
+          log(`(${row},${col}) 参戦`);
+          break;
+        } catch (e) {
+          log(`(${row},${col}) 失敗: ${e}`);
+          // too fast等は次tickへ
+        }
+      }
+    } finally {
+      isAutoJoinRunning = false;
+    }
+  }
+
+  async function fetchRequiredRank(row, col) {
+    const url = `https://donguri.5ch.net/teambattle?r=${row}&c=${col}&` + MODE;
+    const res = await fetch(url, { cache: 'no-store' });
+    if (!res.ok) throw res.status;
+    const text = await res.text();
+    const doc = new DOMParser().parseFromString(text, 'text/html');
+    const table = doc.querySelector('table');
+    if (!table) throw 'table.ng';
+    const equipCond = table.querySelector('td small')?.textContent || '';
+    if (!equipCond) throw 'rank.ng';
+    return equipCond;
+  }
+
+  async function getRegionsForAutoJoin() {
+    const res = await fetch('', { cache: 'no-store' });
+    if (!res.ok) throw `[${res.status}] /teambattle`;
+    const text = await res.text();
+    const doc = new DOMParser().parseFromString(text, 'text/html');
+
+    // scriptから cellColors / capitalMap / GRID_SIZE を取得（新マップ/旧マップ混在対応）
+    const scriptContent = doc.querySelector('.grid > script, #gridWrap + script, script:not([src])')?.textContent || '';
+
+    let cellColors = {};
+    const cellColorsMatch = scriptContent.match(/const cellColors = ({.+?});/s) || scriptContent.match(/const cellColors = ({.+?})/s);
+    if (cellColorsMatch) {
+      const validJsonStr = cellColorsMatch[1].replace(/'/g, '"').replace(/,\s*}/, '}');
+      try { cellColors = JSON.parse(validJsonStr); } catch(e) { cellColors = {}; }
+    }
+
+    let capitalMap = [];
+    const capList = scriptContent.match(/const capitalList = (\[.*?\]);/s);
+    const capMap = scriptContent.match(/const capitalMap = (\[.*?\]);/s);
+    if (capList) capitalMap = JSON.parse(capList[1]);
+    else if (capMap) capitalMap = JSON.parse(capMap[1]);
+
+    let rows = 0, cols = 0;
+    const gridSizeMatch = scriptContent.match(/const GRID_SIZE = (\d+);/);
+    if (gridSizeMatch) {
+      rows = cols = Number(gridSizeMatch[1]);
+    } else {
+      const grid = doc.querySelector('.grid');
+      if (!grid) return null;
+      const r = grid.style.gridTemplateRows.match(/repeat\((\d+),/);
+      const c = grid.style.gridTemplateColumns.match(/repeat\((\d+),/);
+      rows = r ? Number(r[1]) : 6;
+      cols = c ? Number(c[1]) : rows;
+    }
+
+    const cells = [];
+    for (let r=0; r<rows; r++) for (let c=0; c<cols; c++) cells.push([r,c]);
+
+    const directions = [[-1,0],[1,0],[0,-1],[0,1]];
+    const adjacentSet = new Set();
+    for (const [cr, cc] of capitalMap) {
+      for (const [dr, dc] of directions) {
+        const nr = cr + dr, nc = cc + dc;
+        if (nr>=0 && nr<rows && nc>=0 && nc<cols) adjacentSet.add(`${nr}-${nc}`);
+      }
+    }
+    const capitalSet = new Set(capitalMap.map(([r,c])=>`${r}-${c}`));
+
+    const nonAdjacent = cells.filter(([r,c])=>{
+      const key=`${r}-${c}`;
+      return !capitalSet.has(key) && !adjacentSet.has(key);
+    });
+    const capitalAdjacent = cells.filter(([r,c])=>adjacentSet.has(`${r}-${c}`));
+
+    // team adjacent
+    const teamColor = (settings.teamColor || '').replace('#','');
+    const teamColorSet = new Set();
+    if (teamColor) {
+      for (const [key,val] of Object.entries(cellColors)) {
+        if (val.replace('#','') === teamColor) teamColorSet.add(key);
+      }
+    }
+    const teamAdjSet = new Set();
+    for (const key of teamColorSet) {
+      const [tr, tc] = key.split('-').map(Number);
+      for (const [dr,dc] of directions) {
+        const nr=tr+dr, nc=tc+dc;
+        if (nr>=0 && nr<rows && nc>=0 && nc<cols) teamAdjSet.add(`${nr}-${nc}`);
+      }
+    }
+    const teamAdjacent = cells.filter(([r,c])=>{
+      const key=`${r}-${c}`;
+      return teamColorSet.has(key) || teamAdjSet.has(key);
+    });
+
+    // map edge
+    const mapEdgeSet = new Set();
+    for (let i=0;i<rows;i++){ mapEdgeSet.add(`${i}-0`); mapEdgeSet.add(`${i}-${cols-1}`); }
+    for (let i=0;i<cols;i++){ mapEdgeSet.add(`0-${i}`); mapEdgeSet.add(`${rows-1}-${i}`); }
+    const mapEdge = cells.filter(([r,c])=>{
+      const key=`${r}-${c}`;
+      return mapEdgeSet.has(key) && !capitalSet.has(key);
+    });
+
+    return {
+      nonAdjacent: shuffle(nonAdjacent),
+      capitalAdjacent: shuffle(capitalAdjacent),
+      teamAdjacent: shuffle(teamAdjacent),
+      mapEdge: shuffle(mapEdge)
+    };
+  }
+
+function drawProgressBar(){
     fetch('https://donguri.5ch.net/')
     .then(res => res.ok ? res.text() : Promise.reject('res.ng'))
     .then(text => {
