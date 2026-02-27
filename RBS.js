@@ -1835,6 +1835,20 @@
       }
   
       const currentCells = grid.querySelectorAll('.cell');
+
+      // canvasサイズからセル寸法を算出（ResBlue1.3はcanvas描画）
+      const canvas = document.getElementById('gridOverlay') || document.getElementById('gridBase');
+      const rect = canvas ? canvas.getBoundingClientRect() : { width: cols * 35, height: rows * 35 };
+      const cellW = rect.width / cols;
+      const cellH = rect.height / rows;
+      const cellWpx = `${cellW}px`;
+      const cellHpx = `${cellH}px`;
+      grid.style.width = `${rect.width}px`;
+      grid.style.height = `${rect.height}px`;
+      grid.style.position = 'absolute';
+      grid.style.top = '0';
+      grid.style.left = '0';
+
       
       let scriptContent = '';
       for (let s of doc.querySelectorAll('script')) {
@@ -1861,8 +1875,8 @@
       }
   
       if (currentCells.length !== rows * cols) {
-        grid.style.gridTemplateRows = `repeat(${rows}, 35px)`;
-        grid.style.gridTemplateColumns = `repeat(${cols}, 35px)`;
+        grid.style.gridTemplateRows = `repeat(${rows}, ${cellHpx})`;
+        grid.style.gridTemplateColumns = `repeat(${cols}, ${cellWpx})`;
         grid.innerHTML = '';
   
         for (let i = 0; i < rows; i++) {
@@ -2123,6 +2137,17 @@
   }
   addCustomColor();
 
+  // --- ResBlue1.3(canvas)向け: クリック用セルレイヤーを初期生成 ---
+  // .cellが存在しない(=canvas表示のみ)場合でも、透明セルを生成してクリック/選択を可能にする
+  try {
+    const hasCells = document.querySelector('.cell');
+    const hasCanvasWrap = document.getElementById('gridCanvasWrap');
+    if (!hasCells && hasCanvasWrap) {
+      refreshArenaInfo();
+    }
+  } catch (e) { console.error(e); }
+
+
 const observer = new MutationObserver(() => {
     if(grid) scaleContentsToFit(grid.parentNode, grid);
   });
@@ -2156,7 +2181,7 @@ const observer = new MutationObserver(() => {
       }
       const table = doc.querySelector('table');
       if(!table) throw new Error('table.ng');
-      showArenaTable(table);
+      return showArenaTable(table);
     } catch (e) {
       console.error(e);
     }
@@ -2206,6 +2231,7 @@ const observer = new MutationObserver(() => {
       newTable.append(tbody);
       arenaField.querySelector('table').replaceWith(newTable);
       arenaField.show();
+      return { row: dataRow, col: dataCol, rank: equipCond.textContent };
     }
   }
 
@@ -2218,14 +2244,27 @@ const observer = new MutationObserver(() => {
         cell.style.borderColor = '#f64';
         cell.classList.add('selected');
       }
-    } else if (shouldSkipAreaInfo) {
-      const { row, col, rank } = cell.dataset;
-      if (arenaField.open) fetchArenaTable(row, col);
-      await autoEquipAndChallenge (row, col, rank);
-    } else {
-      const { row, col } = cell.dataset;
-      fetchArenaTable(row, col);
+      return;
     }
+
+    const { row, col } = cell.dataset;
+
+    if (shouldSkipAreaInfo) {
+      // canvas版/初期状態ではrank未取得のことがあるため、必要ならテーブルから取得する
+      let rank = cell.dataset.rank;
+      if (!rank) {
+        const info = await fetchArenaTable(row, col);
+        rank = info?.rank || '';
+      } else {
+        // skip時でも情報パネルが開いてるなら更新
+        if (arenaField.open) fetchArenaTable(row, col);
+      }
+      await autoEquipAndChallenge(row, col, rank);
+      return;
+    }
+
+    // 通常: クリックでセル詳細表示
+    fetchArenaTable(row, col);
   }
   // --- robust click handling (event delegation) ---
   // Some map renderers replace/clone cells; delegation keeps clicks working.
