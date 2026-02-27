@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         donguri arena assist tool
-// @version      1.3
+// @version      ResBlue1.3 + RBnew features (map preserved)
 // @description  fix arena ui and add functions (updated specs & removed auto join)
 // @author       7234e634
 // @match        https://donguri.5ch.net/teambattle*
@@ -104,6 +104,7 @@
   // add buttons and select to custom menu
   let shouldSkipAreaInfo, shouldSkipAutoEquip, cellSelectorActivate, rangeAttackProcessing,
     currentPeriod, currentProgress;
+  let currentEquipName = '';
   (()=>{
     const button = document.createElement('button');
     button.type = 'button';
@@ -115,6 +116,7 @@
     button.style.padding = '2px';
     button.style.width = '6em';
     button.style.fontSize = '65%';
+    button.style.border = 'none';
 
     if (vw < 768) {
       progressBarContainer.style.fontSize = '60%';
@@ -126,32 +128,13 @@
       const isSubMenuOpen = subMenu.style.display === 'flex';
       subMenu.style.display = isSubMenuOpen ? 'none' : 'flex';
     })
-  
+
     const equipButton = button.cloneNode();
     equipButton.textContent = '■装備';
     equipButton.addEventListener('click', ()=>{
       panel.style.display = 'flex';
     });
 
-    let currnetSort = 'default';
-    const sortButton = button.cloneNode();
-    sortButton.innerText = 'ソート\n切り替え';
-    sortButton.addEventListener('click', ()=>{
-      if(currnetSort === 'default') {
-        sortCells('cond');
-        currnetSort = 'cond';
-      } else {
-        sortCells('default');
-        currnetSort = 'default';
-      }
-    })
-
-    const cellButton = button.cloneNode();
-    cellButton.innerText = 'エリア情報\n再取得';
-    cellButton.addEventListener('click',()=>{
-      fetchAreaInfo(true);
-    });
-  
     const toggleViewButton = button.cloneNode();
     toggleViewButton.innerText = '表示\n切り替え';
     toggleViewButton.addEventListener('click', ()=>{
@@ -164,6 +147,29 @@
     refreshButton.addEventListener('click',()=>{
       fetchAreaInfo(false);
     });
+
+    const skipAreaInfoButton = button.cloneNode();
+    skipAreaInfoButton.innerText = 'セル情報\nスキップ';
+    skipAreaInfoButton.style.color = '#fff';
+    if (settings.skipArenaInfo) {
+      skipAreaInfoButton.style.background = '#46f';
+      shouldSkipAreaInfo = true;
+    } else {
+      skipAreaInfoButton.style.background = '#888';
+      shouldSkipAreaInfo = false;
+    }
+    skipAreaInfoButton.addEventListener('click', ()=>{
+      if(shouldSkipAreaInfo) {
+        skipAreaInfoButton.style.background = '#888';
+        shouldSkipAreaInfo = false;
+      } else {
+        skipAreaInfoButton.style.background = '#46f';
+        shouldSkipAreaInfo = true;
+      }
+      settings.skipArenaInfo = shouldSkipAreaInfo;
+      localStorage.setItem('aat_settings', JSON.stringify(settings));
+    });
+
 
     const subMenu = document.createElement('div');
     subMenu.style.display = 'none';
@@ -178,7 +184,6 @@
       subButton.style.border = 'none';
       subButton.style.padding = '2px';
 
-
       const div = document.createElement('div');
       div.style.display = 'flex';
       div.style.flex = '1';
@@ -187,8 +192,11 @@
       div.style.overflowX = 'auto';
       div.style.height = '100%';
 
-
-      
+      const cellButton = subButton.cloneNode();
+      cellButton.innerText = 'エリア情報\n再取得';
+      cellButton.addEventListener('click',()=>{
+        fetchAreaInfo(true);
+      });
 
       const skipAutoEquipButton = subButton.cloneNode();
       skipAutoEquipButton.textContent = '自動装備';
@@ -213,9 +221,7 @@
         localStorage.setItem('aat_settings', JSON.stringify(settings));
       });
 
-      
-
-const slideMenu = document.createElement('div');
+      const slideMenu = document.createElement('div');
       slideMenu.style.display = 'flex';
       slideMenu.style.flex = '1';
       slideMenu.style.justifyContent = 'center';
@@ -227,29 +233,6 @@ const slideMenu = document.createElement('div');
       slideMenu.style.background = '#fff';
       slideMenu.style.transition = 'transform 0.1s ease';
 
-      const skipAreaInfoButton = subButton.cloneNode();
-      skipAreaInfoButton.innerText = 'セル情報\nスキップ';
-      skipAreaInfoButton.style.color = '#fff';
-      if (settings.skipArenaInfo) {
-        skipAreaInfoButton.style.background = '#46f';
-        shouldSkipAreaInfo = true;
-      } else {
-        skipAreaInfoButton.style.background = '#888';
-        shouldSkipAreaInfo = false;
-      }
-      skipAreaInfoButton.addEventListener('click', ()=>{
-        if(shouldSkipAreaInfo) {
-          skipAreaInfoButton.style.background = '#888';
-          shouldSkipAreaInfo = false;
-        } else {
-          skipAreaInfoButton.style.background = '#46f';
-          shouldSkipAreaInfo = true;
-        }
-        settings.skipArenaInfo = shouldSkipAreaInfo;
-        localStorage.setItem('aat_settings', JSON.stringify(settings));
-      })
-
-      
 
       const autoJoinButton = subButton.cloneNode();
       autoJoinButton.innerText = '自動参加\nモード';
@@ -367,9 +350,7 @@ const slideMenu = document.createElement('div');
       })();
 
 
-      
-
-const settingsButton = subButton.cloneNode();
+      const settingsButton = subButton.cloneNode();
       settingsButton.textContent = '設定';
       settingsButton.style.background = '#ffb300';
       settingsButton.style.color = '#000';
@@ -394,7 +375,7 @@ const settingsButton = subButton.cloneNode();
         slideMenu.style.transform = 'translateX(0)';
         cellSelectorActivate = false;
       })
-      
+
       const startRangeAttackButton = subButton.cloneNode();
       startRangeAttackButton.textContent = '攻撃開始';
       startRangeAttackButton.style.background = '#f64';
@@ -456,7 +437,7 @@ const settingsButton = subButton.cloneNode();
           cell.style.borderColor = '#ccc';
         });
       })
-      
+
       const batchSelectButton = subButton.cloneNode();
       batchSelectButton.textContent = '一括選択';
       batchSelectButton.style.background = '#ffb300';
@@ -511,7 +492,7 @@ const settingsButton = subButton.cloneNode();
         batchSelectMenu.prepend(closeButton);
       })();
 
-      div.append(skipAreaInfoButton, rangeAttackButton, settingsButton);
+      div.append(skipAutoEquipButton, rangeAttackButton, autoJoinButton, settingsButton, cellButton);
       slideMenu.append(closeSlideMenuButton, startRangeAttackButton, pauseRangeAttackButton, resumeRangeAttackButton, batchSelectButton, deselectButton, batchSelectMenu);
       subMenu.append(div, slideMenu);
 
@@ -522,7 +503,7 @@ const settingsButton = subButton.cloneNode();
     main.style.flexWrap = 'nowrap';
     main.style.gap = '2px';
     main.style.justifyContent = 'center';
-    main.append(menuButton, skipAreaInfoButton, equipButton, toggleViewButton, sortButton, refreshButton, cellButton);
+    main.append(menuButton, skipAreaInfoButton, equipButton, toggleViewButton, refreshButton);
 
     toolbar.append(main, subMenu);
   })();
@@ -575,7 +556,7 @@ const settingsButton = subButton.cloneNode();
       const table = arenaField.querySelector('table');
       const row = table.dataset.row;
       const col = table.dataset.col;
-      await autoEquipAndChallenge(row, col, rank);
+      arenaChallenge(row, col);
     })
 
     const reinforceButton = button.cloneNode();
@@ -2155,8 +2136,6 @@ const observer = new MutationObserver(() => {
     }
   }
 
-  
-
   const autoEquipDialog = document.createElement('dialog');
   autoEquipDialog.style.padding = '0';
   autoEquipDialog.style.background = '#fff';
@@ -2215,9 +2194,7 @@ const observer = new MutationObserver(() => {
     }
   }
 
-  
-
-async function arenaChallenge (row, col){
+  async function arenaChallenge (row, col){
     const options = {
       method: 'POST',
       headers: {
@@ -2226,16 +2203,15 @@ async function arenaChallenge (row, col){
       body: `row=${row}&col=${col}`
     };
     try {
-      const url = '/teamchallenge' + window.location.search;
-      const response = await fetch(url, options);
+      const response = await fetch('/teamchallenge?'+MODE, options);
       if(!response.ok){
         throw new Error('/teamchallenge res.ng');
       }
       const text = await response.text();
       arenaResult.innerText = text;
 
+      const lastLine = text.trim().split('\n').pop();
       if(text.includes('\n')) {
-        const lastLine = text.trim().split('\n').pop();
         lastLine + '\n' + text;
         const p = document.createElement('p');
         p.textContent = lastLine;
@@ -2246,6 +2222,7 @@ async function arenaChallenge (row, col){
       }
 
       arenaResult.show();
+      // arenaResult.show();のあとでsetTimeoutを使用しないと位置がずれる
       setTimeout(() => {
         if (settings.arenaResultScrollPosition === 'bottom') {
           arenaResult.scrollTop = arenaResult.scrollHeight;
@@ -2255,11 +2232,19 @@ async function arenaChallenge (row, col){
       }, 0);
       arenaResult.style.display = '';
 
+      if (lastLine === 'リーダーになった' || lastLine.includes('は新しいアリーナリーダーです。')) {
+        if (!settings.teamColor) return;
+        const cell = document.querySelector(`div[data-row="${row}"][data-col="${col}"]`);
+        cell.style.background = '#' + settings.teamColor;
+        fetchSingleArenaInfo(cell);
+      }
     } catch (e) {
       arenaResult.innerText = e;
       arenaResult.show();
     }
   }
+
+  
 
   let rangeAttackQueue = [];
   async function rangeAttack () {
@@ -2409,9 +2394,68 @@ async function arenaChallenge (row, col){
     cells.forEach(cell => grid.append(cell));
   }
   
-  
+  function drawProgressBar(){
+    fetch('https://donguri.5ch.net/')
+    .then(res => res.ok ? res.text() : Promise.reject('res.ng'))
+    .then(text => {
+      const doc = new DOMParser().parseFromString(text, 'text/html');
+      const statBlockDiv = doc.querySelector('div.stat-block:nth-child(2)>div:nth-child(5)');
+      if(!statBlockDiv) return;
+      const container = statBlockDiv.cloneNode(true);
+      const progressBar = container.lastElementChild;
+      if(!progressBar) return;
+      const barBody = progressBar.lastElementChild;
+      const percentage = parseInt(barBody.textContent);
+      let str,min,totalSec,sec,margin;
+      if (percentage === 0 || percentage === 50) {
+        str = '（マップ更新時）';
+      } else {
+        if (percentage === 100) {
+          min = 0;
+          sec = 20;
+          margin = 10;
+        } else {
+          totalSec = (percentage < 50) ? (50 - percentage) * 36 : (100 - percentage) * 36 + 10;
+          min = Math.trunc(totalSec / 60);
+          sec = totalSec % 60;
+          margin = 20;
+        }
+        str = '（マップ更新まで' + min + '分' + sec + '秒 \xb1' + margin + '秒）';
+      }
+      progressBar.before(str, document.createElement('br'));
+      progressBar.style.display = 'inline-block';
+      progressBar.style.width = '400px';
+      progressBar.style.maxWidth = '100vw';
+      progressBar.style.height = '20px';
+      progressBar.style.background = '#ccc';
+      progressBar.style.borderRadius = '8px';
+      progressBar.style.fontSize = '16px';
+      progressBar.style.overflow = 'hidden';
+      progressBar.style.marginTop = '5px';
+      barBody.style.height = '100%';
+      barBody.style.lineHeight = 'normal';
+      barBody.style.background = '#428bca';
+      barBody.style.textAlign = 'right';
+      barBody.style.paddingRight = '5px';
+      barBody.style.boxSizing = 'border-box';
+      barBody.style.color = 'white';
+      barBody.style.width = barBody.style.width;
+      progressBarContainer.replaceChildren(container);
 
-  
+      const statBlock = doc.querySelector('.stat-block');
+      if(statBlock) {
+        const woodMatch = statBlock.textContent.match(/木材の数: (\d+)/);
+        const steelMatch = statBlock.textContent.match(/鉄の数: (\d+)/);
+        if(woodMatch) wood = woodMatch[1];
+        if(steelMatch) steel = steelMatch[1];
+      }
+    })
+    .catch(e => console.error(e))
+  }
+
+  drawProgressBar();
+  setInterval(drawProgressBar, 18000);
+
 
   let currentViewMode = 'detail';
   function toggleCellViewMode () {
@@ -2472,7 +2516,7 @@ async function arenaChallenge (row, col){
 
   
 
-let autoJoinIntervalId;
+  let autoJoinIntervalId;
   let isAutoJoinRunning = false;
   const sleep = s => new Promise(r=>setTimeout(r,s));
   async function autoJoin() {
@@ -2984,9 +3028,7 @@ let autoJoinIntervalId;
     autoJoinIntervalId = setInterval(attackRegion,60000);
   };
 
-  
-
-async function drawProgressBar(){
+  async function drawProgressBar(){
     try {
       const res = await fetch('https://donguri.5ch.net/');
       if (!res.ok) throw new Error(res.status);
@@ -3042,5 +3084,35 @@ async function drawProgressBar(){
   }
 
   drawProgressBar();
-  setInterval(drawProgressBar, 18000);
+  function startAutoJoin() {
+    clearInterval(progressBarIntervalId);
+    progressBarIntervalId = null;
+    autoJoin();
+  }
+  let progressBarIntervalId = setInterval(drawProgressBar, 18000);
+  (()=>{ // autoJoinとprogressBarのinterval管理
+    function stopAutoJoin() {
+      if (autoJoinIntervalId) {
+        clearInterval(autoJoinIntervalId);
+        autoJoinIntervalId = null;
+      }
+      isAutoJoinRunning = false;
+    }
+    const dialog = document.querySelector('.auto-join');
+    const observer = new MutationObserver(() => {
+      if (!dialog.open) {
+        stopAutoJoin();
+        drawProgressBar();
+        if (!progressBarIntervalId) {
+          progressBarIntervalId = setInterval(drawProgressBar, 18000);
+        }
+      }
+    });
+
+    observer.observe(dialog, {
+      attributes: true,
+      attributeFilter: ['open']
+    });
+  })();
+
 })();
