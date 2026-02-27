@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         donguri arena assist tool
-// @version      1.2.2d改 Red vs Blue 新マップ仕様 + rank-cache(simple)
+// @version      1.2.2d改 Red vs Blue 新マップ仕様
 // @description  fix arena ui and add functions
 // @author       ぱふぱふ
 // @match        https://donguri.5ch.net/teambattle?m=hc
@@ -8,6 +8,7 @@
 // @match        https://donguri.5ch.net/teambattle?m=rb
 // @match        https://donguri.5ch.net/bag
 // ==/UserScript==
+
 
 (()=>{
   if(location.href === 'https://donguri.5ch.net/bag') {
@@ -45,22 +46,6 @@
   const vh = Math.min(document.documentElement.clientHeight, window.innerHeight || 0);
 
   const settings = JSON.parse(localStorage.getItem('aat_settings')) || {};
-
-  // === PATCH: rank cache (simpleでもrank表示するため) ===
-  const rankCache = JSON.parse(localStorage.getItem('aat_rank_cache')) || {};
-  let rankCacheDirty = false;
-  function saveRankCacheSoon(){
-    if (rankCacheDirty) return;
-    rankCacheDirty = true;
-    setTimeout(()=>{
-      try{
-        localStorage.setItem('aat_rank_cache', JSON.stringify(rankCache));
-      } finally {
-        rankCacheDirty = false;
-      }
-    }, 300);
-  }
-  // === /PATCH ===
 
   const header = document.querySelector('header');
   header.style.marginTop = '100px';
@@ -133,7 +118,7 @@
   let shouldSkipAreaInfo, shouldSkipAutoEquip, cellSelectorActivate, rangeAttackProcessing,
     currentPeriod, currentProgress;
   let currentEquipName = '';
-  (()=>{ /* ここは元コードのまま（長いので省略せず全文） */
+  (()=>{
     const button = document.createElement('button');
     button.type = 'button';
     button.style.flexShrink = '1';
@@ -169,6 +154,7 @@
       toggleCellViewMode();
     })
 
+
     const refreshButton = button.cloneNode();
     refreshButton.innerText = 'エリア情報\n更新';
     refreshButton.addEventListener('click',()=>{
@@ -197,13 +183,14 @@
       localStorage.setItem('aat_settings', JSON.stringify(settings));
     });
 
+
     const subMenu = document.createElement('div');
     subMenu.style.display = 'none';
     subMenu.style.flexWrap = 'nowrap';
     subMenu.style.overflowX = 'hidden';
     subMenu.style.position = 'relative';
 
-    (()=>{ /* submenu */
+    (()=>{
       const subButton = button.cloneNode();
       subButton.style.fontSize = '65%';
       subButton.style.width = '6em';
@@ -258,6 +245,7 @@
       slideMenu.style.right = '-100%';
       slideMenu.style.background = '#fff';
       slideMenu.style.transition = 'transform 0.1s ease';
+
 
       const autoJoinButton = subButton.cloneNode();
       autoJoinButton.innerText = '自動参加\nモード';
@@ -337,7 +325,7 @@
       })();
 
       //autoJoin
-      (()=>{ /* autoJoin UI */
+      (()=>{
         const container = document.createElement('div');
         container.style.display = 'flex';
         container.style.flexDirection = 'column';
@@ -364,13 +352,16 @@
         closeButton.addEventListener('click', ()=>{
           autoJoinDialog.close();
         })
+        //closeButton.autofocus = true; // inputへのオートフォーカス阻止
         const p = document.createElement('p');
+        //p.textContent = 'この画面を開いたままにしておくこと。最短600秒';
         p.textContent = 'この画面を開いたままにしておくこと';
         p.style.margin = '0';
 
         container.append(log, p, settingsButton, closeButton);
         autoJoinDialog.append(container);
       })();
+
 
       const settingsButton = subButton.cloneNode();
       settingsButton.textContent = '設定';
@@ -477,7 +468,7 @@
       batchSelectMenu.style.height = '100%';
       batchSelectMenu.style.background = '#fff';
 
-      (()=>{ /* batch select ranks */
+      (()=>{
         const ranks = ['N', 'R', 'SR', 'SSR', 'UR'];
         ranks.forEach(rank=>{
           const rankButton = subButton.cloneNode();
@@ -517,6 +508,7 @@
       div.append(skipAutoEquipButton, rangeAttackButton, autoJoinButton, settingsButton, cellButton);
       slideMenu.append(closeSlideMenuButton, startRangeAttackButton, pauseRangeAttackButton, resumeRangeAttackButton, batchSelectButton, deselectButton, batchSelectMenu);
       subMenu.append(div, slideMenu);
+
     })();
 
     const main = document.createElement('div');
@@ -535,7 +527,7 @@
   arenaField.style.color = '#000';
   arenaField.style.border = 'solid 1px #000';
   if(vw < 768) arenaField.style.fontSize = '85%';
-  (()=>{ /* arenaField position */
+  (()=>{
     arenaField.style.bottom = settings.arenaFieldBottom ? settings.arenaFieldBottom : '4vh';
     if (settings.arenaFieldPosition === 'left') {
       arenaField.style.right = 'auto';
@@ -556,7 +548,7 @@
   const arenaModDialog = document.createElement('dialog');
   let wood, steel
 
-  (()=>{ /* arena action buttons (元コードのまま) */
+  (()=>{
     const div = document.createElement('div');
     div.style.display = 'flex';
     div.style.gap = '2px';
@@ -616,7 +608,7 @@
     const table = document.createElement('table');
     div.append(challengeButton, reinforceButton, siegeButton, closeButton);
     arenaField.append(div, table, arenaModDialog);
-    (()=>{ /* arenaModDialog */
+    (()=>{
       arenaModDialog.style.background = '#fff';
       arenaModDialog.style.border = 'solid 1px #000';
       arenaModDialog.style.color = '#000';
@@ -696,7 +688,7 @@
   arenaResult.style.textAlign = 'left';
   arenaResult.style.overflowY = 'auto';
   arenaResult.style.zIndex = '1';
-  (()=>{ /* arenaResult size */
+  (()=>{
     if (settings.arenaResultHeight) {
       arenaResult.style.height = settings.arenaResultHeight;
       arenaResult.style.maxHeight = '100vh';
@@ -770,7 +762,7 @@
   settingsDialog.style.margin = '0';
   settingsDialog.style.zIndex = '2';
   settingsDialog.style.textAlign = 'left';
-  (()=>{ /* settingsDialog position */
+  (()=>{
     if (settings.settingsPanelPosition === 'left') {
       settingsDialog.style.left = '0';
     } else {
@@ -794,7 +786,7 @@
       settingsDialog.style.height = '96vh';
     }
   })();
-  (()=>{ /* settings UI（元コードのまま・長い） */
+  (()=>{
     const button = document.createElement('button');
     button.type = 'button';
     button.style.borderRadius = 'unset';
@@ -842,7 +834,7 @@
     const settingsButtons = document.createElement('div');
     settingsButtons.style.display = 'flex';
 
-    (()=>{ /* 保存/キャンセル等 */
+    (()=>{
       const saveButton = button.cloneNode();
       saveButton.textContent = '保存';
       saveButton.addEventListener('click', ()=>{
@@ -963,30 +955,130 @@
       addHeader('アリーナログ', arenaResult);
       const arenaField = container.cloneNode();
       addHeader('アリーナ情報', arenaField);
+      //const grid = container.cloneNode();
+      //addHeader('グリッド', grid);
       const settingsPanel = container.cloneNode();
       addHeader('設定パネル', settingsPanel);
       const equipPanel = container.cloneNode();
       addHeader('装備パネル', equipPanel);
 
       const settingItems = {
-        toolbarPosition: { text: '位置:', type: 'select', options: { left: '左寄せ', right: '右寄せ', center: '中央寄せ' }, parent: toolbar },
-        toolbarPositionLength: { text: '端の距離:', type: 'width', parent: toolbar },
-        arenaResultScrollPosition: { text: 'スクロール位置:', type: 'select', options: { top: '上', bottom: '下' }, parent: arenaResult },
-        arenaResultBottom: { text: '下部の距離:', type: 'height', parent: arenaResult },
-        arenaResultPosition: { text: '位置:', type: 'select', options: { right: '右寄せ', left: '左寄せ' }, parent: arenaResult },
-        arenaResultPositionLength: { text: '左端からの距離:', type: 'width', parent: arenaResult },
-        arenaResultHeight: { text: 'ログの高さ:', type: 'height', parent: arenaResult },
-        arenaResultWidth: { text: 'ログの横幅:', type: 'width', parent: arenaResult },
-        arenaFieldBottom: { text: '下部の距離:', type: 'height', parent: arenaField },
-        arenaFieldPosition: { text: '位置:', type: 'select', options: { left: '左寄せ', right: '右寄せ', center: '中央寄せ' }, parent: arenaField },
-        arenaFieldPositionLength: { text: '端からの距離:', type: 'width', parent: arenaField },
-        arenaFieldWidth: { text: '横幅:', type: 'width', parent: arenaField },
-        settingsPanelPosition: { text: '位置:', type: 'select', options: { right: '右寄せ', left: '左寄せ' }, parent: settingsPanel },
-        settingsPanelHeight: { text: '高さ:', type: 'height', parent: settingsPanel },
-        settingsPanelWidth: { text: '横幅:', type: 'width', parent: settingsPanel },
-        equipPanelPosition: { text: '位置:', type: 'select', options: { right: '右寄せ', left: '左寄せ' }, parent: equipPanel },
-        equipPanelHeight: { text: '高さ:', type: 'height', parent: equipPanel },
-        equipPanelWidth: { text: '横幅:', type: 'width', parent: equipPanel }
+        toolbarPosition: {
+          text: '位置:',
+          type: 'select',
+          options: {
+            left: '左寄せ',
+            right: '右寄せ',
+            center: '中央寄せ'
+          },
+          parent: toolbar
+        },
+        toolbarPositionLength: {
+          text: '端の距離:',
+          type: 'width',
+          parent: toolbar
+        },
+        arenaResultScrollPosition: {
+          text: 'スクロール位置:',
+          type: 'select',
+          options: {
+            top: '上',
+            bottom: '下'
+          },
+          parent: arenaResult
+        },
+        arenaResultBottom: {
+          text: '下部の距離:',
+          type: 'height',
+          parent: arenaResult
+        },
+        arenaResultPosition: {
+          text: '位置:',
+          type: 'select',
+          options: {
+            right: '右寄せ',
+            left: '左寄せ'
+          },
+          parent: arenaResult
+        },
+        arenaResultPositionLength: {
+          text: '左端からの距離:',
+          type: 'width',
+          parent: arenaResult
+        },
+        arenaResultHeight: {
+          text: 'ログの高さ:',
+          type: 'height',
+          parent: arenaResult
+        },
+        arenaResultWidth: {
+          text: 'ログの横幅:',
+          type: 'width',
+          parent: arenaResult
+        },
+        arenaFieldBottom: {
+          text: '下部の距離:',
+          type: 'height',
+          parent: arenaField
+        },
+        arenaFieldPosition: {
+          text: '位置:',
+          type: 'select',
+          options: {
+            left: '左寄せ',
+            right: '右寄せ',
+            center: '中央寄せ'
+          },
+          parent: arenaField
+        },
+        arenaFieldPositionLength: {
+          text: '端からの距離:',
+          type: 'width',
+          parent: arenaField
+        },
+        arenaFieldWidth: {
+          text: '横幅:',
+          type: 'width',
+          parent: arenaField
+        },
+        settingsPanelPosition: {
+          text: '位置:',
+          type: 'select',
+          options: {
+            right: '右寄せ',
+            left: '左寄せ'
+          },
+          parent: settingsPanel
+        },
+        settingsPanelHeight: {
+          text: '高さ:',
+          type: 'height',
+          parent: settingsPanel
+        },
+        settingsPanelWidth: {
+          text: '横幅:',
+          type: 'width',
+          parent: settingsPanel
+        },
+        equipPanelPosition: {
+          text: '位置:',
+          type: 'select',
+          options: {
+            right: '右寄せ',
+            left: '左寄せ'
+          },
+          parent: equipPanel
+        },
+        equipPanelHeight: {
+          text: '高さ:',
+          type: 'height',
+          parent: equipPanel
+        },
+        equipPanelWidth: {
+          text: '横幅:',
+          type: 'width',
+          parent: equipPanel
+        }
       }
 
       Object.entries(settingItems).forEach(([key,item]) => {
@@ -1024,7 +1116,12 @@
     footer.style.fontSize = '80%';
     footer.style.textAlign = 'right';
 
-    (()=>{ const link = document.createElement('a'); link.style.color = '#333'; link.textContent = '1.2.2d改 Red vs Blue 新マップ仕様'; footer.append(link); })();
+    (()=>{
+      const link = document.createElement('a');
+      link.style.color = '#333';
+      link.textContent = '1.2.2d改 Red vs Blue 新マップ仕様';
+      footer.append(link);
+    })();
 
     header.append(h2, closeButton);
     container.append(header, settingsButtons, settingsMenu, footer)
@@ -1783,6 +1880,13 @@
       if (!headerText.includes('どんぐりチーム戦い')) throw new Error('title.ng info');
 
       const gridWrap = document.getElementById('gridWrap');
+        // ★ここに追加
+      const original = document.querySelector('.gridCanvasOuter');
+      if (original) original.style.display = 'none';
+
+      if (!gridWrap) return;
+
+      // 以下は元のコードのまま
       if (!gridWrap) throw new Error('gridWrap not found');
 
       let toolLayer = document.getElementById('aat_tool_layer');
