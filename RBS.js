@@ -30,9 +30,9 @@
   }
 
   // --- mode query (e.g., m=rb / m=hc / m=l) ---
-  const MODE = location.search.replace(/^\?/, '');
+  var MODE = location.search.replace(/^\?/, '');
   // expose for any dynamically-evaluated code
-  globalThis.MODE = MODE;
+  window.MODE = MODE;
 
   const vw = Math.min(document.documentElement.clientWidth, window.innerWidth || 0);
   const vh = Math.min(document.documentElement.clientHeight, window.innerHeight || 0);
@@ -1269,7 +1269,7 @@
       if(!presetLi) return;
       const presetName = presetLi.querySelector('span').textContent;
       if(currentMode === 'equip') {
-        setPresetItems(presetName);
+        window.window.setPresetItems(presetName);
       } else if (currentMode === 'remove') {
         removePresetItems(presetName);
       } else if (currentMode === 'edit') {
@@ -1703,6 +1703,9 @@
         localStorage.removeItem('current_equip');
       }
     }
+    // expose for other modules (auto-join / auto-equip)
+    window.setPresetItems = setPresetItems;
+
     function removePresetItems(presetName) {
       const userConfirmed = confirm(presetName + ' を削除しますか？');
       if(!userConfirmed) return;
@@ -2173,12 +2176,12 @@ const observer = new MutationObserver(() => {
         arenaChallenge(row, col);
         return;
       } else if (autoEquipItems[rank].length === 1) {
-        await setPresetItems(autoEquipItems[rank][0]);
+        await window.window.setPresetItems(autoEquipItems[rank][0]);
         arenaChallenge(row, col);
         return;
       } else if (settings.autoEquipRandomly) {
         const index = Math.floor(Math.random() * autoEquipItems[rank].length);
-        await setPresetItems(autoEquipItems[rank][index]);
+        await window.window.setPresetItems(autoEquipItems[rank][index]);
         arenaChallenge(row, col);
       } else {
         while (autoEquipDialog.firstChild) {
@@ -2200,7 +2203,7 @@ const observer = new MutationObserver(() => {
           li.textContent = v;
           li.addEventListener('click', async()=>{
             autoEquipDialog.close();
-            await setPresetItems(v);
+            await window.window.setPresetItems(v);
             arenaChallenge(row, col);
           })
           ul.append(li);
@@ -3026,11 +3029,11 @@ const observer = new MutationObserver(() => {
 
         if (autoEquipItemsAutojoin[rank]?.length > 0) {
           const index = Math.floor(Math.random() * autoEquipItemsAutojoin[rank].length);
-          await setPresetItems(autoEquipItemsAutojoin[rank][index]);
+          await window.window.setPresetItems(autoEquipItemsAutojoin[rank][index]);
           return [rank, 'success'];
         } else if (autoEquipItems[rank]?.length > 0) {
           const index = Math.floor(Math.random() * autoEquipItems[rank].length);
-          await setPresetItems(autoEquipItems[rank][index]);
+          await window.window.setPresetItems(autoEquipItems[rank][index]);
           return [rank, 'success'];
         } else {
           return [rank, 'noEquip'];
