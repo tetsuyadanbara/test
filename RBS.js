@@ -29,6 +29,9 @@
     return;
   }
 
+  // --- mode query (e.g., m=rb / m=hc / m=l) ---
+  const MODE = location.search.replace(/^\?/, '');
+
   const vw = Math.min(document.documentElement.clientWidth, window.innerWidth || 0);
   const vh = Math.min(document.documentElement.clientHeight, window.innerHeight || 0);
 
