@@ -742,6 +742,58 @@
   });
   document.body.append(arenaResult, arenaField, helpDialog);
 
+   (function ensureGridExists(){
+   if (document.querySelector('.grid')) return;
+
+   const gridOuter = document.querySelector('.gridCanvasOuter');
+   if (!gridOuter) return;
+
+   let GRID_SIZE = 16;
+   let cellColors = {};
+
+   for (const s of document.querySelectorAll('script')) {
+    if (!s.textContent.includes('const cellColors =')) continue;
+
+   const cellColorsMatch = s.textContent.match(/const cellColors = ({.+?});/s);
+    if (cellColorsMatch) {
+      const validJsonStr = cellColorsMatch[1]
+        .replace(/'/g, '"')
+        .replace(/,\s*}/, '}');
+      try { cellColors = JSON.parse(validJsonStr); } catch(e){}
+    }
+
+    const gridMatch = s.textContent.match(/const GRID_SIZE = (\d+);/);
+    if (gridMatch) GRID_SIZE = parseInt(gridMatch[1], 10);
+    break;
+   }
+
+   const newGrid = document.createElement('div');
+   newGrid.className = 'grid';
+   newGrid.style.display = 'grid';
+   newGrid.style.gridTemplateColumns = `repeat(${GRID_SIZE}, 35px)`;
+   newGrid.style.gridTemplateRows = `repeat(${GRID_SIZE}, 35px)`;
+   newGrid.style.gap = '2px';
+
+   for (let i = 0; i < GRID_SIZE; i++) {
+    for (let j = 0; j < GRID_SIZE; j++) {
+      const cell = document.createElement('div');
+      cell.className = 'cell';
+      cell.dataset.row = i;
+      cell.dataset.col = j;
+      cell.style.width = '35px';
+      cell.style.height = '35px';
+      cell.style.border = '1px solid #ccc';
+
+      const key = `${i}-${j}`;
+      cell.style.backgroundColor = cellColors[key] || 'transparent';
+
+      newGrid.appendChild(cell);
+     }
+   }
+
+      gridOuter.appendChild(newGrid);
+   })();
+  
   const grid = document.querySelector('.grid');
   if (grid && grid.parentNode) {
     grid.parentNode.style.height = null;
@@ -1881,22 +1933,7 @@
 
       const gridWrap = document.getElementById('gridWrap');
       if (!gridWrap) throw new Error('gridWrap not found');
-      // ★元マップは「消す」ではなく「透明化」する（サイズを潰さない）
-      (() => {
-      const outer = document.querySelector('.gridCanvasOuter');
-      if (!outer) return;
 
-     // 元描画本体（canvas/svg/img）だけを透明化して無効化
-     const original = outer.querySelector('canvas, svg, img');
-     if (original) {
-     original.style.opacity = '0';
-     original.style.pointerEvents = 'none';
-     }
-
-    // もし gridBase があるならそれもクリック無効（見た目は残ってもOK）
-    const base = document.getElementById('gridBase');
-    if (base) base.style.pointerEvents = 'none';
-    })();
       let toolLayer = document.getElementById('aat_tool_layer');
       if (!toolLayer) {
         toolLayer = document.createElement('div');
@@ -2520,8 +2557,8 @@
       grid.style.gridTemplateColumns = grid.style.gridTemplateColumns.replace('105px','35px');
 
       for (const cell of cells) {
-        cell.style.width = '30px';
-        cell.style.height = '30px';
+        cell.style.width = '35px';
+        cell.style.height = '35px';
         cell.style.borderWidth = '1px';
         while (cell.firstChild) {
           cell.firstChild.remove();
