@@ -1,17 +1,18 @@
 // ==UserScript==
 // @name         donguri arena assist tool
-// @version      1.3
-// @description  fix arena ui and add functions (updated specs & removed auto join)
-// @author       7234e634
+// @version      1.2.2d改 Red vs Blue 新マップ仕様 (ResBlue1.3 map style + RBnew menu/autoequip/autojoin)
+// @description  ResBlue1.3 map rendering + RBnew features (auto equip / auto join / tools)
+// @author       ぱふぱふ + 7234e634 (merged)
 // @match        https://donguri.5ch.net/teambattle*
 // @match        https://donguri.5ch.net/bag*
+// @run-at       document-idle
 // ==/UserScript==
 
 
 (()=>{
 
   // ===== Bag: save current equip (from Red Blue new) =====
-  if(location.href === 'https://donguri.5ch.net/bag') {
+  if(location.href.startsWith('https://donguri.5ch.net/bag')) {
       function saveCurrentEquip(url, index) {
         let currentEquip = JSON.parse(localStorage.getItem('current_equip')) || [];
         const regex = /https:\/\/donguri\.5ch\.net\/equip\/(\d+)/;
@@ -29,8 +30,11 @@
         })
       })
       return;
-    }
-  
+  }
+
+  const __params = new URLSearchParams(location.search);
+  const __m = __params.get('m') || 'hc';
+  const MODE = `m=${__m}`;
 
   if(location.pathname === '/bag') {
     function saveCurrentEquip(url, index) {
