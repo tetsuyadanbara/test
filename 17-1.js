@@ -2037,7 +2037,12 @@ let MODENAME;
           terrains.forEach(t => {
             if (t && t.t === 'w') {
               // x: col, y: row
-              waterSet.add(`${t.y}-${t.x}`);
+                            const rr = (t.r ?? t.row ?? t.x ?? t.R ?? t.X);
+              const cc = (t.c ?? t.col ?? t.y ?? t.C ?? t.Y);
+              if (rr !== undefined && cc !== undefined) {
+                waterSet.add(`${Number(rr)}-${Number(cc)}`);
+              }
+
             }
           });
         } catch (e) {
