@@ -74,6 +74,39 @@ let MODENAME;
 
   const settings = JSON.parse(localStorage.getItem('aat_settings')) || {};
 
+  // --- water tiles (unattackable) ---
+  let waterCellSet = new Set();
+  function updateWaterCellSet(scriptContent){
+    waterCellSet = new Set();
+    try{
+      const m = scriptContent.match(/const\s+terrainsPayload\s*=\s*(\{[\s\S]*?\});/);
+      if(!m) return;
+      const payload = JSON.parse(m[1]);
+      const terrains = Array.isArray(payload?.terrains) ? payload.terrains : (Array.isArray(payload) ? payload : []);
+      for (const t of terrains) {
+        const type = t?.t ?? t?.type ?? t?.terrain;
+        if (type === 'w' || type === 'water' || type === 'W') {
+          const x = Number(t?.x);
+          const y = Number(t?.y);
+          if (Number.isFinite(x) && Number.isFinite(y)) waterCellSet.add(`${x}-${y}`);
+        }
+      }
+    } catch(e) {
+      console.error('aat: terrainsPayload parse failed', e);
+    }
+  }
+  function applyWaterStyle(cell){
+    if (cell?.dataset?.water === '1') {
+      // Keep existing team color and just tint it.
+      cell.style.backgroundImage = 'linear-gradient(rgba(120,200,255,0.35), rgba(120,200,255,0.35))';
+      cell.style.backgroundBlendMode = 'multiply';
+    } else {
+      cell.style.backgroundImage = '';
+      cell.style.backgroundBlendMode = '';
+    }
+  }
+
+
   const header = document.querySelector('header');
   header.style.marginTop = '100px';
   const toolbar = document.createElement('div');
@@ -835,32 +868,13 @@ let MODENAME;
         cell.style.cursor = 'pointer';
         cell.style.transition = 'background-color 0.3s';
         const cellKey = `${i}-${j}`;
-        
-const isWater = waterSet.has(cellKey);
-if (cellColors[cellKey]) {
-  cell.style.backgroundColor = cellColors[cellKey];
-  if (isWater) {
-    cell.dataset.water = '1';
-    cell.style.outline = '1px solid rgba(135, 206, 235, 0.9)';
-    cell.style.outlineOffset = '-1px';
-  } else {
-    cell.dataset.water = '';
-    cell.style.outline = '';
-    cell.style.outlineOffset = '';
-  }
-  refreshedCells.push(cell);
-} else if (isWater) {
-  cell.dataset.water = '1';
-  cell.style.backgroundColor = 'rgba(135, 206, 235, 0.45)'; // water tint
-  cell.style.outline = '';
-  cell.style.outlineOffset = '';
-  refreshedCells.push(cell);
-} else {
-  cell.dataset.water = '';
-  cell.style.backgroundColor = 'transparent';
-  cell.style.outline = '';
-  cell.style.outlineOffset = '';
-}
+        cell.dataset.water = waterCellSet.has(cellKey) ? '1' : '';
+        if (cellColors[cellKey]) {
+          cell.style.backgroundColor = cellColors[cellKey];
+        } else {
+          cell.style.backgroundColor = 'transparent';
+        }
+        applyWaterStyle(cell);
         newGrid.appendChild(cell);
       }
     }
@@ -2035,6 +2049,12 @@ if (cellColors[cellKey]) {
       }
   
       const currentCells = grid.querySelectorAll('.cell');
+      // update water flags/styles for existing cells
+      currentCells.forEach(c => {
+        const key = `${c.dataset.row}-${c.dataset.col}`;
+        c.dataset.water = waterCellSet.has(key) ? '1' : '';
+        applyWaterStyle(c);
+      });
       
       let scriptContent = '';
       for (let s of doc.querySelectorAll('script')) {
@@ -2047,28 +2067,6 @@ if (cellColors[cellKey]) {
       const cellColorsString = scriptContent.match(/const cellColors = ({.+?})/s)[1];
       const validJsonStr = cellColorsString.replace(/'/g, '"').replace(/,\s*}/, '}');
       const cellColors = JSON.parse(validJsonStr);
-
-// --- terrains (water) ---
-let waterSet = new Set();
-try {
-  const terrainsPayloadMatch = scriptContent.match(/const terrainsPayload\s*=\s*(\{[\s\S]*?\});/);
-  if (terrainsPayloadMatch) {
-    const terrainsPayload = JSON.parse(terrainsPayloadMatch[1]);
-    if (terrainsPayload && Array.isArray(terrainsPayload.t)) {
-      for (const t of terrainsPayload.t) {
-        if (t && t.t === 'w' && Array.isArray(t.i)) {
-          for (const coord of t.i) {
-            if (Array.isArray(coord) && coord.length >= 2) {
-              waterSet.add(`${coord[0]}-${coord[1]}`);
-            }
-          }
-        }
-      }
-    }
-  }
-} catch (e) {
-  // ignore parse errors
-}
   
       let rows = 8, cols = 8;
       const gridMatch = scriptContent.match(/const GRID_SIZE = (\d+);/);
@@ -2100,32 +2098,11 @@ try {
             cell.style.transition = 'background-color 0.3s';
   
             const cellKey = `${i}-${j}`;
-            
-const isWater = waterSet.has(cellKey);
-if (cellColors[cellKey]) {
-  cell.style.backgroundColor = cellColors[cellKey];
-  if (isWater) {
-    cell.dataset.water = '1';
-    cell.style.outline = '1px solid rgba(135, 206, 235, 0.9)';
-    cell.style.outlineOffset = '-1px';
-  } else {
-    cell.dataset.water = '';
-    cell.style.outline = '';
-    cell.style.outlineOffset = '';
-  }
-  refreshedCells.push(cell);
-} else if (isWater) {
-  cell.dataset.water = '1';
-  cell.style.backgroundColor = 'rgba(135, 206, 235, 0.45)'; // water tint
-  cell.style.outline = '';
-  cell.style.outlineOffset = '';
-  refreshedCells.push(cell);
-} else {
-  cell.dataset.water = '';
-  cell.style.backgroundColor = 'transparent';
-  cell.style.outline = '';
-  cell.style.outlineOffset = '';
-}
+            if (cellColors[cellKey]) {
+              cell.style.backgroundColor = cellColors[cellKey];
+            } else {
+              cell.style.backgroundColor = 'transparent';
+            }
   
             grid.appendChild(cell);
             refreshedCells.push(cell);
@@ -2339,6 +2316,11 @@ if (cellColors[cellKey]) {
   }
 
   async function handleCellClick (cell){
+    if (cell?.dataset?.water === '1') {
+      arenaResult.textContent = '水のマスは撃てません';
+      arenaResult.show();
+      return;
+    }
     if (cellSelectorActivate) {
       if (cell.classList.contains('selected')) {
         cell.style.borderColor = '#ccc';
@@ -2532,6 +2514,13 @@ async function arenaChallenge (row, col){
       const cell = rangeAttackQueue[0];
       // 攻撃前に選択解除された場合
       if(!cell.classList.contains('selected')) {
+        rangeAttackQueue.shift();
+        continue;
+      }
+      if (cell?.dataset?.water === '1') {
+        const p = pTemplate.cloneNode();
+        p.textContent = `(${cell.dataset.row}, ${cell.dataset.col}) [スキップ] 水のマス`;
+        arenaResult.prepend(p);
         rangeAttackQueue.shift();
         continue;
       }
@@ -2982,6 +2971,7 @@ if (location.href.includes('/teambattle?m=rb')) {
         if (!headerText.includes('どんぐりチーム戦い')) throw new Error('title.ng info');
 
         const scriptContent = doc.querySelector('.grid > script, #gridWrap + script')?.textContent || '';
+        updateWaterCellSet(scriptContent);
 
         let cellColors, capitalMap, rows, cols;
 
@@ -2993,27 +2983,6 @@ if (location.href.includes('/teambattle?m=rb')) {
 
           const capitalListMatch = scriptContent.match(/const capitalList = (\[.*?\]);/s);
           capitalMap = JSON.parse(capitalListMatch[1]);
-
-          const gridSizeMatch
-// --- terrains (water) ---
-let waterSet = new Set();
-try {
-  const terrainsPayloadMatch = scriptContent.match(/const terrainsPayload\s*=\s*(\{[\s\S]*?\});/);
-  if (terrainsPayloadMatch) {
-    const terrainsPayload = JSON.parse(terrainsPayloadMatch[1]);
-    if (terrainsPayload && Array.isArray(terrainsPayload.t)) {
-      for (const t of terrainsPayload.t) {
-        if (t && t.t === 'w' && Array.isArray(t.i)) {
-          for (const coord of t.i) {
-            if (Array.isArray(coord) && coord.length >= 2) {
-              waterSet.add(`${coord[0]}-${coord[1]}`);
-            }
-          }
-        }
-      }
-    }
-  }
-} catch (e) {}
 
           const gridSizeMatch = scriptContent.match(/const GRID_SIZE = (\d+);/);
           rows = cols = Number(gridSizeMatch[1]);
@@ -3031,15 +3000,14 @@ try {
           cols = Number(grid.style.gridTemplateColumns.match(/repeat\((\d+), 35px\)/)[1]);
         }
 
-        
-const cells = [];
-for (let r = 0; r < rows; r++) {
-  for (let c = 0; c < cols; c++) {
-    // skip unattackable water tiles
-    if (typeof waterSet !== 'undefined' && waterSet.has(`${r}-${c}`)) continue;
-    cells.push([r, c]);
-  }
-}
+        const cells = [];
+        for (let r = 0; r < rows; r++) {
+          for (let c = 0; c < cols; c++) {
+            const key = `${r}-${c}`;
+            if (waterCellSet.has(key)) continue; // water is unattackable
+            cells.push([r, c]);
+          }
+        }
 
         const directions = [
           [-1, 0],
