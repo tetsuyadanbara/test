@@ -2771,19 +2771,19 @@ function toggleCellViewMode () {
 
             if (success) {
               if (currentProgress < 16) {
-                nextProgress = 26;
+                nextProgress = 24;
                } else if (currentProgress < 33) {
-                nextProgress = 43;
+                nextProgress = 41;
                } else if (currentProgress < 50) {
-                nextProgress = 60;
+                nextProgress = 58;
                } else if (currentProgress < 66) {
-                nextProgress = 76;
+                nextProgress = 74;
                } else if (currentProgress < 83) {
-                nextProgress = 93;
+                nextProgress = 91;
                } else {
-                nextProgress = 10;
+                nextProgress = 8;
                }
-              next = `→ ${nextProgress}±2%`;
+              next = `→ ${nextProgress}±5%`;
               isAutoJoinRunning = false;
             } else if (processType === 'return') {
               next = '';
@@ -2845,19 +2845,19 @@ function toggleCellViewMode () {
         }
         if (!success && regions[cellType].length === 0) {
               if (currentProgress < 16) {
-                nextProgress = 26;
+                nextProgress = 24;
                } else if (currentProgress < 33) {
-                nextProgress = 43;
+                nextProgress = 41;
                } else if (currentProgress < 50) {
-                nextProgress = 60;
+                nextProgress = 58;
                } else if (currentProgress < 66) {
-                nextProgress = 76;
+                nextProgress = 74;
                } else if (currentProgress < 83) {
-                nextProgress = 93;
+                nextProgress = 91;
                } else {
-                nextProgress = 10;
+                nextProgress = 8;
                }
-          const next = `→ ${nextProgress}±2%`;
+          const next = `→ ${nextProgress}±5%`;
           isAutoJoinRunning = false;
           logMessage(null, '攻撃可能なタイルが見つかりませんでした。', next);
           return;
