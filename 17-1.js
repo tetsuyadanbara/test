@@ -52,7 +52,7 @@
     return;
   }
 
-  // ??[hNGim=hc / m=l / m=rbj
+  // ???????[?h?N?G???im=hc / m=l / m=rb?j
   const _mParam = new URLSearchParams(location.search).get('m') || 'rb';
   const MODE = `m=${_mParam}`;
 
@@ -64,10 +64,10 @@
 
   const BASE_BATTLE_URL = `https://donguri.5ch.net/teambattle?${MODE}`;
 let MODENAME;
-  if (MODE === 'm=hc') MODENAME = 'mn[hn';
-  else if (MODE === 'm=l') MODENAME = 'm_[n';
-  else if (MODE === 'm=rb') MODENAME = 'mvs?n';
-  else MODENAME = 'mA[in';
+  if (MODE === 'm=hc') MODENAME = '?m?n?[?h?n';
+  else if (MODE === 'm=l') MODENAME = '?m???_?[?n';
+  else if (MODE === 'm=rb') MODENAME = '?m??vs??n';
+  else MODENAME = '?m?A???[?i?n';
 
   const vw = Math.min(document.documentElement.clientWidth, window.innerWidth || 0);
   const vh = Math.min(document.documentElement.clientHeight, window.innerHeight || 0);
@@ -161,21 +161,21 @@ let MODENAME;
     }
 
     const menuButton = button.cloneNode();
-    menuButton.textContent = 'j[';
+    menuButton.textContent = '?????j???[';
     menuButton.addEventListener('click', ()=>{
       const isSubMenuOpen = subMenu.style.display === 'flex';
       subMenu.style.display = isSubMenuOpen ? 'none' : 'flex';
     })
   
     const equipButton = button.cloneNode();
-    equipButton.textContent = '';
+    equipButton.textContent = '??????';
     equipButton.addEventListener('click', ()=>{
       panel.style.display = 'flex';
     });
 
     let currnetSort = 'default';
     const sortButton = button.cloneNode();
-    sortButton.innerText = '\[g\n??';
+    sortButton.innerText = '?\?[?g\n?????';
     sortButton.addEventListener('click', ()=>{
       if(currnetSort === 'default') {
         sortCells('cond');
@@ -187,13 +187,13 @@ let MODENAME;
     })
 
     const cellButton = button.cloneNode();
-    cellButton.innerText = 'GA\n?擾';
+    cellButton.innerText = '?G???A???\n??擾';
     cellButton.addEventListener('click',()=>{
       fetchAreaInfo(true);
     });
   
     const refreshButton = button.cloneNode();
-    refreshButton.innerText = 'GA\nXV';
+    refreshButton.innerText = '?G???A???\n?X?V';
     refreshButton.addEventListener('click',()=>{
       fetchAreaInfo(false);
     });
@@ -234,7 +234,7 @@ let MODENAME;
       slideMenu.style.transition = 'transform 0.1s ease';
 
       const skipAreaInfoButton = subButton.cloneNode();
-      skipAreaInfoButton.innerText = 'Z\nXLbv';
+      skipAreaInfoButton.innerText = '?Z?????\n?X?L?b?v';
       skipAreaInfoButton.style.color = '#fff';
       if (settings.skipArenaInfo) {
         skipAreaInfoButton.style.background = '#46f';
@@ -256,7 +256,7 @@ let MODENAME;
       })
 
       const settingsButton = subButton.cloneNode();
-      settingsButton.textContent = '?';
+      settingsButton.textContent = '???';
       settingsButton.style.background = '#ffb300';
       settingsButton.style.color = '#000';
       settingsButton.addEventListener('click', ()=>{
@@ -264,7 +264,7 @@ let MODENAME;
       })
 
       const skipAutoEquipButton = subButton.cloneNode();
-      skipAutoEquipButton.textContent = '';
+      skipAutoEquipButton.textContent = '????????';
       skipAutoEquipButton.style.color = '#fff';
       skipAutoEquipButton.classList.add('skip-auto-equip');
       if (settings.skipAutoEquip) {
@@ -287,7 +287,7 @@ let MODENAME;
       });
 
       const rangeAttackButton = subButton.cloneNode();
-      rangeAttackButton.textContent = '??U';
+      rangeAttackButton.textContent = '???U??';
       rangeAttackButton.style.background = '#f64';
       rangeAttackButton.style.color = '#fff';
       rangeAttackButton.addEventListener('click', ()=>{
@@ -297,7 +297,7 @@ let MODENAME;
 
       // --- Auto Join (from Red/Blue new) ---
       const autoJoinButton = subButton.cloneNode();
-      autoJoinButton.innerText = 'Q\n[h';
+      autoJoinButton.innerText = '?????Q??\n???[?h';
       autoJoinButton.style.background = '#ffb300';
       autoJoinButton.style.color = '#000';
 
@@ -331,8 +331,8 @@ let MODENAME;
         const inputC = document.createElement('input');
 
         const inputs = {
-          teamName: [inputT,'`['],
-          teamColor: [inputC,'`[J[(6HEX)']
+          teamName: [inputT,'?`?[????'],
+          teamColor: [inputC,'?`?[???J???[(6??HEX)']
         };
         for (const key of Object.keys(inputs)) {
           const l = label.cloneNode();
@@ -353,7 +353,7 @@ let MODENAME;
 
         const p = document.createElement('p');
         p.style.fontSize = '90%';
-        p.innerText = '`[J[ 6HEXi: d32f2fj???B\npl?eN?Zbgo^??オ?B';
+        p.innerText = '?`?[???J???[?? 6??HEX?i??: d32f2f?j????????????????B\n?????????p?l????e?????N??????Z?b?g??o?^?????????????????オ?????B';
 
         const ok = document.createElement('button');
         ok.type = 'button';
@@ -385,18 +385,18 @@ let MODENAME;
         log.style.textAlign = 'left';
 
         const p = document.createElement('p');
-        p.textContent = '??J????';
+        p.textContent = '????????J??????????????????';
         p.style.margin = '0';
 
         const settingsBtn = document.createElement('button');
-        settingsBtn.textContent = '?';
+        settingsBtn.textContent = '???';
         settingsBtn.addEventListener('click', ()=>{
           autoJoinSettingsDialog.showModal();
           stopAutoJoin();
         });
 
         const closeBtn = document.createElement('button');
-        closeBtn.textContent = 'Q[hI';
+        closeBtn.textContent = '?????Q?????[?h???I??';
         closeBtn.addEventListener('click', ()=>{
           autoJoinDialog.close();
           stopAutoJoin();
@@ -420,7 +420,7 @@ let MODENAME;
       });
 
       const closeSlideMenuButton = subButton.cloneNode();
-      closeSlideMenuButton.textContent = '?';
+      closeSlideMenuButton.textContent = '????';
       closeSlideMenuButton.style.background = '#888';
       closeSlideMenuButton.style.color = '#fff';
       closeSlideMenuButton.addEventListener('click', ()=>{
@@ -429,7 +429,7 @@ let MODENAME;
       })
       
       const startRangeAttackButton = subButton.cloneNode();
-      startRangeAttackButton.textContent = 'UJn';
+      startRangeAttackButton.textContent = '?U???J?n';
       startRangeAttackButton.style.background = '#f64';
       startRangeAttackButton.style.color = '#fff';
       startRangeAttackButton.addEventListener('click', async()=>{
@@ -442,7 +442,7 @@ let MODENAME;
       })
 
       const pauseRangeAttackButton = subButton.cloneNode();
-      pauseRangeAttackButton.textContent = 'f';
+      pauseRangeAttackButton.textContent = '???f';
       pauseRangeAttackButton.style.background = '#888';
       pauseRangeAttackButton.style.color = '#fff';
       pauseRangeAttackButton.addEventListener('click', ()=>{
@@ -452,7 +452,7 @@ let MODENAME;
       })
 
       const resumeRangeAttackButton = subButton.cloneNode();
-      resumeRangeAttackButton.textContent = '?J';
+      resumeRangeAttackButton.textContent = '??J';
       resumeRangeAttackButton.style.background = '#f64';
       resumeRangeAttackButton.style.color = '#fff';
       resumeRangeAttackButton.style.display = 'none';
@@ -479,7 +479,7 @@ let MODENAME;
       }
 
       const deselectButton = subButton.cloneNode();
-      deselectButton.textContent = 'I';
+      deselectButton.textContent = '?I??????';
       deselectButton.style.background = '#888';
       deselectButton.style.color = '#fff';
       deselectButton.addEventListener('click', ()=>{
@@ -491,7 +491,7 @@ let MODENAME;
       })
       
       const batchSelectButton = subButton.cloneNode();
-      batchSelectButton.textContent = '?I';
+      batchSelectButton.textContent = '???I??';
       batchSelectButton.style.background = '#ffb300';
       batchSelectButton.style.color = '#000';
       batchSelectButton.addEventListener('click', ()=>{
@@ -519,7 +519,7 @@ let MODENAME;
             const cells = document.querySelectorAll('.cell');
             cells.forEach(cell => {
               const cellRank = cell.querySelector('p').textContent;
-              const regex = new RegExp(`\\b${rank}()?e?$`);
+              const regex = new RegExp(`\\b${rank}(????)?e?$`);
               const match = cellRank.match(regex);
               if(match) {
                 cell.classList.add('selected');
@@ -537,7 +537,7 @@ let MODENAME;
         closeButton.style.width = '4.5em';
         closeButton.style.background = '#888';
         closeButton.style.color = '#fff';
-        closeButton.textContent = '?';
+        closeButton.textContent = '????';
         closeButton.addEventListener('click', ()=>{
           batchSelectMenu.style.display = 'none';
         })
@@ -601,7 +601,7 @@ let MODENAME;
     }
 
     const challengeButton = button.cloneNode();
-    challengeButton.textContent = 'GA?';
+    challengeButton.textContent = '?G???A?????';
     challengeButton.style.flexGrow = '2';
     challengeButton.addEventListener('click', ()=>{
       const table = arenaField.querySelector('table');
@@ -611,27 +611,27 @@ let MODENAME;
     })
 
     const reinforceButton = button.cloneNode();
-    reinforceButton.textContent = '';
+    reinforceButton.textContent = '????????';
     reinforceButton.style.flexGrow = '1';
     reinforceButton.addEventListener('click', ()=>{
       arenaModDialog.dataset.action = 'ReinforceArena';
-      modButton.textContent = '';
-      p.textContent = `?: ${wood}, S: ${steel} (1pt??e25)`;
+      modButton.textContent = '????????';
+      p.textContent = `???: ${wood}, ?S: ${steel} (1pt?????e25??)`;
       arenaModDialog.show();
     })
 
     const siegeButton = button.cloneNode();
-    siegeButton.textContent = '?';
+    siegeButton.textContent = '????';
     siegeButton.style.flexGrow = '1';
     siegeButton.addEventListener('click', ()=>{
       arenaModDialog.dataset.action = 'SiegeArena';
-      modButton.textContent = '?';
-      p.textContent = `?: ${wood}, S: ${steel} (1pt??e25)`;
+      modButton.textContent = '????';
+      p.textContent = `???: ${wood}, ?S: ${steel} (1pt?????e25??)`;
       arenaModDialog.show();
     })
 
     const closeButton = button.cloneNode();
-    closeButton.textContent = '~';
+    closeButton.textContent = '?~';
     closeButton.marginLeft = 'auto';
     closeButton.style.fontSize = '24px';
     closeButton.style.width = '48px';
@@ -658,7 +658,7 @@ let MODENAME;
 
       const input = document.createElement('input');
       input.type = 'number';
-      input.placeholder = '?';
+      input.placeholder = '???????';
 
       modButton.addEventListener('click', ()=>{
         const amt = Number(input.value);
@@ -672,7 +672,7 @@ let MODENAME;
 
       input.addEventListener('keydown', (e)=>{
         if (e.key === "Enter") {
-          e.preventDefault(); // ?dialog??
+          e.preventDefault(); // ??????????dialog????????
           const amt = Number(input.value);
           const table = arenaField.querySelector('table');
           const row = table.dataset.row;
@@ -700,11 +700,11 @@ let MODENAME;
         const res = await fetch(url, options);
         if(!res.ok) throw new Error('/teamvol/ failed to load');
         const text = await res.text();
-        if(text.includes('pbNJ')) {
+        if(text.includes('?????p?b?N???J????')) {
           open('/craft', '_blank');
           return;
         }
-        if(text !== '') throw new Error(text);
+        if(text !== '????????') throw new Error(text);
         wood = wood - 25 * Math.trunc(amt);
         steel = steel - 25 * Math.trunc(amt);
         arenaResult.textContent = text;
@@ -793,12 +793,11 @@ let MODENAME;
   });
 
   
-  // --- Vdl??ObhWbN? ---
+  // --- ?V?d?l?????O???b?h???????W?b?N??? ---
   if (!document.querySelector('.grid') && document.querySelector('.gridCanvasOuter')) {
     const gridOuter = document.querySelector('.gridCanvasOuter');
-    let GRID_SIZE = 16; // l
+    let GRID_SIZE = 16; // ?????l
     let cellColors = {};
-      let waterCells = new Set();
     const scripts = document.querySelectorAll('script');
     for (let s of scripts) {
       if (s.textContent.includes('const cellColors =')) {
@@ -806,17 +805,6 @@ let MODENAME;
         if (cellColorsMatch) {
           const validJsonStr = cellColorsMatch[1].replace(/'/g, '"').replace(/,\s*}/, '}');
           cellColors = JSON.parse(validJsonStr);
-          // parse terrain payload (water tiles)
-          try {
-            const tMatch = s.textContent.match(/const\s+terrainsPayload\s*=\s*(\[.+?\]);/s);
-            if (tMatch) {
-              let tStr = tMatch[1].replace(/'/g, '"');
-              const terrains = JSON.parse(tStr);
-              for (const t of terrains) {
-                if (t && t.t === 'w') waterCells.add(`${t.y}-${t.x}`);
-              }
-            }
-          } catch (e) { console.warn('Failed to parse terrainsPayload', e); }
         }
         const gridMatch = s.textContent.match(/const GRID_SIZE = (\d+);/);
         if (gridMatch) {
@@ -852,16 +840,12 @@ let MODENAME;
         } else {
           cell.style.backgroundColor = 'transparent';
         }
-        // Water tiles are unattackable: paint light blue
-        if (waterCells && waterCells.has(cellKey)) {
-          cell.style.backgroundColor = 'rgba(135, 206, 250, 0.65)';
-        }
         newGrid.appendChild(cell);
       }
     }
     gridOuter.appendChild(newGrid);
   }
-  // --- ? ---
+  // --- ??????? ---
 
   const grid = document.querySelector('.grid');
   if(grid) {
@@ -933,12 +917,12 @@ let MODENAME;
     header.style.display = 'flex';
     
     const h2 = document.createElement('h2');
-    h2.textContent = '?'
+    h2.textContent = '???'
     h2.style.fontSize = '1.2rem';
     h2.style.margin = '2px';
 
     const closeButton = button.cloneNode();
-    closeButton.textContent = '~';
+    closeButton.textContent = '?~';
     closeButton.style.marginLeft = 'auto';
     closeButton.style.background = 'none';
     closeButton.style.border = 'none';
@@ -960,7 +944,7 @@ let MODENAME;
 
     (()=>{
       const saveButton = button.cloneNode();
-      saveButton.textContent = '?';
+      saveButton.textContent = '???';
       saveButton.addEventListener('click', ()=>{
         const settingElements = settingsMenu.querySelectorAll('[data-setting]');
         settingElements.forEach(elm => {
@@ -986,7 +970,7 @@ let MODENAME;
       })
 
       const cancelButton = button.cloneNode();
-      cancelButton.textContent = 'LZ';
+      cancelButton.textContent = '?L?????Z??';
       cancelButton.addEventListener('click', ()=>{
         refreshSettings();
         settingsDialog.close();
@@ -1076,135 +1060,135 @@ let MODENAME;
       const toolbar = container.cloneNode();
       addHeader('toolbar', toolbar);
       const arenaResult = container.cloneNode();
-      addHeader('A[iO', arenaResult);
+      addHeader('?A???[?i???O', arenaResult);
       const arenaField = container.cloneNode();
-      addHeader('A[i', arenaField);
+      addHeader('?A???[?i???', arenaField);
       const gridPanel = container.cloneNode();
-      addHeader('Obh', gridPanel);
+      addHeader('?O???b?h', gridPanel);
       const settingsPanel = container.cloneNode();
-      addHeader('?pl', settingsPanel);
+      addHeader('???p?l??', settingsPanel);
       const equipPanel = container.cloneNode();
-      addHeader('pl', equipPanel);
+      addHeader('?????p?l??', equipPanel);
 
       const settingItems = {
         toolbarPosition: {
-          text: '?u:',
+          text: '??u:',
           type: 'select',
           options: {
-            left: '',
-            right: 'E',
-            center: ''
+            left: '????',
+            right: '?E??',
+            center: '??????'
           },
           parent: toolbar
         },
         toolbarPositionLength: {
-          text: '[?:',
+          text: '?[?????:',
           type: 'width',
           parent: toolbar
         },
         arenaResultScrollPosition: {
-          text: 'XN[?u:',
+          text: '?X?N???[????u:',
           type: 'select',
           options: {
-            top: '',
-            bottom: ''
+            top: '??',
+            bottom: '??'
           },
           parent: arenaResult
         },
         arenaResultBottom: {
-          text: '?:',
+          text: '?????????:',
           type: 'height',
           parent: arenaResult
         },
         arenaResultPosition: {
-          text: '?u:',
+          text: '??u:',
           type: 'select',
           options: {
-            right: 'E',
-            left: ''
+            right: '?E??',
+            left: '????'
           },
           parent: arenaResult
         },
         arenaResultPositionLength: {
-          text: '[?:',
+          text: '???[????????:',
           type: 'width',
           parent: arenaResult
         },
         arenaResultHeight: {
-          text: 'O?:',
+          text: '???O?????:',
           type: 'height',
           parent: arenaResult
         },
         arenaResultWidth: {
-          text: 'O?:',
+          text: '???O?????:',
           type: 'width',
           parent: arenaResult
         },
         arenaFieldBottom: {
-          text: '?:',
+          text: '?????????:',
           type: 'height',
           parent: arenaField
         },
         arenaFieldPosition: {
-          text: '?u:',
+          text: '??u:',
           type: 'select',
           options: {
-            left: '',
-            right: 'E',
-            center: ''
+            left: '????',
+            right: '?E??',
+            center: '??????'
           },
           parent: arenaField
         },
         arenaFieldPositionLength: {
-          text: '[?:',
+          text: '?[????????:',
           type: 'width',
           parent: arenaField
         },
         arenaFieldWidth: {
-          text: ':',
+          text: '????:',
           type: 'width',
           parent: arenaField
         },
         gridColumns: {
-          text: '1s??Z:',
+          text: '1?s????Z????:',
           type: 'number',
           parent: gridPanel
         },
         settingsPanelPosition: {
-          text: '?u',
+          text: '??u',
           type: 'select',
           options: {
-            right: 'E',
-            left: ''
+            right: '?E??',
+            left: '????'
           },
           parent: settingsPanel
         },
         settingsPanelHeight: {
-          text: '',
+          text: '????',
           type: 'height',
           parent: settingsPanel
         },
         settingsPanelWidth: {
-          text: '',
+          text: '????',
           type: 'width',
           parent: settingsPanel
         },
         equipPanelPosition: {
-          text: '?u',
+          text: '??u',
           type: 'select',
           options: {
-            right: 'E',
-            left: ''
+            right: '?E??',
+            left: '????'
           },
           parent: equipPanel
         },
         equipPanelHeight: {
-          text: '',
+          text: '????',
           type: 'height',
           parent: equipPanel
         },
         equipPanelWidth: {
-          text: '',
+          text: '????',
           type: 'width',
           parent: equipPanel
         }
@@ -1253,7 +1237,7 @@ let MODENAME;
       link.href = 'https://donguri-k.github.io/tools/arena-assist-tool';
       link.target = '_blank';
       const author = document.createElement('input');
-      author.value = ' [ID: 7234e634]';
+      author.value = '??? [ID: 7234e634]';
       author.style.color = '#666';
       author.style.background = 'none';
       author.style.margin = '2px';
@@ -1274,7 +1258,7 @@ let MODENAME;
   
   document.body.append(settingsDialog);
 
-  //--  --//
+  //-- ???? --//
     const panel = document.createElement('div');
     panel.style.position = 'fixed';
     panel.style.top = '0';
@@ -1318,7 +1302,7 @@ let MODENAME;
       // input.style.background = '#eee';
       // input.style.color = '#000';
       // input.style.borderRadius = 'unset';
-      // input.placeholder = 'tB^c';
+      // input.placeholder = '?t?B???^?c';
       button.type = 'button';
       button.style.borderRadius = 'unset';
       button.style.border = 'solid 1px #000';
@@ -1345,7 +1329,7 @@ let MODENAME;
       showEquipPreset();
   
       const resetCurrentEquip = document.createElement('div');
-      resetCurrentEquip.textContent = 'Zbg';
+      resetCurrentEquip.textContent = '???????????Z?b?g';
       resetCurrentEquip.style.borderTop = 'solid 1px #000';
       resetCurrentEquip.style.cursor = 'pointer';
       resetCurrentEquip.style.color = '#a62';
@@ -1354,7 +1338,7 @@ let MODENAME;
       resetCurrentEquip.addEventListener('click', ()=>{
         localStorage.removeItem('current_equip');
         const stat = document.querySelector('.equip-preset-stat');
-        stat.textContent = '??';
+        stat.textContent = '??????????????????';
         weaponTable = null;
         armorTable = null;
         necklaceTable = null;
@@ -1376,7 +1360,7 @@ let MODENAME;
         } else if (currentMode === 'auto') {
           selectAutoEquipItems(presetLi, presetName, currentRank);
         } else if (currentMode === 'edit') {
-          alert('');
+          alert('??????');
         }
       });
   
@@ -1391,7 +1375,7 @@ let MODENAME;
   
         /*
         const closeButton = button.cloneNode();
-        closeButton.textContent = '~';
+        closeButton.textContent = '?~';
         closeButton.style.marginLeft = 'auto';
         closeButton.style.background = 'none';
         closeButton.style.border = 'none';
@@ -1405,7 +1389,7 @@ let MODENAME;
         */
   
         const addButton = button.cloneNode();
-        addButton.textContent = '?';
+        addButton.textContent = '???';
         addButton.addEventListener('click', async()=>{
           selectedEquips = {id:[], rank:[]};
           addButton.disabled = true;
@@ -1414,19 +1398,19 @@ let MODENAME;
         })
   
         const removeButton = button.cloneNode();
-        removeButton.textContent = '?';
-        removeButton.dataset.text = '?';
+        removeButton.textContent = '??';
+        removeButton.dataset.text = '??';
         removeButton.dataset.mode = 'remove';
         /*
         const editButton = button.cloneNode();
-        editButton.textContent = '?W';
-        editButton.dataset.text = '?W';
+        editButton.textContent = '??W';
+        editButton.dataset.text = '??W';
         editButton.dataset.mode = 'edit';
         */
   
         const equipSettingsButton = button.cloneNode();
-        equipSettingsButton.textContent = 'o^';
-        equipSettingsButton.dataset.text = 'o^';
+        equipSettingsButton.textContent = '?????o?^';
+        equipSettingsButton.dataset.text = '?????o?^';
         equipSettingsButton.dataset.mode = 'auto';
   
         const equipSettingsDialog = document.createElement('dialog');
@@ -1471,7 +1455,7 @@ let MODENAME;
           const closeButton = button.cloneNode();
           closeButton.style.width = '100px';
           closeButton.style.background = '#caa';
-          closeButton.textContent = '~';
+          closeButton.textContent = '?~';
           closeButton.addEventListener('click',()=>{
             equipSettingsDialog.close();
           })
@@ -1479,16 +1463,16 @@ let MODENAME;
           const div2 = document.createElement('div');
           div2.style.textAlign = 'center';
           const toggleButton = button.cloneNode();
-          toggleButton.textContent = '?p';
+          toggleButton.textContent = '???p';
           toggleButton.style.width = '7em';
           toggleButton.style.background = '#acc';
           toggleButton.addEventListener('click',()=>{
             if (autoEquipMode === 'normal') {
               autoEquipMode = 'autojoin';
-              toggleButton.textContent = 'Qp';
+              toggleButton.textContent = '?????Q???p';
             } else {
               autoEquipMode = 'normal';
-              toggleButton.textContent = '?p';
+              toggleButton.textContent = '???p';
             }
           })
   
@@ -1501,20 +1485,20 @@ let MODENAME;
             settings.autoEquipRandomly = checkRandom.checked;
             localStorage.setItem('aat_settings', JSON.stringify(settings));
           })
-          label.append(checkRandom, '_');
+          label.append(checkRandom, '?????_??????');
   
           div.append(closeButton);
           div2.append(toggleButton,label);
   
           const description = document.createElement('div');
-          description.innerText = '??gp?I?BogJnO?I??X?Bo^??Jn??I?B\nqg: C??1??Zbgg?????1???o^^?g邱???o^????????B\n??A_?`FbN?Ao^??玩?_?I\n\nQpo^??A???p????gpBo^?????pgpB';
+          description.innerText = '????g?p????????I??????????????B?o?g???J?n?O??????I????????X??????B?????o?^????????J?n???????????????I????????B\n?q???g: ???C??????1???Z?b?g???g??????????????1????o?^?^????????????g???????邱?????????????o?^??????????????????????????B\n?????A?????_????????`?F?b?N???????A?o?^??????????玩????????_????I??\n\n?????Q???p??o?^?????????A??????p???????????g?p????B?o?^??????????????p???????g?p?B';
           description.style.fontSize = '70%';
   
           equipSettingsDialog.append(div, div2, description);
         })();
   
         const backupButton = button.cloneNode();
-        backupButton.innerText = 'obN\nAbv';
+        backupButton.innerText = '?o?b?N\n?A?b?v';
   
         const backupDialog = document.createElement('dialog');
         backupDialog.style.background = '#fff';
@@ -1531,7 +1515,7 @@ let MODENAME;
   
           const div = document.createElement('div');
           const saveButton = button.cloneNode();
-          saveButton.textContent = '?';
+          saveButton.textContent = '???';
           saveButton.addEventListener('click', ()=>{
             const isSuccess = importEquipPresets(textarea.value);
             if(isSuccess) {
@@ -1552,10 +1536,10 @@ let MODENAME;
             }
           });
           const copyButton = button.cloneNode();
-          copyButton.textContent = 'Rs[';
+          copyButton.textContent = '?R?s?[';
           copyButton.addEventListener('click', ()=>{navigator.clipboard.writeText(textarea.value).then(alert('copy'));})
           const closeButton = button.cloneNode();
-          closeButton.textContent = '?';
+          closeButton.textContent = '?????';
           closeButton.addEventListener('click', ()=>{backupDialog.close()})
           div.append(saveButton, copyButton, closeButton);
           backupDialog.append(textarea, div);
@@ -1590,11 +1574,11 @@ let MODENAME;
         function setMode(mode, button) {
           resetMode();
           currentMode = mode;
-          button.textContent = '';
+          button.textContent = '????';
           button.classList.add('active');
-          if(mode === 'remove') stat.textContent = '??I';
-          else if (mode === 'edit') stat.textContent = 'NbN??W';
-          else if (mode === 'auto') stat.textContent = 'NbN?I(I)';
+          if(mode === 'remove') stat.textContent = '?????????????I??';
+          else if (mode === 'edit') stat.textContent = '?N???b?N???W';
+          else if (mode === 'auto') stat.textContent = '?N???b?N??I??(?????I????)';
         }
   
         function resetMode() {
@@ -1645,7 +1629,7 @@ let MODENAME;
       equipField.style.maxWidth = '90vw';
       equipField.style.height = '95vh';
       const closeButton = button.cloneNode();
-      closeButton.textContent = '~';
+      closeButton.textContent = '?~';
       closeButton.style.position = 'absolute';
       closeButton.style.background = 'none';
       closeButton.style.border = 'none';
@@ -1679,7 +1663,7 @@ let MODENAME;
       p.style.height = '28px';
   
       const equipSwitchButton = button.cloneNode();
-      equipSwitchButton.textContent = '?';
+      equipSwitchButton.textContent = '?????';
       equipSwitchButton.style.width = '4em';
       equipSwitchButton.style.height = '42px';
       equipSwitchButton.style.fontSize = '';
@@ -1690,23 +1674,23 @@ let MODENAME;
           weaponTable.style.display = 'none';
           armorTable.style.display = '';
           necklaceTable.style.display = 'none';
-          event.target.textContent = '?h';
+          event.target.textContent = '??h??';
         } else if (!armorTable.style.display) {
           weaponTable.style.display = 'none';
           armorTable.style.display = 'none';
           necklaceTable.style.display = '';
-          event.target.textContent = '?';
+          event.target.textContent = '???';
         } else if (!necklaceTable.style.display) {
           weaponTable.style.display = '';
           armorTable.style.display = 'none';
           necklaceTable.style.display = 'none';
-          event.target.textContent = '?';
+          event.target.textContent = '?????';
         }
       });
   
       // register
       const registerButton = button.cloneNode();
-      registerButton.textContent = 'o^';
+      registerButton.textContent = '?o?^';
       registerButton.style.width = '4em';
       registerButton.style.height = '42px';
       registerButton.style.fontSize = '';
@@ -1718,14 +1702,14 @@ let MODENAME;
         dialog.style.color = '#000';
         dialog.style.textAlign = 'center';
         const presetNameInput = document.createElement('input');
-        presetNameInput.placeholder = 'vZbg';
+        presetNameInput.placeholder = '?v???Z?b?g??';
         presetNameInput.style.background = '#fff';
         presetNameInput.style.color = '#000';
         const p = document.createElement('p');
-        p.textContent = '?vZbg?????B';
+        p.textContent = '??????v???Z?b?g??????????????????????B';
         p.style.margin = '0';
         const confirmButton = button.cloneNode();
-        confirmButton.textContent = '?';
+        confirmButton.textContent = '???';
         confirmButton.addEventListener('click', ()=>{
           if(presetNameInput.value.trim() === '') return;
           saveEquipPreset(presetNameInput.value.substring(0,32), selectedEquips);
@@ -1734,7 +1718,7 @@ let MODENAME;
         })
         presetNameInput.addEventListener('keydown', (e)=>{
           if (e.key === "Enter") {
-            e.preventDefault(); // ?dialog??
+            e.preventDefault(); // ??????????dialog????????
             if(presetNameInput.value.trim() === '') return;
             saveEquipPreset(presetNameInput.value.substring(0,32), selectedEquips);
             dialog.close();
@@ -1742,13 +1726,13 @@ let MODENAME;
           }
         })
         const cancelButton = button.cloneNode();
-        cancelButton.textContent = 'LZ';
+        cancelButton.textContent = '?L?????Z??';
         cancelButton.addEventListener('click', ()=>{dialog.close()});
         dialog.append(presetNameInput, confirmButton, cancelButton, p);
         equipField.append(dialog);
         registerButton.addEventListener('click', ()=>{
           if(!selectedEquips.id[0] && !selectedEquips.id[1] && !selectedEquips.id[2]) {
-            alert('I?');
+            alert('?????????I?????');
             return;
           }
           dialog.showModal();
@@ -1781,7 +1765,7 @@ let MODENAME;
             const text = await res.text();
             const doc = new DOMParser().parseFromString(text, 'text/html');
             const h1 = doc.querySelector('h1');
-            if(h1?.textContent !== 'ACeobO') throw new Error(text);
+            if(h1?.textContent !== '?A?C?e???o?b?O') throw new Error(text);
             weaponTable = doc.querySelector('#weaponTable');
             armorTable = doc.querySelector('#armorTable');
             necklaceTable = doc.querySelector('#necklaceTable');
@@ -1828,7 +1812,7 @@ let MODENAME;
           }
         }
   
-        equipSwitchButton.textContent = '?';
+        equipSwitchButton.textContent = '?????';
         weaponTable.style.display = '';
         armorTable.style.display = 'none';
         necklaceTable.style.display = 'none';
@@ -1891,7 +1875,7 @@ let MODENAME;
           return true;
         } catch (e) {
           if (e instanceof SyntaxError) {
-            alert('G[');
+            alert('?????G???[');
           }
           return false;
         }
@@ -1900,7 +1884,7 @@ let MODENAME;
   
   
       function removePresetItems(presetName) {
-        const userConfirmed = confirm(presetName + ' ??H');
+        const userConfirmed = confirm(presetName + ' ????????????H');
         if(!userConfirmed) return;
         const stat = document.querySelector('.equip-preset-stat');
         const equipPresets = JSON.parse(localStorage.getItem('equipPresets')) || {};
@@ -1947,18 +1931,18 @@ let MODENAME;
         console.log(items[rank]);
       }
     })();
-    //-- ? --//
+    //-- ??????? --//
 
   async function setPresetItems (presetName) {
       let currentEquip = JSON.parse(localStorage.getItem('current_equip')) || [];
       const stat = document.querySelector('.equip-preset-stat');
-      if (stat.textContent === '...') return;
+      if (stat.textContent === '??????...') return;
       const equipPresets = JSON.parse(localStorage.getItem('equipPresets')) || {};
       const fetchPromises = equipPresets[presetName].id
-        .filter(id => id !== undefined && id !== null && !currentEquip.includes(id)) // o^or????O
+        .filter(id => id !== undefined && id !== null && !currentEquip.includes(id)) // ???o?^or?????????????????O
         .map(id => fetch('https://donguri.5ch.net/equip/' + id));
   
-      stat.textContent = '...';
+      stat.textContent = '??????...';
       try {
         const responses = await Promise.all(fetchPromises);
         const texts = await Promise.all(
@@ -1970,20 +1954,20 @@ let MODENAME;
           })
         );
   
-        if(texts.includes('? 肪???B')) {
-          throw new Error('?OC?');
-        } else if(texts.includes('ACe???B')) {
-          throw new Error('ACe???');
+        if(texts.includes('?? 肪????????????????B')) {
+          throw new Error('????O?C?????????????');
+        } else if(texts.includes('?A?C?e????????????????????B')) {
+          throw new Error('?A?C?e???????????????????');
         }
   
         const docs = texts.map(text => new DOMParser().parseFromString(text,'text/html'));
         const titles = docs.map(doc => doc.querySelector('h1')?.textContent);
-        if(titles.includes('? n')) {
-          throw new Error('?OC?');
-        } else if (!titles.every(title => title === 'ACeobO')) {
-          throw new Error('G[');
+        if(titles.includes('?? ??n')) {
+          throw new Error('????O?C?????????????');
+        } else if (!titles.every(title => title === '?A?C?e???o?b?O')) {
+          throw new Error('?????G???[');
         }
-        stat.textContent = ': ' + presetName;
+        stat.textContent = '????: ' + presetName;
         localStorage.setItem('current_equip', JSON.stringify(equipPresets[presetName].id));
         currentEquipName = presetName;
       } catch (e) {
@@ -1999,7 +1983,7 @@ let MODENAME;
   window.setPresetItems = setPresetItems;
 
 
-  //--  --//
+  //-- ???? --//
   function scaleContentsToFit(container, contents){
     const containerWidth = container.clientWidth;
     const contentsWidth = contents.scrollWidth;
@@ -2025,7 +2009,7 @@ let MODENAME;
       
       const h1Text = doc.querySelector('h1')?.textContent || '';
       const divText = doc.querySelector('header > div')?.textContent || '';
-      if (h1Text !== '? `[?' && !divText.includes('? `[?')) {
+      if (h1Text !== '?? ?`?[????' && !divText.includes('?? ?`?[????')) {
          throw new Error('title.ng info');
       }
   
@@ -2042,6 +2026,30 @@ let MODENAME;
       const cellColorsString = scriptContent.match(/const cellColors = ({.+?})/s)[1];
       const validJsonStr = cellColorsString.replace(/'/g, '"').replace(/,\s*}/, '}');
       const cellColors = JSON.parse(validJsonStr);
+      // --- water tiles (cannot be attacked) ---
+      const waterSet = new Set();
+      try {
+        const terrainsMatch = scriptContent.match(/const\s+terrainsPayload\s*=\s*(\{[\s\S]*?\});/);
+        if (terrainsMatch && terrainsMatch[1]) {
+          // terrainsPayload is usually valid JSON, but just in case, remove trailing commas.
+          const terrainsJson = terrainsMatch[1]
+            .replace(/,\s*}/g, '}')
+            .replace(/,\s*]/g, ']');
+          const terrainsPayload = JSON.parse(terrainsJson);
+          const terrains = (terrainsPayload && Array.isArray(terrainsPayload.terrains)) ? terrainsPayload.terrains : [];
+          for (const t of terrains) {
+            const r = (t.r ?? t.row ?? t.x);
+            const c = (t.c ?? t.col ?? t.y);
+            const tt = (t.t ?? t.terrain);
+            if (!Number.isFinite(r) || !Number.isFinite(c)) continue;
+            if (tt === 'w' || tt === 'water' || tt === 'twater') {
+              waterSet.add(`${r}-${c}`);
+            }
+          }
+        }
+      } catch (e) {
+        // ignore parse errors
+      }
   
       let rows = 8, cols = 8;
       const gridMatch = scriptContent.match(/const GRID_SIZE = (\d+);/);
@@ -2073,10 +2081,18 @@ let MODENAME;
             cell.style.transition = 'background-color 0.3s';
   
             const cellKey = `${i}-${j}`;
-            if (cellColors[cellKey]) {
+            if (waterSet.has(cellKey)) {
+              cell.style.backgroundColor = '#b3e5fc';
+              cell.dataset.water = '1';
+              cell.style.cursor = 'not-allowed';
+            } else if (cellColors[cellKey]) {
               cell.style.backgroundColor = cellColors[cellKey];
+              cell.dataset.water = '';
+              cell.style.cursor = 'pointer';
             } else {
               cell.style.backgroundColor = 'transparent';
+              cell.dataset.water = '';
+              cell.style.cursor = 'pointer';
             }
   
             grid.appendChild(cell);
@@ -2097,13 +2113,24 @@ let MODENAME;
               .join('');
           }
   
-          if (cellColors[cellKey]) {
+          if (waterSet.has(cellKey)) {
+            if (cell.style.backgroundColor !== '#b3e5fc') {
+              cell.style.backgroundColor = '#b3e5fc';
+              refreshedCells.push(cell);
+            }
+            cell.dataset.water = '1';
+            cell.style.cursor = 'not-allowed';
+          } else if (cellColors[cellKey]) {
             if (cellColorCode !== cellColors[cellKey].toLowerCase()) {
               cell.style.backgroundColor = cellColors[cellKey];
               refreshedCells.push(cell);
             }
+            cell.dataset.water = '';
+            cell.style.cursor = 'pointer';
           } else if (cellColorCode !== '' && cellColorCode !== '#ffffff00' && cell.style.backgroundColor !== 'transparent') {
             cell.style.backgroundColor = 'transparent';
+            cell.dataset.water = '';
+            cell.style.cursor = 'pointer';
             refreshedCells.push(cell);
           }
           
@@ -2166,13 +2193,13 @@ let MODENAME;
             let doc = new DOMParser().parseFromString(text, 'text/html');
             const h1Text = doc.querySelector('h1')?.textContent || '';
             const divText = doc.querySelector('header > div')?.textContent || '';
-            if (h1Text !== '? `[?' && !divText.includes('? `[?')) {
+            if (h1Text !== '?? ?`?[????' && !divText.includes('?? ?`?[????')) {
               return Promise.reject(`title.ng [${row}][${col}]`);
             }
             let cond = doc.querySelector('small')?.textContent || '';
             if(!cond) return Promise.reject(`cond.ng [${row}][${col}]`);
             let holder = doc.querySelector('strong')?.textContent || '',
-            shortenCond = cond.replace('[G[g]','e').replace('','-').replace(/(?|\[|\]|\||\s)/g,'');
+            shortenCond = cond.replace('[?G???[?g]','e').replace('????','-').replace(/(???|\[|\]|\||\s)/g,'');
             const p = [document.createElement('p'), document.createElement('p')];
             p[0].textContent = shortenCond;
             p[1].textContent = holder;
@@ -2230,7 +2257,7 @@ let MODENAME;
       const doc = new DOMParser().parseFromString(text,'text/html');
       const h1Text = doc.querySelector('h1')?.textContent || '';
       const divText = doc.querySelector('header > div')?.textContent || '';
-      if (h1Text !== '? `[?' && !divText.includes('? `[?')) {
+      if (h1Text !== '?? ?`?[????' && !divText.includes('?? ?`?[????')) {
         return Promise.reject(`title.ng`);
       }
       const table = doc.querySelector('table');
@@ -2243,7 +2270,7 @@ let MODENAME;
     function showArenaTable (table){
       const tableRow = table.querySelector('tbody > tr');
       if(!tableRow) return;
-      const coordinate = tableRow.cells[0].textContent.replace('A[i','').trim();
+      const coordinate = tableRow.cells[0].textContent.replace('?A???[?i','').trim();
       const holderName = tableRow.cells[1].querySelector('strong');
       const equipCond = tableRow.cells[1].querySelector('small');
       const teamName = tableRow.cells[2].textContent;
@@ -2267,8 +2294,8 @@ let MODENAME;
 
       cells[0].append(coordinate, hr, equipCond);
       cells[1].append(holderName, document.createElement('br'), teamName);
-      cells[2].innerText = `:${statistics[0]}\n:${statistics[1]}\n:${statistics[2]}`;
-      cells[3].innerText = `:${modCounts[0]}\n:${modCounts[1]}\n${modders}l`;
+      cells[2].innerText = `??:${statistics[0]}\n??:${statistics[1]}\n??:${statistics[2]}`;
+      cells[3].innerText = `????:${modCounts[0]}\n???:${modCounts[1]}\n${modders}?l`;
       cells[3].style.whiteSpace = 'nowrap';
 
       const matchData = coordinate.match(/\d+/g);
@@ -2338,8 +2365,8 @@ async function autoEquipAndChallenge (row, col, rank, mode = 'normal') {
 
     const normalizedRank = (rank || '')
       .toString()
-      .replace('G[g', 'e')
-      .replace(/.+|\w+-|?||x|x|\s|\[|\]|\|/g, '');
+      .replace('?G???[?g', 'e')
+      .replace(/.+????|\w+-|???|????|?x????|?x|\s|\[|\]|\|/g, '');
 
     const autoEquipItems = JSON.parse(localStorage.getItem('autoEquipItems')) || {};
     const autoEquipItemsAutojoin = JSON.parse(localStorage.getItem('autoEquipItemsAutojoin')) || {};
@@ -2465,7 +2492,7 @@ async function arenaChallenge (row, col){
     }
 
     if(rangeAttackQueue.length === 0) {
-      alert('ZI?');
+      alert('?Z????I?????????????');
       return;
     }
 
@@ -2482,7 +2509,7 @@ async function arenaChallenge (row, col){
       if(!rangeAttackProcessing) return;
 
       const cell = rangeAttackQueue[0];
-      // UO?I??
+      // ?U???O??I????????????
       if(!cell.classList.contains('selected')) {
         rangeAttackQueue.shift();
         continue;
@@ -2505,15 +2532,15 @@ async function arenaChallenge (row, col){
         let lastLine = text.trim().split('\n').pop();
         if(
           lastLine.length > 100 ||
-          lastLine === '? 肪???B'
+          lastLine === '?? 肪????????????????B'
         ) {
-          throw new Error('? 肪???B');
+          throw new Error('?? 肪????????????????B');
         }
         if(
-          lastLine === '??`[?g??B?炭?B' ||
+          lastLine === '???????`?[??????????g?????????????B????炭??????????????B' ||
           lastLine === 'ng<>too fast' ||
-          lastLine === '?h ????B' ||
-          lastLine === '??`[?QKv?B'
+          lastLine === '?????h?? ???????????????B' ||
+          lastLine === '?????`?[????Q??????K?v?????????B'
         ) {
           throw new Error(lastLine);
         }
@@ -2524,7 +2551,7 @@ async function arenaChallenge (row, col){
         rangeAttackQueue.shift();
       } catch (e) {
         const p = pTemplate.cloneNode();
-        p.textContent = `(${row}, ${col}) [f] ${e}`;
+        p.textContent = `(${row}, ${col}) [???f] ${e}`;
         arenaResult.prepend(p);
         errorOccurred = true;
         break;
@@ -2536,7 +2563,7 @@ async function arenaChallenge (row, col){
     }
     if(!errorOccurred) {
       const p = pTemplate.cloneNode();
-      p.textContent = ``;
+      p.textContent = `????`;
       arenaResult.prepend(p);
       return true;
     } else {
@@ -2571,29 +2598,29 @@ async function arenaChallenge (row, col){
       
         const order = ['N', 'R', 'SR', 'SSR', 'UR'];
       
-        // '-' ??N擾i??????j
+        // '-' ????????N???擾?i????????????j
         const baseA = isCompositeA ? splitA[1] : condA;
         const baseB = isCompositeB ? splitB[1] : condB;
       
-        const indexA = order.indexOf(baseA.replace(/|e/g, ''));
-        const indexB = order.indexOf(baseB.replace(/|e/g, ''));
+        const indexA = order.indexOf(baseA.replace(/????|e/g, ''));
+        const indexB = order.indexOf(baseB.replace(/????|e/g, ''));
 
-        // N
+        // ?????N??
         if (indexA !== indexB) return indexA - indexB;
       
-        // '' > 'e' > 'e'
+        // '????' > 'e' > '????e'
         const flag = s => 
-          (s.includes('') ? 1 : 0) + (s.includes('e') ? 2 : 0);
+          (s.includes('????') ? 1 : 0) + (s.includes('e') ? 2 : 0);
         const flagA = flag(condA);
         const flagB = flag(condB);
 
         if(flagA !== flagB) return flagA - flagB;
 
-        // N '-' ????D
+        // ?????????N???? '-' ????????????D??
         if (isCompositeA !== isCompositeB) return isCompositeA - isCompositeB;
       
         if (isCompositeA) {
-          // '-' ?O?N?r
+          // '-' ??O??????N???r
           const frontA = splitA[0];
           const frontB = splitB[0];
           const indexFrontA = order.indexOf(frontA);
@@ -2632,7 +2659,7 @@ async function arenaChallenge (row, col){
       timestamp.style.whiteSpace = 'nowrap';
 
       const regionDiv = document.createElement('div');
-      const progress = `${currentPeriod} ${currentProgress}%`;
+      const progress = `${currentPeriod}?? ${currentProgress}%`;
       if (region) regionDiv.innerText = `${progress}\ntarget: ${region}\n${next}`;
       else regionDiv.innerText = next;
       regionDiv.style.fontSize = '90%';
@@ -2657,52 +2684,52 @@ async function arenaChallenge (row, col){
 
     const messageTypes = {
       breaktime: [
-        '`[?Q??E????A?ogn????B',
-        'xog?QO?A?????B',
-        'ng: ?'
+        '?`?[????Q?????????E????????????????A????o?g?????n??????????????????B',
+        '??????x?o?g????Q??????O??A???????????????B',
+        'ng: ?????????????'
       ],
       toofast: [
         'ng<>too fast'
       ],
       retry: [
-        '??`[?g??B?炭?B'
+        '???????`?[??????????g?????????????B????炭??????????????B'
       ],
       reset: [
-        '?^C?U??B??O?B'
+        '????^?C????U??????????B???O????B'
       ],
       quit: [
-        '??`[?QKv?B',
-        '? 肪???B',
-        '??? 肪???B',
-        'x??B'
+        '?????`?[????Q??????K?v?????????B',
+        '?? 肪????????????????B',
+        '???????? 肪?????????????????B',
+        '???x????????????B'
       ],
       guardError: [
-        '[x]'
+        '[?x????]????'
       ],
       equipError: [
-        '?h ????B',
-        '?h???s?B',
-        '?h???',
-        '????B????',
-        'Q??A??h?ACeID'
+        '?????h?? ???????????????B',
+        '???????????h????????s??????B',
+        '???????????h???????????????',
+        '??????????????????????????????B????????????????????????????????',
+        '?Q????????A????????????h???A?C?e??ID'
       ],
       nonAdjacent: [
-        '?^C?U??B??`[s???A??s???^C?邱????B',
-        '??`[?s???A?`[?s?U??B'
+        '????^?C????U??????????B???????`?[??????s????????A????s?????????^?C?????????邱??????????B',
+        '???????`?[?????s????????????????A????`?[?????s??U??????????B'
       ],
       teamAdjacent: [
-        '?^C?U??B??`[??y????????B',
-        '?^C?U??BsD???A??^C??3?xz?Kv?B',
-        '?^C?U??BsD???A??^C??2?xz?Kv?B',
-        '?^C?U??BsD???A??^C??1?xz?Kv?B',
-        '?^C?U??B?s?U??B',
-        '?s?U??B?^C???'
+        '????^?C????U??????????B???????`?[????????y????????????????????B',
+        '????^?C????U??????????B??s??D??????A???^?C????????????3??x?z???????K?v?????????B',
+        '????^?C????U??????????B??s??D??????A???^?C????????????2??x?z???????K?v?????????B',
+        '????^?C????U??????????B??s??D??????A???^?C????????????1??x?z???????K?v?????????B',
+        '????^?C????U??????????B???????s??U??????????B',
+        '?????s??U??????????B???????^?C?????????????'
       ],
       capitalAdjacent: [
-        '?^C?U??BG}bv??A??m1??s????????B'
+        '????^?C????U??????????B???G?????}?b?v???A??????????m??1????s????????????????????B'
       ],
       mapEdge: [
-        '?^C?U??BG}bv??A??}bv?[?????B'
+        '????^?C????U??????????B???G?????}?b?v???A????????}?b?v??[?????????????B'
       ]
     }
 
@@ -2715,7 +2742,7 @@ async function arenaChallenge (row, col){
     }
 
 
-    // ???isx(%)?iRB}bv16/33/50/66/83/100??j
+    // ??????????i?s?x(%)???????iRB?}?b?v??16/33/50/66/83/100?????j
     function computeNextProgressRB(pct){
       if (pct < 16) return 26;
       if (pct < 33) return 43;
@@ -2725,20 +2752,20 @@ async function arenaChallenge (row, col){
       return 10;
     }
 
-    // ?isx???Wisxi?????j
+    // ????i?s?x???????W?i?s?x?????????i?????????????????????????j
     let nextProgress = null;
     let firstAutoJoinRun = true;
 async function attackRegion(force = false) {
       await drawProgressBar();
       if (isAutoJoinRunning) return;
-      // nextProgress?/NaN?
+      // nextProgress?????/NaN???
       if (nextProgress === null || Number.isNaN(Number(nextProgress))) {
         nextProgress = location.href.includes('/teambattle?m=rb') ? computeNextProgressRB(currentProgress) : nextProgress;
       }
-      // ?Wisx}2%?????@iJn1??j
+      // ??W?i?s?x?}2%????????????????@?i???????J?n?????1????????????j
       if (!firstAutoJoinRun && nextProgress !== null && Math.abs(nextProgress - currentProgress) >= 3) {
         try {
-          logMessage(null, `?@: ${currentProgress}%  ${nextProgress}}2%`, '');
+          logMessage(null, `??@??: ${currentProgress}% ?? ${nextProgress}?}2%`, '');
         } catch(e) {}
         return;
       }
@@ -2749,14 +2776,14 @@ if (location.href.includes('/teambattle?m=rb')) {
           if (res.ok) {
             const text = await res.text();
             const doc = new DOMParser().parseFromString(text, 'text/html');
-            const target = Array.from(doc.querySelectorAll('header span')).find(s => s.textContent.includes('`[:'));
+            const target = Array.from(doc.querySelectorAll('header span')).find(s => s.textContent.includes('?`?[??:'));
             if (target) {
               const raw = target.textContent;
-              if (raw.includes('bh')) {
-                teamName = 'bh';
+              if (raw.includes('???b?h')) {
+                teamName = '???b?h';
                 teamColor = 'd32f2f';
-              } else if (raw.includes('u[')) {
-                teamName = 'u[';
+              } else if (raw.includes('?u???[')) {
+                teamName = '?u???[';
                 teamColor = '1976d2';
               }
             }
@@ -2766,7 +2793,7 @@ if (location.href.includes('/teambattle?m=rb')) {
 
       let regions = await getRegions();
       if (!regions) {
-        logMessage(null, '[?@] }bv擾?s (getRegions)', ' 20s');
+        logMessage(null, '[??@] ?}?b?v???擾????s (getRegions)', '?? 20s');
         await sleep(20000);
         return;
       }
@@ -2805,9 +2832,9 @@ if (location.href.includes('/teambattle?m=rb')) {
             let processType;
             let sleepTime = 2;
 
-            if (text.startsWith('A[i`WJn')||text.startsWith('[_[??')) {
+            if (text.startsWith('?A???[?i?`???????W?J?n')||text.startsWith('???[?_?[??????')) {
               success = true;
-              message = '[] ' + lastLine;
+              message = '[????] ' + lastLine;
               processType = 'return';
             } else if (messageType === 'breaktime') {
               success = true;
@@ -2826,10 +2853,10 @@ if (location.href.includes('/teambattle?m=rb')) {
               message += ` (${cellRank}, ${currentEquipName})`;
               processType = 'continue';
             } else if (lastLine.length > 100) {
-              message = '? VXe';
+              message = '?? ?V?X?e??';
               processType = 'continue';
             } else if (messageType === 'quit') {
-              message = '[~] ' + lastLine;
+              message = '[??~] ' + lastLine;
               processType = 'return';
               clearInterval(autoJoinIntervalId);
             } else if (messageType === 'reset') {
@@ -2857,13 +2884,13 @@ if (location.href.includes('/teambattle?m=rb')) {
               if (location.href.includes('/teambattle?m=rb')) {
                 nextProgress = computeNextProgressRB(currentProgress);
               }
-              next = ` ${nextProgress}}2%`;
+              next = `?? ${nextProgress}?}2%`;
               isAutoJoinRunning = false;
             } else if (processType === 'return') {
               next = '';
               isAutoJoinRunning = false;
             } else {
-              next = ` ${sleepTime}s`;
+              next = `?? ${sleepTime}s`;
             }
 
             logMessage(region, message, next);
@@ -2894,8 +2921,8 @@ if (location.href.includes('/teambattle?m=rb')) {
                 message = e;
                 break;
             }
-            if (e.message === '?OC?') {
-              logMessage(region, '[~] ? 肪???', '');
+            if (e.message === '????O?C?????????????') {
+              logMessage(region, '[??~] ?? 肪???????????????', '');
               isAutoJoinRunning = false;
               clearInterval(autoJoinIntervalId);
               return;
@@ -2908,11 +2935,11 @@ if (location.href.includes('/teambattle?m=rb')) {
               errorCount++;
               let sleepTime = 20 * errorCount;
               if(sleepTime > 600) sleepTime = 600;
-              logMessage(region, message, ` ${sleepTime}s`);
+              logMessage(region, message, `?? ${sleepTime}s`);
               await sleep(sleepTime * 1000);
             } else {
               let sleepTime = 20;
-              logMessage(region, e, ` ${sleepTime}s`);
+              logMessage(region, e, `?? ${sleepTime}s`);
               await sleep(sleepTime * 1000);
             }
           }
@@ -2921,9 +2948,9 @@ if (location.href.includes('/teambattle?m=rb')) {
           if (location.href.includes('/teambattle?m=rb')) {
             nextProgress = computeNextProgressRB(currentProgress);
           }
-          const next = ` ${nextProgress}}2%`;
+          const next = `?? ${nextProgress}?}2%`;
           isAutoJoinRunning = false;
-          logMessage(null, 'U?\?^C???B', next);
+          logMessage(null, '?U????\??^?C????????????????????B', next);
           return;
         }
       }
@@ -2936,13 +2963,11 @@ if (location.href.includes('/teambattle?m=rb')) {
         const text = await res.text();
         const doc = new DOMParser().parseFromString(text, 'text/html');
         const headerText = doc?.querySelector('header')?.textContent || '';
-        if (!headerText.includes('? `[?')) throw new Error('title.ng info');
+        if (!headerText.includes('?? ?`?[????')) throw new Error('title.ng info');
 
         const scriptContent = doc.querySelector('.grid > script, #gridWrap + script')?.textContent || '';
 
         let cellColors, capitalMap, rows, cols;
-
-        let waterSet = new Set();
 
         if (location.href.includes('m=rb')) {
           //rb
@@ -2955,18 +2980,6 @@ if (location.href.includes('/teambattle?m=rb')) {
 
           const gridSizeMatch = scriptContent.match(/const GRID_SIZE = (\d+);/);
           rows = cols = Number(gridSizeMatch[1]);
-
-          // terrain payload (water tiles)
-          try {
-            const tMatch = scriptContent.match(/const\s+terrainsPayload\s*=\s*(\[.+?\]);/s);
-            if (tMatch) {
-              let tStr = tMatch[1].replace(/'/g, '"');
-              const terrains = JSON.parse(tStr);
-              for (const t of terrains) {
-                if (t && t.t === 'w') waterSet.add(`${t.y}-${t.x}`);
-              }
-            }
-          } catch (e) { /* ignore */ }
         } else {
           //hc/l
           const cellColorsString = scriptContent.match(/const cellColors = ({.+?})/s)[1];
@@ -2974,18 +2987,6 @@ if (location.href.includes('/teambattle?m=rb')) {
           cellColors = JSON.parse(validJsonStr);
           const capitalMapString = scriptContent.match(/const capitalMap = (\[.*?\]);/s)[1];
           capitalMap = JSON.parse(capitalMapString);
-
-          // terrain payload (water tiles)
-          try {
-            const tMatch = scriptContent.match(/const\s+terrainsPayload\s*=\s*(\[.+?\]);/s);
-            if (tMatch) {
-              let tStr = tMatch[1].replace(/'/g, '"');
-              const terrains = JSON.parse(tStr);
-              for (const t of terrains) {
-                if (t && t.t === 'w') waterSet.add(`${t.y}-${t.x}`);
-              }
-            }
-          } catch (e) { /* ignore */ }
 
           const grid = doc.querySelector('.grid');
           if (!grid) return;
@@ -3077,16 +3078,8 @@ if (location.href.includes('/teambattle?m=rb')) {
           return arr;
         }
 
-        // Remove unattackable water tiles from candidate lists
-        if (waterSet && waterSet.size > 0) {
-          nonAdjacentCells = nonAdjacentCells.filter(([r,c]) => !waterSet.has(`${r}-${c}`));
-          capitalAdjacentCells = capitalAdjacentCells.filter(([r,c]) => !waterSet.has(`${r}-${c}`));
-          teamAdjacentCells = teamAdjacentCells.filter(([r,c]) => !waterSet.has(`${r}-${c}`));
-          mapEdgeCells = mapEdgeCells.filter(([r,c]) => !waterSet.has(`${r}-${c}`));
-        }
-
         const regions = {
-          nonAdjacent:  shuffle(nonAdjacentCells),
+          nonAdjacent: shuffle(nonAdjacentCells),
           capitalAdjacent: shuffle(capitalAdjacentCells),
           teamAdjacent: shuffle(teamAdjacentCells),
           mapEdge: shuffle(mapEdgeCells)
@@ -3127,13 +3120,13 @@ if (location.href.includes('/teambattle?m=rb')) {
         const text = await res.text();
         const doc = new DOMParser().parseFromString(text,'text/html');
         const headerText = doc?.querySelector('header')?.textContent || '';
-        if(!headerText.includes('? `[?')) return Promise.reject(`title.ng`);
+        if(!headerText.includes('?? ?`?[????')) return Promise.reject(`title.ng`);
         const table = doc.querySelector('table');
         if(!table) throw new Error('table.ng');
         const equipCond = table.querySelector('td small').textContent;
         const rank = equipCond
-          .replace('G[g','e')
-          .replace(/.+|\w+-|?||x|x|\s|\[|\]|\|/g,'');
+          .replace('?G???[?g','e')
+          .replace(/.+????|\w+-|???|????|?x????|?x|\s|\[|\]|\|/g,'');
         const autoEquipItems = JSON.parse(localStorage.getItem('autoEquipItems')) || {};
         const autoEquipItemsAutojoin = JSON.parse(localStorage.getItem('autoEquipItemsAutojoin')) || {};
 
@@ -3155,7 +3148,7 @@ if (location.href.includes('/teambattle?m=rb')) {
     }
 
     if (!isAutoJoinRunning) {
-      // ?{^?xsii?@ j
+      // ?????{?^????????????x?????????s?i?i????@???? ??j
       setTimeout(() => attackRegion(!!forceFirst), 0);
     }
     autoJoinIntervalId = setInterval(() => attackRegion(false), 60000);
@@ -3175,7 +3168,7 @@ async function drawProgressBar(){
       let str,min,totalSec,sec,margin;
 
       if (currentProgress === 0 || currentProgress === 50 || (location.href.includes('/teambattle?m=rb') && (currentProgress === 16 || currentProgress === 33 || currentProgress === 66 || currentProgress === 83))) {
-        str = 'i}bvXVj';
+        str = '?i?}?b?v?X?V?j';
       } else {
         if (currentProgress === 100) {
           min = 0;
@@ -3204,15 +3197,15 @@ async function drawProgressBar(){
           Bluesec = totalSec % 60;
           margin = 20;
         }
-        str = 'ic' + min + '' + sec + 'b \xb1' + margin + 'bj';
+        str = '?i?c??' + min + '??' + sec + '?b \xb1' + margin + '?b?j';
       }
       progressBarBody.textContent = currentProgress + '%';
       progressBarBody.style.width = currentProgress + '%';
-      progressBarInfo.textContent = `${MODENAME}${currentPeriod}${str}`;
+      progressBarInfo.textContent = `${MODENAME}??${currentPeriod}??${str}`;
 
       const statBlock = doc.querySelector('.stat-block');
-      wood = statBlock.textContent.match(/???: (\d+)/)[1];
-      steel = statBlock.textContent.match(/S?: (\d+)/)[1];
+      wood = statBlock.textContent.match(/?????: (\d+)/)[1];
+      steel = statBlock.textContent.match(/?S???: (\d+)/)[1];
     } catch (e) {
       console.error(e+' drawProgressBar()')
     }
