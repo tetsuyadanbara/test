@@ -2604,7 +2604,6 @@
         '再建が必要です。'
       ],
       onemoretime: [
-        'この場所には首都を建設できません（水で隣接が不足）',
         'もう一度バトルに参加する前に、待たなければなりません。'
       ],
       breaktime: [
@@ -2910,24 +2909,16 @@
 
             if (success) {
               if (location.href.includes('/teambattle?m=rb')) {
-                if (currentProgress < 10) {
-                  nextProgress = 12;
-                } else if (currentProgress < 20) {
-                  nextProgress = 22;
-                } else if (currentProgress < 30) {
-                  nextProgress = 32;
-                } else if (currentProgress < 40) {
-                  nextProgress = 42;
+                if (currentProgress < 16) {
+                  nextProgress = 19;
+                } else if (currentProgress < 33) {
+                  nextProgress = 36;
                 } else if (currentProgress < 50) {
                   nextProgress = 52;
-                } else if (currentProgress < 60) {
-                  nextProgress = 62;
-                } else if (currentProgress < 70) {
-                  nextProgress = 72;
-                } else if (currentProgress < 80) {
-                  nextProgress = 82;
-                } else if (currentProgress < 90) {
-                  nextProgress = 92;
+                } else if (currentProgress < 66) {
+                  nextProgress = 69;
+                } else if (currentProgress < 83) {
+                  nextProgress = 86;
                 } else {
                   nextProgress = 2;
                 }
@@ -3031,26 +3022,18 @@
 
         if (!success && regions[cellType].length === 0) {
           if (location.href.includes('/teambattle?m=rb')) {
-            if (currentProgress < 10) {
-              nextProgress = 12;
-            } else if (currentProgress < 20) {
-              nextProgress = 22;
-            } else if (currentProgress < 30) {
-              nextProgress = 32;
-            } else if (currentProgress < 40) {
-              nextProgress = 42;
+            if (currentProgress < 16) {
+               nextProgress = 19;
+            } else if (currentProgress < 33) {
+               nextProgress = 36;
             } else if (currentProgress < 50) {
               nextProgress = 52;
-            } else if (currentProgress < 60) {
-              nextProgress = 62;
-            } else if (currentProgress < 70) {
-              nextProgress = 72;
-            } else if (currentProgress < 80) {
-              nextProgress = 82;
-            } else if (currentProgress < 90) {
-              nextProgress = 92;
+            } else if (currentProgress < 66) {
+               nextProgress = 69;
+            } else if (currentProgress < 83) {
+               nextProgress = 86;
             } else {
-              nextProgress = 2;
+               nextProgress = 2;
             }
           } else {
             if (isMorning) {
