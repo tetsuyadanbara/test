@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         donguri arena assist tool
-// @version      1.2.2d改 umeR/stdP Switch A
+// @version      1.2.2d改 umeR/stdPRO Switch
 // @description  fix arena ui and add functions
 // @author       ぱふぱふ
 // @match        https://donguri.5ch.net/teambattle?m=hc
@@ -1118,7 +1118,7 @@
     (()=>{
       const link = document.createElement('a');
       link.style.color = '#333';
-      link.textContent = '1.2.2d改 umeR/stdP Switch A';
+      link.textContent = '1.2.2d改 umeR/stdPRO Switch';
       footer.append(link);
     })();
 
@@ -2604,6 +2604,7 @@
         '再建が必要です。'
       ],
       onemoretime: [
+        'この場所には首都を建設できません（水で隣接が不足）',
         'もう一度バトルに参加する前に、待たなければなりません。'
       ],
       breaktime: [
@@ -2734,8 +2735,8 @@
             let message = lastLine;
             let processType;
             let sleepTime = 1;
-            // 255がumeのときの上限（実際には+1の256）、7がstdPROのときの[ﾘﾄﾗｲ]上限（実際には+1の8）
-            const maxloop = isMorning ? 255 : 7;
+            // 255がumeのときの上限（実際には+1の256）、9がstdPROのときの[ﾘﾄﾗｲ]上限（実際には+1の10）
+            const maxloop = isMorning ? 255 : 9;
 
             if (messageType === 'capitalAttack') {
               if (isMorning) {
@@ -2909,20 +2910,28 @@
 
             if (success) {
               if (location.href.includes('/teambattle?m=rb')) {
-                if (currentProgress < 16) {
-                  nextProgress = 19;
-                } else if (currentProgress < 33) {
-                  nextProgress = 36;
-                } else if (currentProgress < 50) {
-                  nextProgress = 52;
-                } else if (currentProgress < 66) {
-                  nextProgress = 69;
-                } else if (currentProgress < 83) {
-                  nextProgress = 86;
-                } else {
-                  nextProgress = 2;
-                }
-              } else {
+               if (currentProgress < 10) {
+                  nextProgress = 15;
+              } else if (currentProgress < 20) {
+	        nextProgress = 25;
+	      } else if (currentProgress < 30) {
+ 	        nextProgress = 35;
+ 	      } else if (currentProgress < 40) {
+ 	        nextProgress = 45;
+ 	      } else if (currentProgress < 50) {
+ 	        nextProgress = 55;
+ 	      } else if (currentProgress < 60) {
+ 	        nextProgress = 65;
+ 	      } else if (currentProgress < 70) {
+ 	        nextProgress = 75;
+ 	      } else if (currentProgress < 80) {
+ 	        nextProgress = 85;
+ 	      } else if (currentProgress < 90) {
+ 	        nextProgress = 95;
+ 	      } else {
+ 	        nextProgress = 5;
+ 	      }
+             } else {
                 if (isMorning) {
                   if (currentProgress < 50) {
                     nextProgress = 52;
@@ -2930,15 +2939,28 @@
                     nextProgress = 2;
                   }
                 } else {
-                  if (currentProgress < 25) {
-                    nextProgress = Math.floor(Math.random() * 8) + 31; // 31~38 -2~+1
+                  if (currentProgress < 20) {
+                    nextProgress = Math.floor(Math.random() * 5) + 28; // 28~32 -2~+1
+                  } else if (currentProgress < 35) {
+                    nextProgress = Math.floor(Math.random() * 5) + 43; // 43~47 -2~+1
                   } else if (currentProgress < 50) {
-                    nextProgress = Math.floor(Math.random() * 8) + 65; // 65~72 -2~+1
-                  } else if (currentProgress < 75) {
-                    nextProgress = Math.floor(Math.random() * 8) + 81; // 81~88 -2~+1
+                    nextProgress = Math.floor(Math.random() * 5) + 63; // 63~67 -2~+1
+                  } else if (currentProgress < 70) {
+                    nextProgress = Math.floor(Math.random() * 5) + 78; // 78~82 -2~+1
+                  } else if (currentProgress < 85) {
+                    nextProgress = Math.floor(Math.random() * 5) + 93; // 93~97 -2~+1
                   } else {
-                    nextProgress = Math.floor(Math.random() * 8) + 15; // 15~22 -2~+1
+                    nextProgress = Math.floor(Math.random() * 5) + 13; // 13~17 -2~+1
                   }
+//                if (currentProgress < 25) {
+//                  nextProgress = Math.floor(Math.random() * 8) + 31; // 31~38 -2~+1
+//                } else if (currentProgress < 50) {
+//                  nextProgress = Math.floor(Math.random() * 8) + 65; // 65~72 -2~+1
+//                } else if (currentProgress < 75) {
+//                  nextProgress = Math.floor(Math.random() * 8) + 81; // 81~88 -2~+1
+//                } else {
+//                  nextProgress = Math.floor(Math.random() * 8) + 15; // 15~22 -2~+1
+//                }
                 }
               }
               next = `→ ${nextProgress}±1%`;
@@ -3009,18 +3031,26 @@
 
         if (!success && regions[cellType].length === 0) {
           if (location.href.includes('/teambattle?m=rb')) {
-            if (currentProgress < 16) {
-               nextProgress = 19;
-            } else if (currentProgress < 33) {
-               nextProgress = 36;
-            } else if (currentProgress < 50) {
-              nextProgress = 52;
-            } else if (currentProgress < 66) {
-               nextProgress = 69;
-            } else if (currentProgress < 83) {
-               nextProgress = 86;
-            } else {
-               nextProgress = 2;
+             if (currentProgress < 10) {
+                nextProgress = 15;
+              } else if (currentProgress < 20) {
+	        nextProgress = 25;
+	      } else if (currentProgress < 30) {
+ 	        nextProgress = 35;
+ 	      } else if (currentProgress < 40) {
+ 	        nextProgress = 45;
+ 	      } else if (currentProgress < 50) {
+ 	        nextProgress = 55;
+ 	      } else if (currentProgress < 60) {
+ 	        nextProgress = 65;
+ 	      } else if (currentProgress < 70) {
+ 	        nextProgress = 75;
+ 	      } else if (currentProgress < 80) {
+ 	        nextProgress = 85;
+ 	      } else if (currentProgress < 90) {
+ 	        nextProgress = 95;
+ 	      } else {
+ 	        nextProgress = 5;
             }
           } else {
             if (isMorning) {
@@ -3030,15 +3060,28 @@
                 nextProgress = 2;
               }
             } else {
-              if (currentProgress < 25) {
-                nextProgress = Math.floor(Math.random() * 8) + 31; // 31~38 -2~+1
-              } else if (currentProgress < 50) {
-                nextProgress = Math.floor(Math.random() * 8) + 65; // 65~72 -2~+1
-              } else if (currentProgress < 75) {
-                nextProgress = Math.floor(Math.random() * 8) + 81; // 81~88 -2~+1
-              } else {
-                nextProgress = Math.floor(Math.random() * 8) + 15; // 15~22 -2~+1
-              }
+                if (currentProgress < 20) {
+                  nextProgress = Math.floor(Math.random() * 5) + 28; // 28~32 -2~+1
+                } else if (currentProgress < 35) {
+                  nextProgress = Math.floor(Math.random() * 5) + 43; // 43~47 -2~+1
+                } else if (currentProgress < 50) {
+                  nextProgress = Math.floor(Math.random() * 5) + 63; // 63~67 -2~+1
+                } else if (currentProgress < 70) {
+                  nextProgress = Math.floor(Math.random() * 5) + 78; // 78~82 -2~+1
+                } else if (currentProgress < 85) {
+                  nextProgress = Math.floor(Math.random() * 5) + 93; // 93~97 -2~+1
+                } else {
+                  nextProgress = Math.floor(Math.random() * 5) + 13; // 13~17 -2~+1
+                }
+//                if (currentProgress < 25) {
+//                  nextProgress = Math.floor(Math.random() * 8) + 31; // 31~38 -2~+1
+//                } else if (currentProgress < 50) {
+//                  nextProgress = Math.floor(Math.random() * 8) + 65; // 65~72 -2~+1
+//                } else if (currentProgress < 75) {
+//                  nextProgress = Math.floor(Math.random() * 8) + 81; // 81~88 -2~+1
+//                } else {
+//                  nextProgress = Math.floor(Math.random() * 8) + 15; // 15~22 -2~+1
+//                }
             }
           }
           const next = `→ ${nextProgress}±1%`;
