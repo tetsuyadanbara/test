@@ -2911,25 +2911,25 @@
             if (success) {
               if (location.href.includes('/teambattle?m=rb')) {
                 if (currentProgress < 10) {
-                  nextProgress = 15;
+                  nextProgress = 12;
                 } else if (currentProgress < 20) {
-	          nextProgress = 25;
-	        } else if (currentProgress < 30) {
- 	          nextProgress = 35;
- 	        } else if (currentProgress < 40) {
- 	          nextProgress = 45;
- 	        } else if (currentProgress < 50) {
- 	          nextProgress = 55;
- 	        } else if (currentProgress < 60) {
- 	          nextProgress = 65;
- 	        } else if (currentProgress < 70) {
- 	          nextProgress = 75;
- 	        } else if (currentProgress < 80) {
- 	          nextProgress = 85;
- 	        } else if (currentProgress < 90) {
- 	          nextProgress = 95;
- 	        } else {
- 	          nextProgress = 5;
+                  nextProgress = 22;
+                } else if (currentProgress < 30) {
+                  nextProgress = 32;
+                } else if (currentProgress < 40) {
+                  nextProgress = 42;
+                } else if (currentProgress < 50) {
+                  nextProgress = 52;
+                } else if (currentProgress < 60) {
+                  nextProgress = 62;
+                } else if (currentProgress < 70) {
+                  nextProgress = 72;
+                } else if (currentProgress < 80) {
+                  nextProgress = 82;
+                } else if (currentProgress < 90) {
+                  nextProgress = 92;
+                } else {
+                  nextProgress = 2;
                 }
               } else {
                 if (isMorning) {
@@ -3032,25 +3032,25 @@
         if (!success && regions[cellType].length === 0) {
           if (location.href.includes('/teambattle?m=rb')) {
             if (currentProgress < 10) {
-              nextProgress = 15;
+              nextProgress = 12;
             } else if (currentProgress < 20) {
-	      nextProgress = 25;
-	    } else if (currentProgress < 30) {
- 	      nextProgress = 35;
- 	    } else if (currentProgress < 40) {
- 	      nextProgress = 45;
- 	    } else if (currentProgress < 50) {
- 	      nextProgress = 55;
- 	    } else if (currentProgress < 60) {
- 	      nextProgress = 65;
- 	    } else if (currentProgress < 70) {
- 	      nextProgress = 75;
- 	    } else if (currentProgress < 80) {
- 	      nextProgress = 85;
- 	    } else if (currentProgress < 90) {
- 	      nextProgress = 95;
- 	    } else {
- 	      nextProgress = 5;
+              nextProgress = 22;
+            } else if (currentProgress < 30) {
+              nextProgress = 32;
+            } else if (currentProgress < 40) {
+              nextProgress = 42;
+            } else if (currentProgress < 50) {
+              nextProgress = 52;
+            } else if (currentProgress < 60) {
+              nextProgress = 62;
+            } else if (currentProgress < 70) {
+              nextProgress = 72;
+            } else if (currentProgress < 80) {
+              nextProgress = 82;
+            } else if (currentProgress < 90) {
+              nextProgress = 92;
+            } else {
+              nextProgress = 2;
             }
           } else {
             if (isMorning) {
