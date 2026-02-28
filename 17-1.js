@@ -2000,172 +2000,154 @@ let MODENAME;
 
   async function refreshArenaInfo() {
     const refreshedCells = [];
-
+  
     try {
-      const res = await fetch('', { cache: 'no-store' });
+      const res = await fetch(`${BASE_BATTLE_URL}&t=${Date.now()}`, { cache: 'no-store' });
       if (!res.ok) throw new Error('res.ng');
-
+  
       const text = await res.text();
       const doc = new DOMParser().parseFromString(text, 'text/html');
-      const headerText = doc?.querySelector('header')?.textContent || '';
-      if (!headerText.includes('どんぐりチーム戦い')) throw new Error('title.ng info');
-
-      const gridWrap = document.getElementById('gridWrap');
-      if (!gridWrap) throw new Error('gridWrap not found');
-
-      // --- parse map info from inline script (colors / capitals / terrains) ---
-      const scriptContent = doc.querySelector('script:not([src])')?.textContent || "";
-
-      // cellColors (team color map)
-      const cellColorsMatch = scriptContent.match(/const cellColors = ({.+?});/s);
-      const cellColorsString = cellColorsMatch ? cellColorsMatch[1] : '{}';
+      
+      const h1Text = doc.querySelector('h1')?.textContent || '';
+      const divText = doc.querySelector('header > div')?.textContent || '';
+      if (h1Text !== 'どんぐりチーム戦い' && !divText.includes('どんぐりチーム戦い')) {
+         throw new Error('title.ng info');
+      }
+  
+      const currentCells = grid.querySelectorAll('.cell');
+      // 水マス（撃てない）を判定して水色を付ける
+      if (waterSet && waterSet.size) {
+        currentCells.forEach(c => {
+          const k = `${c.dataset.row}-${c.dataset.col}`;
+          if (waterSet.has(k)) {
+            c.dataset.terrain = 'w';
+            c.classList.add('water');
+            c.style.backgroundColor = WATER_COLOR;
+          }
+        });
+      }
+      
+      let scriptContent = '';
+      for (let s of doc.querySelectorAll('script')) {
+        if (s.textContent.includes('const cellColors =')) {
+          scriptContent = s.textContent;
+          break;
+        }
+      }
+      
+      const cellColorsString = scriptContent.match(/const cellColors = ({.+?})/s)[1];
       const validJsonStr = cellColorsString.replace(/'/g, '"').replace(/,\s*}/, '}');
-      let cellColors = {};
-      try { cellColors = JSON.parse(validJsonStr); } catch (_) { cellColors = {}; }
+      const cellColors = JSON.parse(validJsonStr);
 
-      // capital list
-      const capitalMapMatch = scriptContent.match(/const capitalList = (\[.*?\]);/s);
-      const capitalMapString = capitalMapMatch ? capitalMapMatch[1] : '[]';
-      let capitalMap = [];
-      try { capitalMap = JSON.parse(capitalMapString); } catch (_) { capitalMap = []; }
-
-      // grid size
-      const gridSizeMatch = scriptContent.match(/const GRID_SIZE = (\d+);/);
-      const rows = gridSizeMatch ? Number(gridSizeMatch[1]) : 6;
-      const cols = rows;
-
-      // terrains (water tiles)
-      const waterSet = new Set();
-      const terrainsMatch = scriptContent.match(/const terrainsPayload\s*=\s*(\[[\s\S]*?\]);/);
+      // terrainsPayload (water tiles: t === 'w')
+      let waterSet = new Set();
+      const terrainsMatch = scriptContent.match(/const terrainsPayload = (\{.+?\});/s);
       if (terrainsMatch) {
         try {
-          const terrains = JSON.parse(terrainsMatch[1]);
-          const pick = (obj, keys) => {
-            for (const k of keys) {
-              if (obj && obj[k] !== undefined && obj[k] !== null && obj[k] !== '') return obj[k];
+          const terrainsPayload = JSON.parse(terrainsMatch[1]);
+          const terrains = (terrainsPayload && terrainsPayload.terrains) ? terrainsPayload.terrains : [];
+          terrains.forEach(t => {
+            if (t && t.t === 'w') {
+              // x: col, y: row
+                            const rr = (t.r ?? t.row ?? t.x ?? t.R ?? t.X);
+              const cc = (t.c ?? t.col ?? t.y ?? t.C ?? t.Y);
+              if (rr !== undefined && cc !== undefined) {
+                waterSet.add(`${Number(rr)}-${Number(cc)}`);
+              }
+
             }
-            return undefined;
-          };
-          for (const t of terrains) {
-            const type = String(pick(t, ['type', 'terrain', 'kind', 't']) ?? '').toLowerCase();
-            const isWater =
-              type === 'water' ||
-              type === 'sea' ||
-              type === 'ocean' ||
-              type === 'lake' ||
-              type === 'river' ||
-              type.includes('water') ||
-              type.includes('sea') ||
-              type.includes('ocean') ||
-              type.includes('lake') ||
-              type.includes('river') ||
-              type.includes('水');
-            if (!isWater) continue;
-
-            const col = Number(pick(t, ['x', 'c', 'col', 'X', 'C']));
-            const row = Number(pick(t, ['y', 'r', 'row', 'Y', 'R']));
-            if (!Number.isFinite(row) || !Number.isFinite(col)) continue;
-
-            waterSet.add(`${row}-${col}`);
-          }
+          });
         } catch (e) {
           // ignore parse errors
         }
       }
-
-      // --- ensure overlay layer exists ---
-      let toolLayer = document.getElementById('aat_tool_layer');
-      if (!toolLayer) {
-        toolLayer = document.createElement('div');
-        toolLayer.id = 'aat_tool_layer';
-        toolLayer.style.position = 'absolute';
-        toolLayer.style.top = '1.8vh';
-        toolLayer.style.left = '0';
-        toolLayer.style.display = 'grid';
-        toolLayer.style.zIndex = '100';
-        toolLayer.style.pointerEvents = 'none'; // allow clicks through unless cell enables
-        gridWrap.appendChild(toolLayer);
+  
+      let rows = 8, cols = 8;
+      const gridMatch = scriptContent.match(/const GRID_SIZE = (\d+);/);
+      if (gridMatch) {
+        rows = cols = parseInt(gridMatch[1]);
+      } else {
+        const newGrid = doc.querySelector('.grid');
+        if (newGrid) {
+          rows = Number(newGrid.style.gridTemplateRows.match(/repeat\((\d+), 35px\)/)[1]);
+          cols = Number(newGrid.style.gridTemplateColumns.match(/repeat\((\d+), 35px\)/)[1]);
+        }
       }
-      const grid = toolLayer;
-
-      const gridBase = document.getElementById('gridBase');
-      const currentCellSize = gridBase ? (parseInt(gridBase.style.width) / rows) + 'px' : '32px';
-
-      const currentCells = grid.querySelectorAll('.cell');
-      const needsRebuild = currentCells.length !== rows * cols;
-
-      // --- (re)build cells if needed ---
-      if (needsRebuild) {
-        grid.style.gridTemplateRows = `repeat(${rows}, ${currentCellSize})`;
-        grid.style.gridTemplateColumns = `repeat(${cols}, ${currentCellSize})`;
+  
+      if (currentCells.length !== rows * cols) {
+        grid.style.gridTemplateRows = `repeat(${rows}, 35px)`;
+        grid.style.gridTemplateColumns = `repeat(${cols}, 35px)`;
         grid.innerHTML = '';
-
+  
         for (let i = 0; i < rows; i++) {
           for (let j = 0; j < cols; j++) {
             const cell = document.createElement('div');
             cell.className = 'cell';
             cell.dataset.row = i;
             cell.dataset.col = j;
-            cell.style.width = currentCellSize;
-            cell.style.height = currentCellSize;
-            cell.style.border = '1px solid rgba(204, 204, 204, 0.5)';
+            cell.style.width = '30px';
+            cell.style.height = '30px';
+            cell.style.border = '1px solid #ccc';
             cell.style.cursor = 'pointer';
-            cell.style.pointerEvents = 'auto';
-            cell.style.boxSizing = 'border-box';
-            cell.style.display = 'flex';
-            cell.style.alignItems = 'center';
-            cell.style.justifyContent = 'center';
-            cell.style.fontSize = '12px';
-            cell.style.fontWeight = 'bold';
-
+            cell.style.transition = 'background-color 0.3s';
+  
             const cellKey = `${i}-${j}`;
-
-            // capital outline
-            if (includesCoord(capitalMap, i, j)) {
-              cell.style.outline = '2px solid gold';
-              cell.style.outlineOffset = '-2px';
+            if (cellColors[cellKey]) {
+              cell.style.backgroundColor = cellColors[cellKey];
+            } else {
+              cell.style.backgroundColor = 'transparent';
             }
-
-            // base color priority: WATER > cellColors
-            if (waterSet.has(cellKey)) {
-              cell.classList.add('water');
-              cell.dataset.terrain = 'water';
-              cell.style.backgroundColor = WATER_COLOR;
-            } else if (cellColors[cellKey]) {
-              const hex = cellColors[cellKey];
-              cell.style.backgroundColor = hex + '44';
-            }
-
-            cell.addEventListener('click', (e) => {
-              e.stopPropagation();
-              handleCellClick(cell);
-            });
-
+  
             grid.appendChild(cell);
             refreshedCells.push(cell);
           }
         }
       } else {
-        // update existing cells' base color (e.g. water)
-        currentCells.forEach((cell) => {
-          const r = Number(cell.dataset.row);
-          const c = Number(cell.dataset.col);
-          const cellKey = `${r}-${c}`;
+        currentCells.forEach(cell => {
+          const row = cell.dataset.row;
+          const col = cell.dataset.col;
+          const cellKey = `${row}-${col}`;
 
-          if (waterSet.has(cellKey)) {
-            cell.classList.add('water');
-            cell.dataset.terrain = 'water';
-            cell.style.backgroundColor = WATER_COLOR;
+          let cellColorCode = '';
+          const rgbMatchCell = cell.style.backgroundColor.match(/\d+/g);
+          if (rgbMatchCell && rgbMatchCell.length >= 3) {
+            cellColorCode = '#' + rgbMatchCell
+              .map(v => Number(v).toString(16).toLowerCase().padStart(2, '0'))
+              .join('');
+          }
+  
+          if (cellColors[cellKey]) {
+            if (cellColorCode !== cellColors[cellKey].toLowerCase()) {
+              cell.style.backgroundColor = cellColors[cellKey];
+              refreshedCells.push(cell);
+            }
+          } else if (cellColorCode !== '' && cellColorCode !== '#ffffff00' && cell.style.backgroundColor !== 'transparent') {
+            cell.style.backgroundColor = 'transparent';
+            refreshedCells.push(cell);
+          }
+          
+          const rgb = cell.style.backgroundColor.match(/\d+/g);
+          if (rgb && rgb.length >= 3) {
+            const brightness = 0.2126 * rgb[0] + 0.7152 * rgb[1] + 0.0722 * rgb[2];
+            cell.style.color = brightness > 128 ? '#000' : '#fff';
+          } else {
+            cell.style.color = '#000';
           }
         });
       }
-
+  
+      const tables = document.querySelectorAll('table');
+      const newTables = doc.querySelectorAll('table');
+      newTables.forEach((table, i) => {
+        if (tables[i]) tables[i].replaceWith(table);
+      });
+      console.log(refreshedCells);
       return refreshedCells;
     } catch (e) {
-      console.error('Error in refreshArenaInfo:', e);
+      console.error(e);
     }
   }
-
+  
   async function fetchAreaInfo(refreshAll){
     const refreshedCells = await refreshArenaInfo();
     grid.style.gridTemplateRows = grid.style.gridTemplateRows.replace('35px','65px');
