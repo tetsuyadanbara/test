@@ -835,11 +835,32 @@ let MODENAME;
         cell.style.cursor = 'pointer';
         cell.style.transition = 'background-color 0.3s';
         const cellKey = `${i}-${j}`;
-        if (cellColors[cellKey]) {
-          cell.style.backgroundColor = cellColors[cellKey];
-        } else {
-          cell.style.backgroundColor = 'transparent';
-        }
+        
+const isWater = waterSet.has(cellKey);
+if (cellColors[cellKey]) {
+  cell.style.backgroundColor = cellColors[cellKey];
+  if (isWater) {
+    cell.dataset.water = '1';
+    cell.style.outline = '1px solid rgba(135, 206, 235, 0.9)';
+    cell.style.outlineOffset = '-1px';
+  } else {
+    cell.dataset.water = '';
+    cell.style.outline = '';
+    cell.style.outlineOffset = '';
+  }
+  refreshedCells.push(cell);
+} else if (isWater) {
+  cell.dataset.water = '1';
+  cell.style.backgroundColor = 'rgba(135, 206, 235, 0.45)'; // water tint
+  cell.style.outline = '';
+  cell.style.outlineOffset = '';
+  refreshedCells.push(cell);
+} else {
+  cell.dataset.water = '';
+  cell.style.backgroundColor = 'transparent';
+  cell.style.outline = '';
+  cell.style.outlineOffset = '';
+}
         newGrid.appendChild(cell);
       }
     }
@@ -2026,6 +2047,28 @@ let MODENAME;
       const cellColorsString = scriptContent.match(/const cellColors = ({.+?})/s)[1];
       const validJsonStr = cellColorsString.replace(/'/g, '"').replace(/,\s*}/, '}');
       const cellColors = JSON.parse(validJsonStr);
+
+// --- terrains (water) ---
+let waterSet = new Set();
+try {
+  const terrainsPayloadMatch = scriptContent.match(/const terrainsPayload\s*=\s*(\{[\s\S]*?\});/);
+  if (terrainsPayloadMatch) {
+    const terrainsPayload = JSON.parse(terrainsPayloadMatch[1]);
+    if (terrainsPayload && Array.isArray(terrainsPayload.t)) {
+      for (const t of terrainsPayload.t) {
+        if (t && t.t === 'w' && Array.isArray(t.i)) {
+          for (const coord of t.i) {
+            if (Array.isArray(coord) && coord.length >= 2) {
+              waterSet.add(`${coord[0]}-${coord[1]}`);
+            }
+          }
+        }
+      }
+    }
+  }
+} catch (e) {
+  // ignore parse errors
+}
   
       let rows = 8, cols = 8;
       const gridMatch = scriptContent.match(/const GRID_SIZE = (\d+);/);
@@ -2057,11 +2100,32 @@ let MODENAME;
             cell.style.transition = 'background-color 0.3s';
   
             const cellKey = `${i}-${j}`;
-            if (cellColors[cellKey]) {
-              cell.style.backgroundColor = cellColors[cellKey];
-            } else {
-              cell.style.backgroundColor = 'transparent';
-            }
+            
+const isWater = waterSet.has(cellKey);
+if (cellColors[cellKey]) {
+  cell.style.backgroundColor = cellColors[cellKey];
+  if (isWater) {
+    cell.dataset.water = '1';
+    cell.style.outline = '1px solid rgba(135, 206, 235, 0.9)';
+    cell.style.outlineOffset = '-1px';
+  } else {
+    cell.dataset.water = '';
+    cell.style.outline = '';
+    cell.style.outlineOffset = '';
+  }
+  refreshedCells.push(cell);
+} else if (isWater) {
+  cell.dataset.water = '1';
+  cell.style.backgroundColor = 'rgba(135, 206, 235, 0.45)'; // water tint
+  cell.style.outline = '';
+  cell.style.outlineOffset = '';
+  refreshedCells.push(cell);
+} else {
+  cell.dataset.water = '';
+  cell.style.backgroundColor = 'transparent';
+  cell.style.outline = '';
+  cell.style.outlineOffset = '';
+}
   
             grid.appendChild(cell);
             refreshedCells.push(cell);
@@ -2595,7 +2659,7 @@ async function arenaChallenge (row, col){
   let autoJoinIntervalId;
   let isAutoJoinRunning = false;
   const sleep = s => new Promise(r=>setTimeout(r,s));
-  async function autoJoin(forceFirst = false) {
+  async function autoJoin() {
     const dialog = document.querySelector('.auto-join');
 
     const logArea = dialog.querySelector('.auto-join-log');
@@ -2712,7 +2776,7 @@ async function arenaChallenge (row, col){
     // 現在進行度から次の目標進行度を初期化（未初期化だと常時発射してしまう）
     let nextProgress = null;
     let firstAutoJoinRun = true;
-async function attackRegion(force = false) {
+async function attackRegion () {
       await drawProgressBar();
       if (isAutoJoinRunning) return;
       // nextProgress未設定/NaN対策
@@ -2749,11 +2813,6 @@ if (location.href.includes('/teambattle?m=rb')) {
       }
 
       let regions = await getRegions();
-      if (!regions) {
-        logMessage(null, '[待機] マップ情報取得に失敗 (getRegions)', '→ 20s');
-        await sleep(20000);
-        return;
-      }
       const excludeSet = new Set();
 
       let cellType;
@@ -2935,6 +2994,27 @@ if (location.href.includes('/teambattle?m=rb')) {
           const capitalListMatch = scriptContent.match(/const capitalList = (\[.*?\]);/s);
           capitalMap = JSON.parse(capitalListMatch[1]);
 
+          const gridSizeMatch
+// --- terrains (water) ---
+let waterSet = new Set();
+try {
+  const terrainsPayloadMatch = scriptContent.match(/const terrainsPayload\s*=\s*(\{[\s\S]*?\});/);
+  if (terrainsPayloadMatch) {
+    const terrainsPayload = JSON.parse(terrainsPayloadMatch[1]);
+    if (terrainsPayload && Array.isArray(terrainsPayload.t)) {
+      for (const t of terrainsPayload.t) {
+        if (t && t.t === 'w' && Array.isArray(t.i)) {
+          for (const coord of t.i) {
+            if (Array.isArray(coord) && coord.length >= 2) {
+              waterSet.add(`${coord[0]}-${coord[1]}`);
+            }
+          }
+        }
+      }
+    }
+  }
+} catch (e) {}
+
           const gridSizeMatch = scriptContent.match(/const GRID_SIZE = (\d+);/);
           rows = cols = Number(gridSizeMatch[1]);
         } else {
@@ -2951,12 +3031,15 @@ if (location.href.includes('/teambattle?m=rb')) {
           cols = Number(grid.style.gridTemplateColumns.match(/repeat\((\d+), 35px\)/)[1]);
         }
 
-        const cells = [];
-        for (let r = 0; r < rows; r++) {
-          for (let c = 0; c < cols; c++) {
-            cells.push([r, c]);
-          }
-        }
+        
+const cells = [];
+for (let r = 0; r < rows; r++) {
+  for (let c = 0; c < cols; c++) {
+    // skip unattackable water tiles
+    if (typeof waterSet !== 'undefined' && waterSet.has(`${r}-${c}`)) continue;
+    cells.push([r, c]);
+  }
+}
 
         const directions = [
           [-1, 0],
@@ -3105,10 +3188,9 @@ if (location.href.includes('/teambattle?m=rb')) {
     }
 
     if (!isAutoJoinRunning) {
-      // 初回はボタン押下直後に一度だけ即実行（進捗待機判定を無視）
-      setTimeout(() => attackRegion(!!forceFirst), 0);
+      attackRegion();
     }
-    autoJoinIntervalId = setInterval(() => attackRegion(false), 60000);
+    autoJoinIntervalId = setInterval(attackRegion,60000);
   };
 
   
@@ -3190,7 +3272,7 @@ async function drawProgressBar(){
       progressBarIntervalId = null;
     }
     // kick once immediately + schedule inside autoJoin()
-    autoJoin(true);
+    autoJoin();
   }
 
   // When Auto Join dialog is closed, stop auto-join and resume progress bar updates
