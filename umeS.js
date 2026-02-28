@@ -2839,8 +2839,9 @@
                 i++;
               } else {
                 message += ` (${cellRank}, ${currentEquipName})`;
-                processType = 'continue';
-                i++;
+                sleepTime = 3;
+                cellType = 'teamAdjacent';
+                processType = 'reload';
               }
             } else if (lastLine.length > 100) {
               message = 'どんぐりシステム';
@@ -2910,28 +2911,20 @@
 
             if (success) {
               if (location.href.includes('/teambattle?m=rb')) {
-               if (currentProgress < 10) {
-                  nextProgress = 15;
-              } else if (currentProgress < 20) {
-	        nextProgress = 25;
-	      } else if (currentProgress < 30) {
- 	        nextProgress = 35;
- 	      } else if (currentProgress < 40) {
- 	        nextProgress = 45;
- 	      } else if (currentProgress < 50) {
- 	        nextProgress = 55;
- 	      } else if (currentProgress < 60) {
- 	        nextProgress = 65;
- 	      } else if (currentProgress < 70) {
- 	        nextProgress = 75;
- 	      } else if (currentProgress < 80) {
- 	        nextProgress = 85;
- 	      } else if (currentProgress < 90) {
- 	        nextProgress = 95;
- 	      } else {
- 	        nextProgress = 5;
- 	      }
-             } else {
+                if (currentProgress < 16) {
+                  nextProgress = 19;
+                } else if (currentProgress < 33) {
+                  nextProgress = 36;
+                } else if (currentProgress < 50) {
+                  nextProgress = 52;
+                } else if (currentProgress < 66) {
+                  nextProgress = 69;
+                } else if (currentProgress < 83) {
+                  nextProgress = 86;
+                } else {
+                  nextProgress = 2;
+                }
+              } else {
                 if (isMorning) {
                   if (currentProgress < 50) {
                     nextProgress = 52;
@@ -3031,26 +3024,18 @@
 
         if (!success && regions[cellType].length === 0) {
           if (location.href.includes('/teambattle?m=rb')) {
-             if (currentProgress < 10) {
-                nextProgress = 15;
-              } else if (currentProgress < 20) {
-	        nextProgress = 25;
-	      } else if (currentProgress < 30) {
- 	        nextProgress = 35;
- 	      } else if (currentProgress < 40) {
- 	        nextProgress = 45;
- 	      } else if (currentProgress < 50) {
- 	        nextProgress = 55;
- 	      } else if (currentProgress < 60) {
- 	        nextProgress = 65;
- 	      } else if (currentProgress < 70) {
- 	        nextProgress = 75;
- 	      } else if (currentProgress < 80) {
- 	        nextProgress = 85;
- 	      } else if (currentProgress < 90) {
- 	        nextProgress = 95;
- 	      } else {
- 	        nextProgress = 5;
+            if (currentProgress < 16) {
+               nextProgress = 19;
+            } else if (currentProgress < 33) {
+               nextProgress = 36;
+            } else if (currentProgress < 50) {
+              nextProgress = 52;
+            } else if (currentProgress < 66) {
+               nextProgress = 69;
+            } else if (currentProgress < 83) {
+               nextProgress = 86;
+            } else {
+               nextProgress = 2;
             }
           } else {
             if (isMorning) {
