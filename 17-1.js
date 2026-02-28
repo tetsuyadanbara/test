@@ -52,7 +52,7 @@
     return;
   }
 
-  // ???????[?h?N?G???im=hc / m=l / m=rb?j
+  // 現在のモードクエリ（m=hc / m=l / m=rb）
   const _mParam = new URLSearchParams(location.search).get('m') || 'rb';
   const MODE = `m=${_mParam}`;
 
@@ -64,10 +64,10 @@
 
   const BASE_BATTLE_URL = `https://donguri.5ch.net/teambattle?${MODE}`;
 let MODENAME;
-  if (MODE === 'm=hc') MODENAME = '?m?n?[?h?n';
-  else if (MODE === 'm=l') MODENAME = '?m???_?[?n';
-  else if (MODE === 'm=rb') MODENAME = '?m??vs??n';
-  else MODENAME = '?m?A???[?i?n';
+  if (MODE === 'm=hc') MODENAME = '［ハード］';
+  else if (MODE === 'm=l') MODENAME = '［ラダー］';
+  else if (MODE === 'm=rb') MODENAME = '［赤vs青］';
+  else MODENAME = '［アリーナ］';
 
   const vw = Math.min(document.documentElement.clientWidth, window.innerWidth || 0);
   const vh = Math.min(document.documentElement.clientHeight, window.innerHeight || 0);
@@ -161,21 +161,21 @@ let MODENAME;
     }
 
     const menuButton = button.cloneNode();
-    menuButton.textContent = '?????j???[';
+    menuButton.textContent = '▼メニュー';
     menuButton.addEventListener('click', ()=>{
       const isSubMenuOpen = subMenu.style.display === 'flex';
       subMenu.style.display = isSubMenuOpen ? 'none' : 'flex';
     })
   
     const equipButton = button.cloneNode();
-    equipButton.textContent = '??????';
+    equipButton.textContent = '■装備';
     equipButton.addEventListener('click', ()=>{
       panel.style.display = 'flex';
     });
 
     let currnetSort = 'default';
     const sortButton = button.cloneNode();
-    sortButton.innerText = '?\?[?g\n?????';
+    sortButton.innerText = 'ソート\n切り替え';
     sortButton.addEventListener('click', ()=>{
       if(currnetSort === 'default') {
         sortCells('cond');
@@ -187,13 +187,13 @@ let MODENAME;
     })
 
     const cellButton = button.cloneNode();
-    cellButton.innerText = '?G???A???\n??擾';
+    cellButton.innerText = 'エリア情報\n再取得';
     cellButton.addEventListener('click',()=>{
       fetchAreaInfo(true);
     });
   
     const refreshButton = button.cloneNode();
-    refreshButton.innerText = '?G???A???\n?X?V';
+    refreshButton.innerText = 'エリア情報\n更新';
     refreshButton.addEventListener('click',()=>{
       fetchAreaInfo(false);
     });
@@ -234,7 +234,7 @@ let MODENAME;
       slideMenu.style.transition = 'transform 0.1s ease';
 
       const skipAreaInfoButton = subButton.cloneNode();
-      skipAreaInfoButton.innerText = '?Z?????\n?X?L?b?v';
+      skipAreaInfoButton.innerText = 'セル情報\nスキップ';
       skipAreaInfoButton.style.color = '#fff';
       if (settings.skipArenaInfo) {
         skipAreaInfoButton.style.background = '#46f';
@@ -256,7 +256,7 @@ let MODENAME;
       })
 
       const settingsButton = subButton.cloneNode();
-      settingsButton.textContent = '???';
+      settingsButton.textContent = '設定';
       settingsButton.style.background = '#ffb300';
       settingsButton.style.color = '#000';
       settingsButton.addEventListener('click', ()=>{
@@ -264,7 +264,7 @@ let MODENAME;
       })
 
       const skipAutoEquipButton = subButton.cloneNode();
-      skipAutoEquipButton.textContent = '????????';
+      skipAutoEquipButton.textContent = '自動装備';
       skipAutoEquipButton.style.color = '#fff';
       skipAutoEquipButton.classList.add('skip-auto-equip');
       if (settings.skipAutoEquip) {
@@ -287,7 +287,7 @@ let MODENAME;
       });
 
       const rangeAttackButton = subButton.cloneNode();
-      rangeAttackButton.textContent = '???U??';
+      rangeAttackButton.textContent = '範囲攻撃';
       rangeAttackButton.style.background = '#f64';
       rangeAttackButton.style.color = '#fff';
       rangeAttackButton.addEventListener('click', ()=>{
@@ -297,7 +297,7 @@ let MODENAME;
 
       // --- Auto Join (from Red/Blue new) ---
       const autoJoinButton = subButton.cloneNode();
-      autoJoinButton.innerText = '?????Q??\n???[?h';
+      autoJoinButton.innerText = '自動参加\nモード';
       autoJoinButton.style.background = '#ffb300';
       autoJoinButton.style.color = '#000';
 
@@ -331,8 +331,8 @@ let MODENAME;
         const inputC = document.createElement('input');
 
         const inputs = {
-          teamName: [inputT,'?`?[????'],
-          teamColor: [inputC,'?`?[???J???[(6??HEX)']
+          teamName: [inputT,'チーム名'],
+          teamColor: [inputC,'チームカラー(6桁HEX)']
         };
         for (const key of Object.keys(inputs)) {
           const l = label.cloneNode();
@@ -353,7 +353,7 @@ let MODENAME;
 
         const p = document.createElement('p');
         p.style.fontSize = '90%';
-        p.innerText = '?`?[???J???[?? 6??HEX?i??: d32f2f?j????????????????B\n?????????p?l????e?????N??????Z?b?g??o?^?????????????????オ?????B';
+        p.innerText = 'チームカラーは 6桁HEX（例: d32f2f）で入力してください。\n自動装備パネルで各ランクの装備セットを登録しておくと成功率が上がります。';
 
         const ok = document.createElement('button');
         ok.type = 'button';
@@ -385,18 +385,18 @@ let MODENAME;
         log.style.textAlign = 'left';
 
         const p = document.createElement('p');
-        p.textContent = '????????J??????????????????';
+        p.textContent = 'この画面を開いたままにしておくこと';
         p.style.margin = '0';
 
         const settingsBtn = document.createElement('button');
-        settingsBtn.textContent = '???';
+        settingsBtn.textContent = '設定';
         settingsBtn.addEventListener('click', ()=>{
           autoJoinSettingsDialog.showModal();
           stopAutoJoin();
         });
 
         const closeBtn = document.createElement('button');
-        closeBtn.textContent = '?????Q?????[?h???I??';
+        closeBtn.textContent = '自動参加モードを終了';
         closeBtn.addEventListener('click', ()=>{
           autoJoinDialog.close();
           stopAutoJoin();
@@ -420,7 +420,7 @@ let MODENAME;
       });
 
       const closeSlideMenuButton = subButton.cloneNode();
-      closeSlideMenuButton.textContent = '????';
+      closeSlideMenuButton.textContent = 'やめる';
       closeSlideMenuButton.style.background = '#888';
       closeSlideMenuButton.style.color = '#fff';
       closeSlideMenuButton.addEventListener('click', ()=>{
@@ -429,7 +429,7 @@ let MODENAME;
       })
       
       const startRangeAttackButton = subButton.cloneNode();
-      startRangeAttackButton.textContent = '?U???J?n';
+      startRangeAttackButton.textContent = '攻撃開始';
       startRangeAttackButton.style.background = '#f64';
       startRangeAttackButton.style.color = '#fff';
       startRangeAttackButton.addEventListener('click', async()=>{
@@ -442,7 +442,7 @@ let MODENAME;
       })
 
       const pauseRangeAttackButton = subButton.cloneNode();
-      pauseRangeAttackButton.textContent = '???f';
+      pauseRangeAttackButton.textContent = '中断';
       pauseRangeAttackButton.style.background = '#888';
       pauseRangeAttackButton.style.color = '#fff';
       pauseRangeAttackButton.addEventListener('click', ()=>{
@@ -452,7 +452,7 @@ let MODENAME;
       })
 
       const resumeRangeAttackButton = subButton.cloneNode();
-      resumeRangeAttackButton.textContent = '??J';
+      resumeRangeAttackButton.textContent = '再開';
       resumeRangeAttackButton.style.background = '#f64';
       resumeRangeAttackButton.style.color = '#fff';
       resumeRangeAttackButton.style.display = 'none';
@@ -479,7 +479,7 @@ let MODENAME;
       }
 
       const deselectButton = subButton.cloneNode();
-      deselectButton.textContent = '?I??????';
+      deselectButton.textContent = '選択解除';
       deselectButton.style.background = '#888';
       deselectButton.style.color = '#fff';
       deselectButton.addEventListener('click', ()=>{
@@ -491,7 +491,7 @@ let MODENAME;
       })
       
       const batchSelectButton = subButton.cloneNode();
-      batchSelectButton.textContent = '???I??';
+      batchSelectButton.textContent = '一括選択';
       batchSelectButton.style.background = '#ffb300';
       batchSelectButton.style.color = '#000';
       batchSelectButton.addEventListener('click', ()=>{
@@ -519,7 +519,7 @@ let MODENAME;
             const cells = document.querySelectorAll('.cell');
             cells.forEach(cell => {
               const cellRank = cell.querySelector('p').textContent;
-              const regex = new RegExp(`\\b${rank}(????)?e?$`);
+              const regex = new RegExp(`\\b${rank}(だけ)?e?$`);
               const match = cellRank.match(regex);
               if(match) {
                 cell.classList.add('selected');
@@ -537,7 +537,7 @@ let MODENAME;
         closeButton.style.width = '4.5em';
         closeButton.style.background = '#888';
         closeButton.style.color = '#fff';
-        closeButton.textContent = '????';
+        closeButton.textContent = 'やめる';
         closeButton.addEventListener('click', ()=>{
           batchSelectMenu.style.display = 'none';
         })
@@ -601,7 +601,7 @@ let MODENAME;
     }
 
     const challengeButton = button.cloneNode();
-    challengeButton.textContent = '?G???A?????';
+    challengeButton.textContent = 'エリアに挑む';
     challengeButton.style.flexGrow = '2';
     challengeButton.addEventListener('click', ()=>{
       const table = arenaField.querySelector('table');
@@ -611,27 +611,27 @@ let MODENAME;
     })
 
     const reinforceButton = button.cloneNode();
-    reinforceButton.textContent = '????????';
+    reinforceButton.textContent = '強化する';
     reinforceButton.style.flexGrow = '1';
     reinforceButton.addEventListener('click', ()=>{
       arenaModDialog.dataset.action = 'ReinforceArena';
-      modButton.textContent = '????????';
-      p.textContent = `???: ${wood}, ?S: ${steel} (1pt?????e25??)`;
+      modButton.textContent = '強化する';
+      p.textContent = `木材: ${wood}, 鉄: ${steel} (1ptにつき各25個)`;
       arenaModDialog.show();
     })
 
     const siegeButton = button.cloneNode();
-    siegeButton.textContent = '????';
+    siegeButton.textContent = '弱体化';
     siegeButton.style.flexGrow = '1';
     siegeButton.addEventListener('click', ()=>{
       arenaModDialog.dataset.action = 'SiegeArena';
-      modButton.textContent = '????';
-      p.textContent = `???: ${wood}, ?S: ${steel} (1pt?????e25??)`;
+      modButton.textContent = '弱体化';
+      p.textContent = `木材: ${wood}, 鉄: ${steel} (1ptにつき各25個)`;
       arenaModDialog.show();
     })
 
     const closeButton = button.cloneNode();
-    closeButton.textContent = '?~';
+    closeButton.textContent = '×';
     closeButton.marginLeft = 'auto';
     closeButton.style.fontSize = '24px';
     closeButton.style.width = '48px';
@@ -658,7 +658,7 @@ let MODENAME;
 
       const input = document.createElement('input');
       input.type = 'number';
-      input.placeholder = '???????';
+      input.placeholder = '改造の量';
 
       modButton.addEventListener('click', ()=>{
         const amt = Number(input.value);
@@ -672,7 +672,7 @@ let MODENAME;
 
       input.addEventListener('keydown', (e)=>{
         if (e.key === "Enter") {
-          e.preventDefault(); // ??????????dialog????????
+          e.preventDefault(); // これが無いとdialogが閉じない
           const amt = Number(input.value);
           const table = arenaField.querySelector('table');
           const row = table.dataset.row;
@@ -700,11 +700,11 @@ let MODENAME;
         const res = await fetch(url, options);
         if(!res.ok) throw new Error('/teamvol/ failed to load');
         const text = await res.text();
-        if(text.includes('?????p?b?N???J????')) {
+        if(text.includes('資源パックを開ける')) {
           open('/craft', '_blank');
           return;
         }
-        if(text !== '????????') throw new Error(text);
+        if(text !== '改造成功') throw new Error(text);
         wood = wood - 25 * Math.trunc(amt);
         steel = steel - 25 * Math.trunc(amt);
         arenaResult.textContent = text;
@@ -793,10 +793,10 @@ let MODENAME;
   });
 
   
-  // --- ?V?d?l?????O???b?h???????W?b?N??? ---
+  // --- 新仕様対応のグリッド生成ロジック追加 ---
   if (!document.querySelector('.grid') && document.querySelector('.gridCanvasOuter')) {
     const gridOuter = document.querySelector('.gridCanvasOuter');
-    let GRID_SIZE = 16; // ?????l
+    let GRID_SIZE = 16; // 初期値
     let cellColors = {};
     const scripts = document.querySelectorAll('script');
     for (let s of scripts) {
@@ -845,7 +845,7 @@ let MODENAME;
     }
     gridOuter.appendChild(newGrid);
   }
-  // --- ??????? ---
+  // --- ここまで ---
 
   const grid = document.querySelector('.grid');
   if(grid) {
@@ -917,12 +917,12 @@ let MODENAME;
     header.style.display = 'flex';
     
     const h2 = document.createElement('h2');
-    h2.textContent = '???'
+    h2.textContent = '設定'
     h2.style.fontSize = '1.2rem';
     h2.style.margin = '2px';
 
     const closeButton = button.cloneNode();
-    closeButton.textContent = '?~';
+    closeButton.textContent = '×';
     closeButton.style.marginLeft = 'auto';
     closeButton.style.background = 'none';
     closeButton.style.border = 'none';
@@ -944,7 +944,7 @@ let MODENAME;
 
     (()=>{
       const saveButton = button.cloneNode();
-      saveButton.textContent = '???';
+      saveButton.textContent = '保存';
       saveButton.addEventListener('click', ()=>{
         const settingElements = settingsMenu.querySelectorAll('[data-setting]');
         settingElements.forEach(elm => {
@@ -970,7 +970,7 @@ let MODENAME;
       })
 
       const cancelButton = button.cloneNode();
-      cancelButton.textContent = '?L?????Z??';
+      cancelButton.textContent = 'キャンセル';
       cancelButton.addEventListener('click', ()=>{
         refreshSettings();
         settingsDialog.close();
@@ -1060,135 +1060,135 @@ let MODENAME;
       const toolbar = container.cloneNode();
       addHeader('toolbar', toolbar);
       const arenaResult = container.cloneNode();
-      addHeader('?A???[?i???O', arenaResult);
+      addHeader('アリーナログ', arenaResult);
       const arenaField = container.cloneNode();
-      addHeader('?A???[?i???', arenaField);
+      addHeader('アリーナ情報', arenaField);
       const gridPanel = container.cloneNode();
-      addHeader('?O???b?h', gridPanel);
+      addHeader('グリッド', gridPanel);
       const settingsPanel = container.cloneNode();
-      addHeader('???p?l??', settingsPanel);
+      addHeader('設定パネル', settingsPanel);
       const equipPanel = container.cloneNode();
-      addHeader('?????p?l??', equipPanel);
+      addHeader('装備パネル', equipPanel);
 
       const settingItems = {
         toolbarPosition: {
-          text: '??u:',
+          text: '位置:',
           type: 'select',
           options: {
-            left: '????',
-            right: '?E??',
-            center: '??????'
+            left: '左寄せ',
+            right: '右寄せ',
+            center: '中央寄せ'
           },
           parent: toolbar
         },
         toolbarPositionLength: {
-          text: '?[?????:',
+          text: '端の距離:',
           type: 'width',
           parent: toolbar
         },
         arenaResultScrollPosition: {
-          text: '?X?N???[????u:',
+          text: 'スクロール位置:',
           type: 'select',
           options: {
-            top: '??',
-            bottom: '??'
+            top: '上',
+            bottom: '下'
           },
           parent: arenaResult
         },
         arenaResultBottom: {
-          text: '?????????:',
+          text: '下部の距離:',
           type: 'height',
           parent: arenaResult
         },
         arenaResultPosition: {
-          text: '??u:',
+          text: '位置:',
           type: 'select',
           options: {
-            right: '?E??',
-            left: '????'
+            right: '右寄せ',
+            left: '左寄せ'
           },
           parent: arenaResult
         },
         arenaResultPositionLength: {
-          text: '???[????????:',
+          text: '左端からの距離:',
           type: 'width',
           parent: arenaResult
         },
         arenaResultHeight: {
-          text: '???O?????:',
+          text: 'ログの高さ:',
           type: 'height',
           parent: arenaResult
         },
         arenaResultWidth: {
-          text: '???O?????:',
+          text: 'ログの横幅:',
           type: 'width',
           parent: arenaResult
         },
         arenaFieldBottom: {
-          text: '?????????:',
+          text: '下部の距離:',
           type: 'height',
           parent: arenaField
         },
         arenaFieldPosition: {
-          text: '??u:',
+          text: '位置:',
           type: 'select',
           options: {
-            left: '????',
-            right: '?E??',
-            center: '??????'
+            left: '左寄せ',
+            right: '右寄せ',
+            center: '中央寄せ'
           },
           parent: arenaField
         },
         arenaFieldPositionLength: {
-          text: '?[????????:',
+          text: '端からの距離:',
           type: 'width',
           parent: arenaField
         },
         arenaFieldWidth: {
-          text: '????:',
+          text: '横幅:',
           type: 'width',
           parent: arenaField
         },
         gridColumns: {
-          text: '1?s????Z????:',
+          text: '1行の最大セル数:',
           type: 'number',
           parent: gridPanel
         },
         settingsPanelPosition: {
-          text: '??u',
+          text: '位置',
           type: 'select',
           options: {
-            right: '?E??',
-            left: '????'
+            right: '右寄せ',
+            left: '左寄せ'
           },
           parent: settingsPanel
         },
         settingsPanelHeight: {
-          text: '????',
+          text: '高さ',
           type: 'height',
           parent: settingsPanel
         },
         settingsPanelWidth: {
-          text: '????',
+          text: '横幅',
           type: 'width',
           parent: settingsPanel
         },
         equipPanelPosition: {
-          text: '??u',
+          text: '位置',
           type: 'select',
           options: {
-            right: '?E??',
-            left: '????'
+            right: '右寄せ',
+            left: '左寄せ'
           },
           parent: equipPanel
         },
         equipPanelHeight: {
-          text: '????',
+          text: '高さ',
           type: 'height',
           parent: equipPanel
         },
         equipPanelWidth: {
-          text: '????',
+          text: '横幅',
           type: 'width',
           parent: equipPanel
         }
@@ -1237,7 +1237,7 @@ let MODENAME;
       link.href = 'https://donguri-k.github.io/tools/arena-assist-tool';
       link.target = '_blank';
       const author = document.createElement('input');
-      author.value = '??? [ID: 7234e634]';
+      author.value = '作者 [ID: 7234e634]';
       author.style.color = '#666';
       author.style.background = 'none';
       author.style.margin = '2px';
@@ -1258,7 +1258,7 @@ let MODENAME;
   
   document.body.append(settingsDialog);
 
-  //-- ???? --//
+  //-- 装備 --//
     const panel = document.createElement('div');
     panel.style.position = 'fixed';
     panel.style.top = '0';
@@ -1302,7 +1302,7 @@ let MODENAME;
       // input.style.background = '#eee';
       // input.style.color = '#000';
       // input.style.borderRadius = 'unset';
-      // input.placeholder = '?t?B???^?c';
+      // input.placeholder = 'フィルタ…';
       button.type = 'button';
       button.style.borderRadius = 'unset';
       button.style.border = 'solid 1px #000';
@@ -1329,7 +1329,7 @@ let MODENAME;
       showEquipPreset();
   
       const resetCurrentEquip = document.createElement('div');
-      resetCurrentEquip.textContent = '???????????Z?b?g';
+      resetCurrentEquip.textContent = '装備情報をリセット';
       resetCurrentEquip.style.borderTop = 'solid 1px #000';
       resetCurrentEquip.style.cursor = 'pointer';
       resetCurrentEquip.style.color = '#a62';
@@ -1338,7 +1338,7 @@ let MODENAME;
       resetCurrentEquip.addEventListener('click', ()=>{
         localStorage.removeItem('current_equip');
         const stat = document.querySelector('.equip-preset-stat');
-        stat.textContent = '??????????????????';
+        stat.textContent = '現在の装備情報を初期化';
         weaponTable = null;
         armorTable = null;
         necklaceTable = null;
@@ -1360,7 +1360,7 @@ let MODENAME;
         } else if (currentMode === 'auto') {
           selectAutoEquipItems(presetLi, presetName, currentRank);
         } else if (currentMode === 'edit') {
-          alert('??????');
+          alert('未実装');
         }
       });
   
@@ -1375,7 +1375,7 @@ let MODENAME;
   
         /*
         const closeButton = button.cloneNode();
-        closeButton.textContent = '?~';
+        closeButton.textContent = '×';
         closeButton.style.marginLeft = 'auto';
         closeButton.style.background = 'none';
         closeButton.style.border = 'none';
@@ -1389,7 +1389,7 @@ let MODENAME;
         */
   
         const addButton = button.cloneNode();
-        addButton.textContent = '???';
+        addButton.textContent = '追加';
         addButton.addEventListener('click', async()=>{
           selectedEquips = {id:[], rank:[]};
           addButton.disabled = true;
@@ -1398,19 +1398,19 @@ let MODENAME;
         })
   
         const removeButton = button.cloneNode();
-        removeButton.textContent = '??';
-        removeButton.dataset.text = '??';
+        removeButton.textContent = '削除';
+        removeButton.dataset.text = '削除';
         removeButton.dataset.mode = 'remove';
         /*
         const editButton = button.cloneNode();
-        editButton.textContent = '??W';
-        editButton.dataset.text = '??W';
+        editButton.textContent = '編集';
+        editButton.dataset.text = '編集';
         editButton.dataset.mode = 'edit';
         */
   
         const equipSettingsButton = button.cloneNode();
-        equipSettingsButton.textContent = '?????o?^';
-        equipSettingsButton.dataset.text = '?????o?^';
+        equipSettingsButton.textContent = '装備登録';
+        equipSettingsButton.dataset.text = '装備登録';
         equipSettingsButton.dataset.mode = 'auto';
   
         const equipSettingsDialog = document.createElement('dialog');
@@ -1455,7 +1455,7 @@ let MODENAME;
           const closeButton = button.cloneNode();
           closeButton.style.width = '100px';
           closeButton.style.background = '#caa';
-          closeButton.textContent = '?~';
+          closeButton.textContent = '×';
           closeButton.addEventListener('click',()=>{
             equipSettingsDialog.close();
           })
@@ -1463,16 +1463,16 @@ let MODENAME;
           const div2 = document.createElement('div');
           div2.style.textAlign = 'center';
           const toggleButton = button.cloneNode();
-          toggleButton.textContent = '???p';
+          toggleButton.textContent = '対戦用';
           toggleButton.style.width = '7em';
           toggleButton.style.background = '#acc';
           toggleButton.addEventListener('click',()=>{
             if (autoEquipMode === 'normal') {
               autoEquipMode = 'autojoin';
-              toggleButton.textContent = '?????Q???p';
+              toggleButton.textContent = '自動参加用';
             } else {
               autoEquipMode = 'normal';
-              toggleButton.textContent = '???p';
+              toggleButton.textContent = '対戦用';
             }
           })
   
@@ -1485,20 +1485,20 @@ let MODENAME;
             settings.autoEquipRandomly = checkRandom.checked;
             localStorage.setItem('aat_settings', JSON.stringify(settings));
           })
-          label.append(checkRandom, '?????_??????');
+          label.append(checkRandom, 'ランダム装備');
   
           div.append(closeButton);
           div2.append(toggleButton,label);
   
           const description = document.createElement('div');
-          description.innerText = '????g?p????????I??????????????B?o?g???J?n?O??????I????????X??????B?????o?^????????J?n???????????????I????????B\n?q???g: ???C??????1???Z?b?g???g??????????????1????o?^?^????????????g???????邱?????????????o?^??????????????????????????B\n?????A?????_????????`?F?b?N???????A?o?^??????????玩????????_????I??\n\n?????Q???p??o?^?????????A??????p???????????g?p????B?o?^??????????????p???????g?p?B';
+          description.innerText = '対戦に使用する装備を選択してください。バトル開始前に自動的に装備を変更します。複数登録した場合は開始時に装備するものを選択します。\nヒント: メインとなる1つのセットを使うことがほとんどなら1つのみ登録／複数の装備を使い分けることが多いなら複数登録しておくと切り替えの手間が少なくなる。\nまたは、ランダム装備にチェックを入れると、登録してある中から自動でランダムに選択\n\n自動参加用を登録しておくと、通常の対戦用とは別の装備を使用する。登録していない場合は対戦用装備を使用。';
           description.style.fontSize = '70%';
   
           equipSettingsDialog.append(div, div2, description);
         })();
   
         const backupButton = button.cloneNode();
-        backupButton.innerText = '?o?b?N\n?A?b?v';
+        backupButton.innerText = 'バック\nアップ';
   
         const backupDialog = document.createElement('dialog');
         backupDialog.style.background = '#fff';
@@ -1515,7 +1515,7 @@ let MODENAME;
   
           const div = document.createElement('div');
           const saveButton = button.cloneNode();
-          saveButton.textContent = '???';
+          saveButton.textContent = '保存';
           saveButton.addEventListener('click', ()=>{
             const isSuccess = importEquipPresets(textarea.value);
             if(isSuccess) {
@@ -1536,10 +1536,10 @@ let MODENAME;
             }
           });
           const copyButton = button.cloneNode();
-          copyButton.textContent = '?R?s?[';
+          copyButton.textContent = 'コピー';
           copyButton.addEventListener('click', ()=>{navigator.clipboard.writeText(textarea.value).then(alert('copy'));})
           const closeButton = button.cloneNode();
-          closeButton.textContent = '?????';
+          closeButton.textContent = '閉じる';
           closeButton.addEventListener('click', ()=>{backupDialog.close()})
           div.append(saveButton, copyButton, closeButton);
           backupDialog.append(textarea, div);
@@ -1574,11 +1574,11 @@ let MODENAME;
         function setMode(mode, button) {
           resetMode();
           currentMode = mode;
-          button.textContent = '????';
+          button.textContent = '完了';
           button.classList.add('active');
-          if(mode === 'remove') stat.textContent = '?????????????I??';
-          else if (mode === 'edit') stat.textContent = '?N???b?N???W';
-          else if (mode === 'auto') stat.textContent = '?N???b?N??I??(?????I????)';
+          if(mode === 'remove') stat.textContent = '削除したいものを選択';
+          else if (mode === 'edit') stat.textContent = 'クリックで編集';
+          else if (mode === 'auto') stat.textContent = 'クリックで選択(複数選択可)';
         }
   
         function resetMode() {
@@ -1629,7 +1629,7 @@ let MODENAME;
       equipField.style.maxWidth = '90vw';
       equipField.style.height = '95vh';
       const closeButton = button.cloneNode();
-      closeButton.textContent = '?~';
+      closeButton.textContent = '×';
       closeButton.style.position = 'absolute';
       closeButton.style.background = 'none';
       closeButton.style.border = 'none';
@@ -1663,7 +1663,7 @@ let MODENAME;
       p.style.height = '28px';
   
       const equipSwitchButton = button.cloneNode();
-      equipSwitchButton.textContent = '?????';
+      equipSwitchButton.textContent = '?武器';
       equipSwitchButton.style.width = '4em';
       equipSwitchButton.style.height = '42px';
       equipSwitchButton.style.fontSize = '';
@@ -1674,23 +1674,23 @@ let MODENAME;
           weaponTable.style.display = 'none';
           armorTable.style.display = '';
           necklaceTable.style.display = 'none';
-          event.target.textContent = '??h??';
+          event.target.textContent = '?防具';
         } else if (!armorTable.style.display) {
           weaponTable.style.display = 'none';
           armorTable.style.display = 'none';
           necklaceTable.style.display = '';
-          event.target.textContent = '???';
+          event.target.textContent = '?首';
         } else if (!necklaceTable.style.display) {
           weaponTable.style.display = '';
           armorTable.style.display = 'none';
           necklaceTable.style.display = 'none';
-          event.target.textContent = '?????';
+          event.target.textContent = '?武器';
         }
       });
   
       // register
       const registerButton = button.cloneNode();
-      registerButton.textContent = '?o?^';
+      registerButton.textContent = '登録';
       registerButton.style.width = '4em';
       registerButton.style.height = '42px';
       registerButton.style.fontSize = '';
@@ -1702,14 +1702,14 @@ let MODENAME;
         dialog.style.color = '#000';
         dialog.style.textAlign = 'center';
         const presetNameInput = document.createElement('input');
-        presetNameInput.placeholder = '?v???Z?b?g??';
+        presetNameInput.placeholder = 'プリセット名';
         presetNameInput.style.background = '#fff';
         presetNameInput.style.color = '#000';
         const p = document.createElement('p');
-        p.textContent = '??????v???Z?b?g??????????????????????B';
+        p.textContent = '同名のプリセットが存在する場合は上書きされます。';
         p.style.margin = '0';
         const confirmButton = button.cloneNode();
-        confirmButton.textContent = '???';
+        confirmButton.textContent = '保存';
         confirmButton.addEventListener('click', ()=>{
           if(presetNameInput.value.trim() === '') return;
           saveEquipPreset(presetNameInput.value.substring(0,32), selectedEquips);
@@ -1718,7 +1718,7 @@ let MODENAME;
         })
         presetNameInput.addEventListener('keydown', (e)=>{
           if (e.key === "Enter") {
-            e.preventDefault(); // ??????????dialog????????
+            e.preventDefault(); // これが無いとdialogが閉じない
             if(presetNameInput.value.trim() === '') return;
             saveEquipPreset(presetNameInput.value.substring(0,32), selectedEquips);
             dialog.close();
@@ -1726,13 +1726,13 @@ let MODENAME;
           }
         })
         const cancelButton = button.cloneNode();
-        cancelButton.textContent = '?L?????Z??';
+        cancelButton.textContent = 'キャンセル';
         cancelButton.addEventListener('click', ()=>{dialog.close()});
         dialog.append(presetNameInput, confirmButton, cancelButton, p);
         equipField.append(dialog);
         registerButton.addEventListener('click', ()=>{
           if(!selectedEquips.id[0] && !selectedEquips.id[1] && !selectedEquips.id[2]) {
-            alert('?????????I?????');
+            alert('装備が未選択です');
             return;
           }
           dialog.showModal();
@@ -1765,7 +1765,7 @@ let MODENAME;
             const text = await res.text();
             const doc = new DOMParser().parseFromString(text, 'text/html');
             const h1 = doc.querySelector('h1');
-            if(h1?.textContent !== '?A?C?e???o?b?O') throw new Error(text);
+            if(h1?.textContent !== 'アイテムバッグ') throw new Error(text);
             weaponTable = doc.querySelector('#weaponTable');
             armorTable = doc.querySelector('#armorTable');
             necklaceTable = doc.querySelector('#necklaceTable');
@@ -1812,7 +1812,7 @@ let MODENAME;
           }
         }
   
-        equipSwitchButton.textContent = '?????';
+        equipSwitchButton.textContent = '?武器';
         weaponTable.style.display = '';
         armorTable.style.display = 'none';
         necklaceTable.style.display = 'none';
@@ -1875,7 +1875,7 @@ let MODENAME;
           return true;
         } catch (e) {
           if (e instanceof SyntaxError) {
-            alert('?????G???[');
+            alert('書式エラー');
           }
           return false;
         }
@@ -1884,7 +1884,7 @@ let MODENAME;
   
   
       function removePresetItems(presetName) {
-        const userConfirmed = confirm(presetName + ' ????????????H');
+        const userConfirmed = confirm(presetName + ' を削除しますか？');
         if(!userConfirmed) return;
         const stat = document.querySelector('.equip-preset-stat');
         const equipPresets = JSON.parse(localStorage.getItem('equipPresets')) || {};
@@ -1931,18 +1931,18 @@ let MODENAME;
         console.log(items[rank]);
       }
     })();
-    //-- ??????? --//
+    //-- ここまで --//
 
   async function setPresetItems (presetName) {
       let currentEquip = JSON.parse(localStorage.getItem('current_equip')) || [];
       const stat = document.querySelector('.equip-preset-stat');
-      if (stat.textContent === '??????...') return;
+      if (stat.textContent === '装備中...') return;
       const equipPresets = JSON.parse(localStorage.getItem('equipPresets')) || {};
       const fetchPromises = equipPresets[presetName].id
-        .filter(id => id !== undefined && id !== null && !currentEquip.includes(id)) // ???o?^or?????????????????O
+        .filter(id => id !== undefined && id !== null && !currentEquip.includes(id)) // 未登録or既に装備中の部位は除外
         .map(id => fetch('https://donguri.5ch.net/equip/' + id));
   
-      stat.textContent = '??????...';
+      stat.textContent = '装備中...';
       try {
         const responses = await Promise.all(fetchPromises);
         const texts = await Promise.all(
@@ -1954,20 +1954,20 @@ let MODENAME;
           })
         );
   
-        if(texts.includes('?? 肪????????????????B')) {
-          throw new Error('????O?C?????????????');
-        } else if(texts.includes('?A?C?e????????????????????B')) {
-          throw new Error('?A?C?e???????????????????');
+        if(texts.includes('どんぐりが見つかりませんでした。')) {
+          throw new Error('再ログインしてください');
+        } else if(texts.includes('アイテムが見つかりませんでした。')) {
+          throw new Error('アイテムが見つかりませんでした');
         }
   
         const docs = texts.map(text => new DOMParser().parseFromString(text,'text/html'));
         const titles = docs.map(doc => doc.querySelector('h1')?.textContent);
-        if(titles.includes('?? ??n')) {
-          throw new Error('????O?C?????????????');
-        } else if (!titles.every(title => title === '?A?C?e???o?b?O')) {
-          throw new Error('?????G???[');
+        if(titles.includes('どんぐり基地')) {
+          throw new Error('再ログインしてください');
+        } else if (!titles.every(title => title === 'アイテムバッグ')) {
+          throw new Error('装備エラー');
         }
-        stat.textContent = '????: ' + presetName;
+        stat.textContent = '完了: ' + presetName;
         localStorage.setItem('current_equip', JSON.stringify(equipPresets[presetName].id));
         currentEquipName = presetName;
       } catch (e) {
@@ -1983,7 +1983,7 @@ let MODENAME;
   window.setPresetItems = setPresetItems;
 
 
-  //-- ???? --//
+  //-- 装備 --//
   function scaleContentsToFit(container, contents){
     const containerWidth = container.clientWidth;
     const contentsWidth = contents.scrollWidth;
@@ -2009,7 +2009,7 @@ let MODENAME;
       
       const h1Text = doc.querySelector('h1')?.textContent || '';
       const divText = doc.querySelector('header > div')?.textContent || '';
-      if (h1Text !== '?? ?`?[????' && !divText.includes('?? ?`?[????')) {
+      if (h1Text !== 'どんぐりチーム戦い' && !divText.includes('どんぐりチーム戦い')) {
          throw new Error('title.ng info');
       }
   
@@ -2026,29 +2026,23 @@ let MODENAME;
       const cellColorsString = scriptContent.match(/const cellColors = ({.+?})/s)[1];
       const validJsonStr = cellColorsString.replace(/'/g, '"').replace(/,\s*}/, '}');
       const cellColors = JSON.parse(validJsonStr);
-      // --- water tiles (cannot be attacked) ---
-      const waterSet = new Set();
-      try {
-        const terrainsMatch = scriptContent.match(/const\s+terrainsPayload\s*=\s*(\{[\s\S]*?\});/);
-        if (terrainsMatch && terrainsMatch[1]) {
-          // terrainsPayload is usually valid JSON, but just in case, remove trailing commas.
-          const terrainsJson = terrainsMatch[1]
-            .replace(/,\s*}/g, '}')
-            .replace(/,\s*]/g, ']');
-          const terrainsPayload = JSON.parse(terrainsJson);
-          const terrains = (terrainsPayload && Array.isArray(terrainsPayload.terrains)) ? terrainsPayload.terrains : [];
-          for (const t of terrains) {
-            const r = (t.r ?? t.row ?? t.x);
-            const c = (t.c ?? t.col ?? t.y);
-            const tt = (t.t ?? t.terrain);
-            if (!Number.isFinite(r) || !Number.isFinite(c)) continue;
-            if (tt === 'w' || tt === 'water' || tt === 'twater') {
-              waterSet.add(`${r}-${c}`);
+
+      // terrainsPayload (water tiles: t === 'w')
+      let waterSet = new Set();
+      const terrainsMatch = scriptContent.match(/const terrainsPayload = (\{.+?\});/s);
+      if (terrainsMatch) {
+        try {
+          const terrainsPayload = JSON.parse(terrainsMatch[1]);
+          const terrains = (terrainsPayload && terrainsPayload.terrains) ? terrainsPayload.terrains : [];
+          terrains.forEach(t => {
+            if (t && t.t === 'w') {
+              // x: col, y: row
+              waterSet.add(`${t.y}-${t.x}`);
             }
-          }
+          });
+        } catch (e) {
+          // ignore parse errors
         }
-      } catch (e) {
-        // ignore parse errors
       }
   
       let rows = 8, cols = 8;
@@ -2081,18 +2075,10 @@ let MODENAME;
             cell.style.transition = 'background-color 0.3s';
   
             const cellKey = `${i}-${j}`;
-            if (waterSet.has(cellKey)) {
-              cell.style.backgroundColor = '#b3e5fc';
-              cell.dataset.water = '1';
-              cell.style.cursor = 'not-allowed';
-            } else if (cellColors[cellKey]) {
+            if (cellColors[cellKey]) {
               cell.style.backgroundColor = cellColors[cellKey];
-              cell.dataset.water = '';
-              cell.style.cursor = 'pointer';
             } else {
               cell.style.backgroundColor = 'transparent';
-              cell.dataset.water = '';
-              cell.style.cursor = 'pointer';
             }
   
             grid.appendChild(cell);
@@ -2113,24 +2099,13 @@ let MODENAME;
               .join('');
           }
   
-          if (waterSet.has(cellKey)) {
-            if (cell.style.backgroundColor !== '#b3e5fc') {
-              cell.style.backgroundColor = '#b3e5fc';
-              refreshedCells.push(cell);
-            }
-            cell.dataset.water = '1';
-            cell.style.cursor = 'not-allowed';
-          } else if (cellColors[cellKey]) {
+          if (cellColors[cellKey]) {
             if (cellColorCode !== cellColors[cellKey].toLowerCase()) {
               cell.style.backgroundColor = cellColors[cellKey];
               refreshedCells.push(cell);
             }
-            cell.dataset.water = '';
-            cell.style.cursor = 'pointer';
           } else if (cellColorCode !== '' && cellColorCode !== '#ffffff00' && cell.style.backgroundColor !== 'transparent') {
             cell.style.backgroundColor = 'transparent';
-            cell.dataset.water = '';
-            cell.style.cursor = 'pointer';
             refreshedCells.push(cell);
           }
           
@@ -2193,13 +2168,13 @@ let MODENAME;
             let doc = new DOMParser().parseFromString(text, 'text/html');
             const h1Text = doc.querySelector('h1')?.textContent || '';
             const divText = doc.querySelector('header > div')?.textContent || '';
-            if (h1Text !== '?? ?`?[????' && !divText.includes('?? ?`?[????')) {
+            if (h1Text !== 'どんぐりチーム戦い' && !divText.includes('どんぐりチーム戦い')) {
               return Promise.reject(`title.ng [${row}][${col}]`);
             }
             let cond = doc.querySelector('small')?.textContent || '';
             if(!cond) return Promise.reject(`cond.ng [${row}][${col}]`);
             let holder = doc.querySelector('strong')?.textContent || '',
-            shortenCond = cond.replace('[?G???[?g]','e').replace('????','-').replace(/(???|\[|\]|\||\s)/g,'');
+            shortenCond = cond.replace('[エリート]','e').replace('から','-').replace(/(まで|\[|\]|\||\s)/g,'');
             const p = [document.createElement('p'), document.createElement('p')];
             p[0].textContent = shortenCond;
             p[1].textContent = holder;
@@ -2257,7 +2232,7 @@ let MODENAME;
       const doc = new DOMParser().parseFromString(text,'text/html');
       const h1Text = doc.querySelector('h1')?.textContent || '';
       const divText = doc.querySelector('header > div')?.textContent || '';
-      if (h1Text !== '?? ?`?[????' && !divText.includes('?? ?`?[????')) {
+      if (h1Text !== 'どんぐりチーム戦い' && !divText.includes('どんぐりチーム戦い')) {
         return Promise.reject(`title.ng`);
       }
       const table = doc.querySelector('table');
@@ -2270,7 +2245,7 @@ let MODENAME;
     function showArenaTable (table){
       const tableRow = table.querySelector('tbody > tr');
       if(!tableRow) return;
-      const coordinate = tableRow.cells[0].textContent.replace('?A???[?i','').trim();
+      const coordinate = tableRow.cells[0].textContent.replace('アリーナ','').trim();
       const holderName = tableRow.cells[1].querySelector('strong');
       const equipCond = tableRow.cells[1].querySelector('small');
       const teamName = tableRow.cells[2].textContent;
@@ -2294,8 +2269,8 @@ let MODENAME;
 
       cells[0].append(coordinate, hr, equipCond);
       cells[1].append(holderName, document.createElement('br'), teamName);
-      cells[2].innerText = `??:${statistics[0]}\n??:${statistics[1]}\n??:${statistics[2]}`;
-      cells[3].innerText = `????:${modCounts[0]}\n???:${modCounts[1]}\n${modders}?l`;
+      cells[2].innerText = `勝:${statistics[0]}\n負:${statistics[1]}\n引:${statistics[2]}`;
+      cells[3].innerText = `強化:${modCounts[0]}\n弱体:${modCounts[1]}\n${modders}人`;
       cells[3].style.whiteSpace = 'nowrap';
 
       const matchData = coordinate.match(/\d+/g);
@@ -2365,8 +2340,8 @@ async function autoEquipAndChallenge (row, col, rank, mode = 'normal') {
 
     const normalizedRank = (rank || '')
       .toString()
-      .replace('?G???[?g', 'e')
-      .replace(/.+????|\w+-|???|????|?x????|?x|\s|\[|\]|\|/g, '');
+      .replace('エリート', 'e')
+      .replace(/.+から|\w+-|まで|だけ|警備員|警|\s|\[|\]|\|/g, '');
 
     const autoEquipItems = JSON.parse(localStorage.getItem('autoEquipItems')) || {};
     const autoEquipItemsAutojoin = JSON.parse(localStorage.getItem('autoEquipItemsAutojoin')) || {};
@@ -2492,7 +2467,7 @@ async function arenaChallenge (row, col){
     }
 
     if(rangeAttackQueue.length === 0) {
-      alert('?Z????I?????????????');
+      alert('セルを選択してください');
       return;
     }
 
@@ -2509,7 +2484,7 @@ async function arenaChallenge (row, col){
       if(!rangeAttackProcessing) return;
 
       const cell = rangeAttackQueue[0];
-      // ?U???O??I????????????
+      // 攻撃前に選択解除された場合
       if(!cell.classList.contains('selected')) {
         rangeAttackQueue.shift();
         continue;
@@ -2532,15 +2507,15 @@ async function arenaChallenge (row, col){
         let lastLine = text.trim().split('\n').pop();
         if(
           lastLine.length > 100 ||
-          lastLine === '?? 肪????????????????B'
+          lastLine === 'どんぐりが見つかりませんでした。'
         ) {
-          throw new Error('?? 肪????????????????B');
+          throw new Error('どんぐりが見つかりませんでした。');
         }
         if(
-          lastLine === '???????`?[??????????g?????????????B????炭??????????????B' ||
+          lastLine === 'あなたのチームは動きを使い果たしました。しばらくお待ちください。' ||
           lastLine === 'ng<>too fast' ||
-          lastLine === '?????h?? ???????????????B' ||
-          lastLine === '?????`?[????Q??????K?v?????????B'
+          lastLine === '武器と防具を装備しなければなりません。' ||
+          lastLine === '最初にチームに参加する必要があります。'
         ) {
           throw new Error(lastLine);
         }
@@ -2551,7 +2526,7 @@ async function arenaChallenge (row, col){
         rangeAttackQueue.shift();
       } catch (e) {
         const p = pTemplate.cloneNode();
-        p.textContent = `(${row}, ${col}) [???f] ${e}`;
+        p.textContent = `(${row}, ${col}) [中断] ${e}`;
         arenaResult.prepend(p);
         errorOccurred = true;
         break;
@@ -2563,7 +2538,7 @@ async function arenaChallenge (row, col){
     }
     if(!errorOccurred) {
       const p = pTemplate.cloneNode();
-      p.textContent = `????`;
+      p.textContent = `完了`;
       arenaResult.prepend(p);
       return true;
     } else {
@@ -2598,29 +2573,29 @@ async function arenaChallenge (row, col){
       
         const order = ['N', 'R', 'SR', 'SSR', 'UR'];
       
-        // '-' ????????N???擾?i????????????j
+        // '-' の後のランクを取得（ない場合はそのまま）
         const baseA = isCompositeA ? splitA[1] : condA;
         const baseB = isCompositeB ? splitB[1] : condB;
       
-        const indexA = order.indexOf(baseA.replace(/????|e/g, ''));
-        const indexB = order.indexOf(baseB.replace(/????|e/g, ''));
+        const indexA = order.indexOf(baseA.replace(/だけ|e/g, ''));
+        const indexB = order.indexOf(baseB.replace(/だけ|e/g, ''));
 
-        // ?????N??
+        // ランク順
         if (indexA !== indexB) return indexA - indexB;
       
-        // '????' > 'e' > '????e'
+        // 'だけ' > 'e' > 'だけe'
         const flag = s => 
-          (s.includes('????') ? 1 : 0) + (s.includes('e') ? 2 : 0);
+          (s.includes('だけ') ? 1 : 0) + (s.includes('e') ? 2 : 0);
         const flagA = flag(condA);
         const flagB = flag(condB);
 
         if(flagA !== flagB) return flagA - flagB;
 
-        // ?????????N???? '-' ????????????D??
+        // 同じランク内で '-' を含まないものを優先
         if (isCompositeA !== isCompositeB) return isCompositeA - isCompositeB;
       
         if (isCompositeA) {
-          // '-' ??O??????N???r
+          // '-' の前のランクで比較
           const frontA = splitA[0];
           const frontB = splitB[0];
           const indexFrontA = order.indexOf(frontA);
@@ -2659,7 +2634,7 @@ async function arenaChallenge (row, col){
       timestamp.style.whiteSpace = 'nowrap';
 
       const regionDiv = document.createElement('div');
-      const progress = `${currentPeriod}?? ${currentProgress}%`;
+      const progress = `${currentPeriod}期 ${currentProgress}%`;
       if (region) regionDiv.innerText = `${progress}\ntarget: ${region}\n${next}`;
       else regionDiv.innerText = next;
       regionDiv.style.fontSize = '90%';
@@ -2684,52 +2659,52 @@ async function arenaChallenge (row, col){
 
     const messageTypes = {
       breaktime: [
-        '?`?[????Q?????????E????????????????A????o?g?????n??????????????????B',
-        '??????x?o?g????Q??????O??A???????????????B',
-        'ng: ?????????????'
+        'チームに参加または離脱してから間もないため、次のバトルが始まるまでお待ちください。',
+        'もう一度バトルに参加する前に、待たなければなりません。',
+        'ng: ちょっとゆっくり'
       ],
       toofast: [
         'ng<>too fast'
       ],
       retry: [
-        '???????`?[??????????g?????????????B????炭??????????????B'
+        'あなたのチームは動きを使い果たしました。しばらくお待ちください。'
       ],
       reset: [
-        '????^?C????U??????????B???O????B'
+        'このタイルは攻撃できません。範囲外です。'
       ],
       quit: [
-        '?????`?[????Q??????K?v?????????B',
-        '?? 肪????????????????B',
-        '???????? 肪?????????????????B',
-        '???x????????????B'
+        '最初にチームに参加する必要があります。',
+        'どんぐりが見つかりませんでした。',
+        'あなたのどんぐりが理解できませんでした。',
+        'レベルが低すぎます。'
       ],
       guardError: [
-        '[?x????]????'
+        '[警備員]だけ'
       ],
       equipError: [
-        '?????h?? ???????????????B',
-        '???????????h????????s??????B',
-        '???????????h???????????????',
-        '??????????????????????????????B????????????????????????????????',
-        '?Q????????A????????????h???A?C?e??ID'
+        '武器と防具を装備しなければなりません。',
+        '装備している防具と武器が力不足です。',
+        '装備している防具と武器が強すぎます',
+        '装備しているものは改造が多すぎます。改造の少ない他のものをお試しください',
+        '参加するには、装備中の武器と防具のアイテムID'
       ],
       nonAdjacent: [
-        '????^?C????U??????????B???????`?[??????s????????A????s?????????^?C?????????邱??????????B',
-        '???????`?[?????s????????????????A????`?[?????s??U??????????B'
+        'このタイルは攻撃できません。あなたのチームが首都を持つまで、どの首都にも隣接するタイルを主張することはできません。',
+        'あなたのチームは首都を持っていないため、他のチームの首都に攻撃できません。'
       ],
       teamAdjacent: [
-        '????^?C????U??????????B???????`?[????????y????????????????????B',
-        '????^?C????U??????????B??s??D??????A???^?C????????????3??x?z???????K?v?????????B',
-        '????^?C????U??????????B??s??D??????A???^?C????????????2??x?z???????K?v?????????B',
-        '????^?C????U??????????B??s??D??????A???^?C????????????1??x?z???????K?v?????????B',
-        '????^?C????U??????????B???????s??U??????????B',
-        '?????s??U??????????B???????^?C?????????????'
+        'このタイルは攻撃できません。あなたのチームの制御領土に隣接していなければなりません。',
+        'このタイルは攻撃できません。首都を奪取するには、隣接タイルを少なくとも3つ支配している必要があります。',
+        'このタイルは攻撃できません。首都を奪取するには、隣接タイルを少なくとも2つ支配している必要があります。',
+        'このタイルは攻撃できません。首都を奪取するには、隣接タイルを少なくとも1つ支配している必要があります。',
+        'このタイルは攻撃できません。自分の首都は攻撃できません。',
+        'この首都は攻撃できません。相手の総タイル数の少なくとも'
       ],
       capitalAdjacent: [
-        '????^?C????U??????????B???G?????}?b?v???A??????????m??1????s????????????????????B'
+        'このタイルは攻撃できません。混雑したマップでは、初期主張は正確に1つの首都に隣接していなければなりません。'
       ],
       mapEdge: [
-        '????^?C????U??????????B???G?????}?b?v???A????????}?b?v??[?????????????B'
+        'このタイルは攻撃できません。混雑したマップでは、初期主張はマップの端でなければなりません。'
       ]
     }
 
@@ -2742,7 +2717,7 @@ async function arenaChallenge (row, col){
     }
 
 
-    // ??????????i?s?x(%)???????iRB?}?b?v??16/33/50/66/83/100?????j
+    // 次に撃つべき進行度(%)を決める（RBマップは16/33/50/66/83/100で区切り）
     function computeNextProgressRB(pct){
       if (pct < 16) return 26;
       if (pct < 33) return 43;
@@ -2752,20 +2727,20 @@ async function arenaChallenge (row, col){
       return 10;
     }
 
-    // ????i?s?x???????W?i?s?x?????????i?????????????????????????j
+    // 現在進行度から次の目標進行度を初期化（未初期化だと常時発射してしまう）
     let nextProgress = null;
     let firstAutoJoinRun = true;
 async function attackRegion(force = false) {
       await drawProgressBar();
       if (isAutoJoinRunning) return;
-      // nextProgress?????/NaN???
+      // nextProgress未設定/NaN対策
       if (nextProgress === null || Number.isNaN(Number(nextProgress))) {
         nextProgress = location.href.includes('/teambattle?m=rb') ? computeNextProgressRB(currentProgress) : nextProgress;
       }
-      // ??W?i?s?x?}2%????????????????@?i???????J?n?????1????????????j
+      // 目標進行度±2%に入っていない時は待機（ただし開始直後の1回目はすぐ試す）
       if (!firstAutoJoinRun && nextProgress !== null && Math.abs(nextProgress - currentProgress) >= 3) {
         try {
-          logMessage(null, `??@??: ${currentProgress}% ?? ${nextProgress}?}2%`, '');
+          logMessage(null, `待機中: ${currentProgress}% → ${nextProgress}±2%`, '');
         } catch(e) {}
         return;
       }
@@ -2776,14 +2751,14 @@ if (location.href.includes('/teambattle?m=rb')) {
           if (res.ok) {
             const text = await res.text();
             const doc = new DOMParser().parseFromString(text, 'text/html');
-            const target = Array.from(doc.querySelectorAll('header span')).find(s => s.textContent.includes('?`?[??:'));
+            const target = Array.from(doc.querySelectorAll('header span')).find(s => s.textContent.includes('チーム:'));
             if (target) {
               const raw = target.textContent;
-              if (raw.includes('???b?h')) {
-                teamName = '???b?h';
+              if (raw.includes('レッド')) {
+                teamName = 'レッド';
                 teamColor = 'd32f2f';
-              } else if (raw.includes('?u???[')) {
-                teamName = '?u???[';
+              } else if (raw.includes('ブルー')) {
+                teamName = 'ブルー';
                 teamColor = '1976d2';
               }
             }
@@ -2793,7 +2768,7 @@ if (location.href.includes('/teambattle?m=rb')) {
 
       let regions = await getRegions();
       if (!regions) {
-        logMessage(null, '[??@] ?}?b?v???擾????s (getRegions)', '?? 20s');
+        logMessage(null, '[待機] マップ情報取得に失敗 (getRegions)', '→ 20s');
         await sleep(20000);
         return;
       }
@@ -2832,9 +2807,9 @@ if (location.href.includes('/teambattle?m=rb')) {
             let processType;
             let sleepTime = 2;
 
-            if (text.startsWith('?A???[?i?`???????W?J?n')||text.startsWith('???[?_?[??????')) {
+            if (text.startsWith('アリーナチャレンジ開始')||text.startsWith('リーダーになった')) {
               success = true;
-              message = '[????] ' + lastLine;
+              message = '[成功] ' + lastLine;
               processType = 'return';
             } else if (messageType === 'breaktime') {
               success = true;
@@ -2853,10 +2828,10 @@ if (location.href.includes('/teambattle?m=rb')) {
               message += ` (${cellRank}, ${currentEquipName})`;
               processType = 'continue';
             } else if (lastLine.length > 100) {
-              message = '?? ?V?X?e??';
+              message = 'どんぐりシステム';
               processType = 'continue';
             } else if (messageType === 'quit') {
-              message = '[??~] ' + lastLine;
+              message = '[停止] ' + lastLine;
               processType = 'return';
               clearInterval(autoJoinIntervalId);
             } else if (messageType === 'reset') {
@@ -2884,13 +2859,13 @@ if (location.href.includes('/teambattle?m=rb')) {
               if (location.href.includes('/teambattle?m=rb')) {
                 nextProgress = computeNextProgressRB(currentProgress);
               }
-              next = `?? ${nextProgress}?}2%`;
+              next = `→ ${nextProgress}±2%`;
               isAutoJoinRunning = false;
             } else if (processType === 'return') {
               next = '';
               isAutoJoinRunning = false;
             } else {
-              next = `?? ${sleepTime}s`;
+              next = `→ ${sleepTime}s`;
             }
 
             logMessage(region, message, next);
@@ -2921,8 +2896,8 @@ if (location.href.includes('/teambattle?m=rb')) {
                 message = e;
                 break;
             }
-            if (e.message === '????O?C?????????????') {
-              logMessage(region, '[??~] ?? 肪???????????????', '');
+            if (e.message === '再ログインしてください') {
+              logMessage(region, '[停止] どんぐりが見つかりませんでした', '');
               isAutoJoinRunning = false;
               clearInterval(autoJoinIntervalId);
               return;
@@ -2935,11 +2910,11 @@ if (location.href.includes('/teambattle?m=rb')) {
               errorCount++;
               let sleepTime = 20 * errorCount;
               if(sleepTime > 600) sleepTime = 600;
-              logMessage(region, message, `?? ${sleepTime}s`);
+              logMessage(region, message, `→ ${sleepTime}s`);
               await sleep(sleepTime * 1000);
             } else {
               let sleepTime = 20;
-              logMessage(region, e, `?? ${sleepTime}s`);
+              logMessage(region, e, `→ ${sleepTime}s`);
               await sleep(sleepTime * 1000);
             }
           }
@@ -2948,9 +2923,9 @@ if (location.href.includes('/teambattle?m=rb')) {
           if (location.href.includes('/teambattle?m=rb')) {
             nextProgress = computeNextProgressRB(currentProgress);
           }
-          const next = `?? ${nextProgress}?}2%`;
+          const next = `→ ${nextProgress}±2%`;
           isAutoJoinRunning = false;
-          logMessage(null, '?U????\??^?C????????????????????B', next);
+          logMessage(null, '攻撃可能なタイルが見つかりませんでした。', next);
           return;
         }
       }
@@ -2963,7 +2938,7 @@ if (location.href.includes('/teambattle?m=rb')) {
         const text = await res.text();
         const doc = new DOMParser().parseFromString(text, 'text/html');
         const headerText = doc?.querySelector('header')?.textContent || '';
-        if (!headerText.includes('?? ?`?[????')) throw new Error('title.ng info');
+        if (!headerText.includes('どんぐりチーム戦い')) throw new Error('title.ng info');
 
         const scriptContent = doc.querySelector('.grid > script, #gridWrap + script')?.textContent || '';
 
@@ -3120,13 +3095,13 @@ if (location.href.includes('/teambattle?m=rb')) {
         const text = await res.text();
         const doc = new DOMParser().parseFromString(text,'text/html');
         const headerText = doc?.querySelector('header')?.textContent || '';
-        if(!headerText.includes('?? ?`?[????')) return Promise.reject(`title.ng`);
+        if(!headerText.includes('どんぐりチーム戦い')) return Promise.reject(`title.ng`);
         const table = doc.querySelector('table');
         if(!table) throw new Error('table.ng');
         const equipCond = table.querySelector('td small').textContent;
         const rank = equipCond
-          .replace('?G???[?g','e')
-          .replace(/.+????|\w+-|???|????|?x????|?x|\s|\[|\]|\|/g,'');
+          .replace('エリート','e')
+          .replace(/.+から|\w+-|まで|だけ|警備員|警|\s|\[|\]|\|/g,'');
         const autoEquipItems = JSON.parse(localStorage.getItem('autoEquipItems')) || {};
         const autoEquipItemsAutojoin = JSON.parse(localStorage.getItem('autoEquipItemsAutojoin')) || {};
 
@@ -3148,7 +3123,7 @@ if (location.href.includes('/teambattle?m=rb')) {
     }
 
     if (!isAutoJoinRunning) {
-      // ?????{?^????????????x?????????s?i?i????@???? ??j
+      // 初回はボタン押下直後に一度だけ即実行（進捗待機判定を無視）
       setTimeout(() => attackRegion(!!forceFirst), 0);
     }
     autoJoinIntervalId = setInterval(() => attackRegion(false), 60000);
@@ -3168,7 +3143,7 @@ async function drawProgressBar(){
       let str,min,totalSec,sec,margin;
 
       if (currentProgress === 0 || currentProgress === 50 || (location.href.includes('/teambattle?m=rb') && (currentProgress === 16 || currentProgress === 33 || currentProgress === 66 || currentProgress === 83))) {
-        str = '?i?}?b?v?X?V?j';
+        str = '（マップ更新）';
       } else {
         if (currentProgress === 100) {
           min = 0;
@@ -3197,15 +3172,15 @@ async function drawProgressBar(){
           Bluesec = totalSec % 60;
           margin = 20;
         }
-        str = '?i?c??' + min + '??' + sec + '?b \xb1' + margin + '?b?j';
+        str = '（残り' + min + '分' + sec + '秒 \xb1' + margin + '秒）';
       }
       progressBarBody.textContent = currentProgress + '%';
       progressBarBody.style.width = currentProgress + '%';
-      progressBarInfo.textContent = `${MODENAME}??${currentPeriod}??${str}`;
+      progressBarInfo.textContent = `${MODENAME}第${currentPeriod}期${str}`;
 
       const statBlock = doc.querySelector('.stat-block');
-      wood = statBlock.textContent.match(/?????: (\d+)/)[1];
-      steel = statBlock.textContent.match(/?S???: (\d+)/)[1];
+      wood = statBlock.textContent.match(/木材の数: (\d+)/)[1];
+      steel = statBlock.textContent.match(/鉄の数: (\d+)/)[1];
     } catch (e) {
       console.error(e+' drawProgressBar()')
     }
