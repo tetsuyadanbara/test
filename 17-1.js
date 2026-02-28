@@ -73,6 +73,7 @@ let MODENAME;
   const vh = Math.min(document.documentElement.clientHeight, window.innerHeight || 0);
 
   const settings = JSON.parse(localStorage.getItem('aat_settings')) || {};
+  const WATER_COLOR = 'rgba(135,206,250,0.35)'; // 水マス用
 
   const header = document.querySelector('header');
   header.style.marginTop = '100px';
@@ -2014,6 +2015,17 @@ let MODENAME;
       }
   
       const currentCells = grid.querySelectorAll('.cell');
+      // 水マス（撃てない）を判定して水色を付ける
+      if (waterSet && waterSet.size) {
+        currentCells.forEach(c => {
+          const k = `${c.dataset.row}-${c.dataset.col}`;
+          if (waterSet.has(k)) {
+            c.dataset.terrain = 'w';
+            c.classList.add('water');
+            c.style.backgroundColor = WATER_COLOR;
+          }
+        });
+      }
       
       let scriptContent = '';
       for (let s of doc.querySelectorAll('script')) {
@@ -2945,7 +2957,7 @@ if (location.href.includes('/teambattle?m=rb')) {
         const headerText = doc?.querySelector('header')?.textContent || '';
         if (!headerText.includes('どんぐりチーム戦い')) throw new Error('title.ng info');
 
-        const scriptContent = doc.querySelector('.grid > script, #gridWrap + script')?.textContent || '';
+        const scriptContent = Array.from(doc.querySelectorAll('script:not([src])')).map(s=>s.textContent||'').join('\n');
 
         let cellColors, capitalMap, rows, cols;
 
