@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Donguri Bag Enhancer
 // @namespace    https://donguri.5ch.net/
-// @version      8.18.5.2
+// @version      8.18.6.3
 // @description  5ちゃんねる「どんぐりシステム」の「アイテムバッグ」ページ機能改良スクリプト。
 // @author       福呼び草
 // @assistant    ChatGPT (OpenAI)
@@ -25,7 +25,7 @@
   // ============================================================
   // スクリプト自身のバージョン（About 表示用）
   // ============================================================
-  const DBE_VERSION    = '8.18.5.2';
+  const DBE_VERSION    = '8.18.6.3';
 
   // ============================================================
   // 多重起動ガード（同一ページで DBE が複数注入される事故を防ぐ）
@@ -396,6 +396,7 @@
     ['花火R',                      { kana:'ハナビR',                      limited:true  }],
     ['うちわR',                    { kana:'ウチワR',                      limited:true  }],
     ['チョコレートハンマー',       { kana:'チョコレートハンマー',         limited:true  }],
+    ['桃花うちわ',                 { kana:'トウカウチワ',                 limited:true  }],
   ]);
   // レジストリ（常設防具）
   const armorRegistry = new Map([
@@ -429,7 +430,7 @@
     ['ミイラ包帯',                 { kana:'ミイラホウタイ',               limited:true  }],
     ['霜鬼のマント',               { kana:'ソウキのマント',               limited:true  }],
     ['鏡棺',                       { kana:'キョウカン',                   limited:true  }],
-    ['灯守の外套',                 { kana:'トウモリノガイトウ',             limited:true  }],
+    ['灯守の外套',                 { kana:'トウモリノガイトウ',           limited:true  }],
     ['段ボールの鎧R',              { kana:'ダンボールノヨロイR',          limited:true  }],
     ['プチプチ巻きR',              { kana:'プチプチマキR',                limited:true  }],
     ['葉っぱの鎧R',                { kana:'ハッパノヨロイR',              limited:true  }],
@@ -441,7 +442,8 @@
     ['雪崩の甲殻',                 { kana:'ナダレノコウカク',             limited:true  }],
     ['ツンドラ守護者の胴衣',       { kana:'ツンドラシュゴシャノドウイ',   limited:true  }],
     ['極光の冠兜',                 { kana:'キョッコウノカンムリカブト',   limited:true  }],
-    ['月影の告白ゆかた',           { kana:'ツキカゲノコクハクユカタ',     limited:true  }]
+    ['月影の告白ゆかた',           { kana:'ツキカゲノコクハクユカタ',     limited:true  }],
+    ['乱れ桜の外套',               { kana:'ミダレザクラノガイトウ',       limited:true  }],
   ]);
 
   // ============================================================
@@ -513,9 +515,15 @@
 
   function updateSortIndicator(th, arrow, position, label) {
     // 既存のインジケーターを全て削除（ヘッダー行内）
-    th.parentNode
-      .querySelectorAll('.sort-indicator, .sort-indicator-left')
-      .forEach(el => el.remove());
+    // ※ヘッダー行が clone 置換されるケースでも確実に効くよう closest('tr') を優先
+    const headerTr = (th && typeof th.closest === 'function')
+      ? th.closest('tr')
+      : (th ? th.parentNode : null);
+    if (headerTr) {
+      headerTr
+        .querySelectorAll('.sort-indicator, .sort-indicator-left')
+        .forEach(el => el.remove());
+    }
     const span = document.createElement('span');
 
     // 共通クラス付与
@@ -524,6 +532,14 @@
     } else {
       span.classList.add('sort-indicator');
     }
+
+    // 念のため：CSSが当たらない/上書きされるケースでも最低限見えるように保険
+    // （CSS側の定義は維持しつつ、表示されない事故だけ潰す）
+    span.style.display = 'inline-flex';
+    span.style.alignItems = 'center';
+    span.style.gap = '0.1em';
+    span.style.color = 'red';
+    span.style.fontWeight = 'bold';
 
     // インジケーター本体
     const svg = ARROW_SVG[ arrow === '⬇' ? 'down' : 'up' ];
@@ -10843,7 +10859,11 @@
           // ※theadにID列が残っている状態でtbodyを差し替えると、tbody側にIDセルが存在せず列ズレが起きる
           try{
             const showId = (typeof readBool === 'function') ? readBool('displayItemId') : false;
-            if (showId){
+            // ★列ズレ対策：thead/tbody の同期は toggleItemIdColumn に委ねる
+            if (typeof toggleItemIdColumn === 'function'){
+              toggleItemIdColumn(!!showId);
+            }else if (showId){
+              // フォールバック（念のため）
               ensureItemIdColumn(table, { itemKey:'necClm-ItemID', nameKey:'necClm-Name', equpKey:'necClm-Equp' });
             }
           }catch(_){}
@@ -11471,7 +11491,12 @@
           // ※theadにID列が残っている状態でtbodyを差し替えると、tbody側にIDセルが存在せず列ズレが起きる
           try{
             const showId = (typeof readBool === 'function') ? readBool('displayItemId') : false;
-            if (showId){
+            // ★列ズレ対策：thead/tbody の同期は toggleItemIdColumn に委ねる
+            // （thead に ID 列が残っているのに tbody 側が欠けているケースだけ補修するロジックを内包）
+            if (typeof toggleItemIdColumn === 'function'){
+              toggleItemIdColumn(!!showId);
+            }else if (showId){
+              // フォールバック（念のため）
               const t =
                 (id === 'weaponTable') ? { itemKey:'wepClm-ItemID', nameKey:'wepClm-Name', equpKey:'wepClm-Equp' } :
                 (id === 'armorTable')  ? { itemKey:'amrClm-ItemID', nameKey:'amrClm-Name', equpKey:'amrClm-Equp' } :
