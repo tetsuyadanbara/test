@@ -1,11 +1,9 @@
 // ==UserScript==
 // @name         donguri arena assist tool
-// @version      1.2.2d?? Red vs Blue
+// @version      1.2.2d改 RB autojoin fix 2026-03-03
 // @description  fix arena ui and add functions
-// @author       ?????
-// @match        https://donguri.5ch.net/teambattle?m=hc
-// @match        https://donguri.5ch.net/teambattle?m=l
-// @match        https://donguri.5ch.net/teambattle?m=rb
+// @author       ぱふぱふ + GPT fix
+// @match        https://donguri.5ch.net/teambattle*
 // @match        https://donguri.5ch.net/bag
 // ==/UserScript==
 
@@ -2353,19 +2351,156 @@
     }
   }
 
+  
   async function arenaChallenge (row, col){
-    const options = {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded'
-      },
-      body: `row=${row}&col=${col}`
-    };
-    try {
-      const response = await fetch('/teamchallenge?'+MODE, options);
-      if(!response.ok){
-        throw new Error('/teamchallenge res.ng');
+    // New battlefield update: challenge endpoint/params may change.
+    // We try to auto-detect the correct endpoint from the target cell page,
+    // and fallback to known legacy endpoints.
+    const headers = { 'Content-Type': 'application/x-www-form-urlencoded' };
+
+    function buildBody(names){
+      // names: {row:'row', col:'col'} etc
+      const rKey = names.row || 'row';
+      const cKey = names.col || 'col';
+      return `${encodeURIComponent(rKey)}=${encodeURIComponent(row)}&${encodeURIComponent(cKey)}=${encodeURIComponent(col)}`;
+    }
+
+    async function tryPost(url, body){
+      const res = await fetch(url, { method:'POST', headers, body });
+      const text = await res.text().catch(()=> '');
+      return { ok: res.ok, status: res.status, text, url };
+    }
+
+    function discoverFromDoc(doc){
+      // 1) look for POST form which seems to be a battle/challenge form
+      const forms = [...doc.querySelectorAll('form')];
+      for(const f of forms){
+        const method = (f.getAttribute('method')||'').toLowerCase();
+        if(method && method !== 'post') continue;
+        // must have a submit control
+        const submit = f.querySelector('button[type="submit"], input[type="submit"], button:not([type]), input[type="button"]');
+        if(!submit) continue;
+        const t = (submit.textContent||submit.value||'').trim();
+        // heuristic: contains japanese "挑" (挑む/挑戦) or "battle" or "fight"
+        if(!/挑|戦|battle|fight|challenge/i.test(t)) continue;
+
+        const action = f.getAttribute('action') || '';
+        // infer parameter names
+        const rowInput = f.querySelector('input[name="row"], input[name="r"]');
+        const colInput = f.querySelector('input[name="col"], input[name="c"]');
+        const names = {
+          row: rowInput?.getAttribute('name') || (f.querySelector('input[name="r"]') ? 'r' : 'row'),
+          col: colInput?.getAttribute('name') || (f.querySelector('input[name="c"]') ? 'c' : 'col')
+        };
+        return { action, names };
       }
+
+      // 2) search inline scripts for endpoints like "/teamchallenge" or "/teambattle" post routes
+      const scriptText = [...doc.querySelectorAll('script')].map(s=>s.textContent||'').join('\n');
+      const candidates = [];
+      for(const m of scriptText.matchAll(/fetch\(\s*['"]([^'"]+)['"]/g)){
+        candidates.push(m[1]);
+      }
+      for(const m of scriptText.matchAll(/['"]\/(team[a-z0-9_-]*|teambattle[a-z0-9_-]*)[^'"]*['"]/ig)){
+        candidates.push(m[0].replace(/^['"]|['"]$/g,''));
+      }
+      const uniq = [...new Set(candidates)].filter(u=>u.startsWith('/'));
+      // prefer something with "challenge"
+      const best = uniq.find(u=>/challenge/i.test(u)) || uniq.find(u=>/teambattle/i.test(u)) || uniq[0];
+      if(best){
+        // guess parameter names (new UI uses r/c in querystring)
+        return { action: best, names: {row:'row', col:'col'} };
+      }
+      return null;
+    }
+
+    try {
+      // Fetch the target cell page first (often contains the actual POST endpoint).
+      const cellUrl = `https://donguri.5ch.net/teambattle?r=${row}&c=${col}&` + MODE;
+      const pageRes = await fetch(cellUrl, { method:'GET' });
+      const pageText = await pageRes.text();
+      const doc = new DOMParser().parseFromString(pageText, 'text/html');
+
+      const discovered = discoverFromDoc(doc);
+
+      const attempts = [];
+
+      // If we discovered something, try it first.
+      if(discovered){
+        let action = discovered.action || '';
+        // If action is relative without leading '/', make it absolute-ish
+        if(action && !action.startsWith('/')) {
+          // allow relative like "teambattle" etc
+          action = '/' + action.replace(/^\.?\//,'');
+        }
+        // Some pages may post back to /teambattle (current page) with no action.
+        if(!action) action = '/teambattle';
+
+        // If action already has query, preserve it and add MODE if missing
+        let url = action;
+        if(url.startsWith('/')){
+          if(url.includes('?')) {
+            if(!url.includes('m=')) url += '&' + MODE;
+          } else {
+            url += '?' + MODE;
+          }
+        }
+        attempts.push({ url, body: buildBody(discovered.names) });
+        // also try with r/c param names if different
+        attempts.push({ url, body: buildBody({row:'r', col:'c'}) });
+      }
+
+      // Legacy / fallback endpoints (order matters)
+      [
+        { url: '/teamchallenge?' + MODE, body: `row=${row}&col=${col}` },
+        { url: '/teamchallenge?' + MODE, body: `r=${row}&c=${col}` },
+        { url: '/teambattle?' + MODE, body: `row=${row}&col=${col}` },
+        { url: '/teambattle?' + MODE, body: `r=${row}&c=${col}` },
+        { url: '/teamvol/?' + MODE, body: `row=${row}&col=${col}&action=ChallengeArena` },
+        { url: '/teamvol/?' + MODE, body: `r=${row}&c=${col}&action=ChallengeArena` },
+      ].forEach(a => attempts.push(a));
+
+      let last = null;
+      for(const a of attempts){
+        try{
+          last = await tryPost(a.url, a.body);
+          // treat non-200 but with meaningful text as failure
+          if(last.ok && last.text && !/not found|404/i.test(last.text)) break;
+        }catch(e){
+          last = { ok:false, status:0, text:String(e), url:a.url };
+        }
+      }
+
+      if(!last || (!last.ok && !last.text)){
+        throw new Error('battle request failed');
+      }
+
+      arenaResult.innerText = last.text || String(last.status);
+
+      const lastLine = (last.text||'').trim().split('\n').pop();
+      if((last.text||'').includes('\n')) {
+        const p = document.createElement('p');
+        p.textContent = lastLine;
+        p.style.fontWeight = 'bold';
+        p.style.padding = '0';
+        p.style.margin = '0';
+        arenaResult.prepend(p);
+      }
+
+      arenaResult.show();
+      setTimeout(() => {
+        if (settings.arenaResultScrollPosition === 'bottom') {
+          arenaResult.scrollTop = arenaResult.scrollHeight;
+        } else {
+          arenaResult.scrollTop = 0;
+        }
+      }, 0);
+
+    } catch (e) {
+      arenaResult.innerText = String(e);
+      arenaResult.show();
+    }
+  }
       const text = await response.text();
       arenaResult.innerText = text;
 
@@ -2861,42 +2996,6 @@
         }
       }
     }
-
-  async function equipChange (region) {
-        const [ row, col ] = region;
-        const url = `https://donguri.5ch.net/teambattle?r=${row}&c=${col}&`+MODE;
-        try {
-          const res = await fetch(url);
-          if(!res.ok) throw new Error(`[${res.status}] /teambattle?r=${row}&c=${col}`);
-          const text = await res.text();
-          const doc = new DOMParser().parseFromString(text,'text/html');
-          const headerText = doc?.querySelector('header')?.textContent || '';
-          if(!headerText.includes('?? ?`?[????')) return Promise.reject(`title.ng`);
-          const table = doc.querySelector('table');
-          if(!table) throw new Error('table.ng');
-          const equipCond = table.querySelector('td small').textContent;
-          const rank = equipCond
-            .replace('?G???[?g','e')
-            .replace(/.+????|\w+-|???|????|?x????|?x|\s|\[|\]|\|/g,'');
-          const autoEquipItems = JSON.parse(localStorage.getItem('autoEquipItems')) || {};
-          const autoEquipItemsAutojoin = JSON.parse(localStorage.getItem('autoEquipItemsAutojoin')) || {};
-  
-          if (autoEquipItemsAutojoin[rank]?.length > 0) {
-            const index = Math.floor(Math.random() * autoEquipItemsAutojoin[rank].length);
-            await setPresetItems(autoEquipItemsAutojoin[rank][index]);
-            return [rank, 'success'];
-          } else if (autoEquipItems[rank]?.length > 0) {
-            const index = Math.floor(Math.random() * autoEquipItems[rank].length);
-            await setPresetItems(autoEquipItems[rank][index]);
-            return [rank, 'success'];
-          } else {
-            return [rank, 'noEquip'];
-          }
-        } catch (e) {
-          console.error(e);
-          throw e;
-        }
-      }
 
   async function getRegions () {
   try {
