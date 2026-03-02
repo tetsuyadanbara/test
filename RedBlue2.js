@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         donguri arena assist tool
-// @version      1.2.2d?? Red vs Blue_fix_autojoin
+// @version      1.2.2d?? Red vs Blue
 // @description  fix arena ui and add functions
 // @author       ?????
 // @match        https://donguri.5ch.net/teambattle?m=hc
@@ -11,51 +11,6 @@
 
 
 (()=>{
-
-  // ★ autojoin: ensure equipChange is available on teambattle pages (HTML updates can break scopes)
-  async function equipChange(region, MODE_ARG) {
-    const [row, col] = region;
-    const mode = MODE_ARG || (typeof MODE !== 'undefined' ? MODE : '');
-    const url = `https://donguri.5ch.net/teambattle?r=${row}&c=${col}&` + mode;
-
-    const res = await fetch(url, { cache: 'no-store' });
-    if (!res.ok) throw new Error(`[${res.status}] /teambattle?r=${row}&c=${col}`);
-
-    const text = await res.text();
-    const doc = new DOMParser().parseFromString(text, 'text/html');
-
-    const headerText = doc?.querySelector('header')?.textContent || '';
-    if (!headerText.includes('どんぐりチーム戦い')) throw new Error('title.ng');
-
-    const table = doc.querySelector('table');
-    if (!table) throw new Error('table.ng');
-
-    const equipCond = table.querySelector('td small')?.textContent || '';
-    const rank = equipCond
-      .replace('エリート', 'e')
-      .replace(/.+から|\w+-|まで|だけ|警備員|警|\s|\[|\]|\|/g, '');
-
-    const autoEquipItems = JSON.parse(localStorage.getItem('autoEquipItems')) || {};
-    const autoEquipItemsAutojoin = JSON.parse(localStorage.getItem('autoEquipItemsAutojoin')) || {};
-
-    if (typeof setPresetItems !== 'function') {
-      return [rank || 'unknown', 'noSetPresetItems'];
-    }
-
-    if (autoEquipItemsAutojoin[rank]?.length > 0) {
-      const idx = Math.floor(Math.random() * autoEquipItemsAutojoin[rank].length);
-      await setPresetItems(autoEquipItemsAutojoin[rank][idx]);
-      return [rank, 'success'];
-    } else if (autoEquipItems[rank]?.length > 0) {
-      const idx = Math.floor(Math.random() * autoEquipItems[rank].length);
-      await setPresetItems(autoEquipItems[rank][idx]);
-      return [rank, 'success'];
-    } else {
-      return [rank, 'noEquip'];
-    }
-  }
-
-
   if(location.href === 'https://donguri.5ch.net/bag') {
     function saveCurrentEquip(url, index) {
       let currentEquip = JSON.parse(localStorage.getItem('current_equip')) || [];
@@ -86,11 +41,6 @@
   } else {
       MODENAME = '?m??vs??n';
   }
-
-  // ★ auto join から必ず参照できるようにグローバル定義
-  }
-
-
 
   const vw = Math.min(document.documentElement.clientWidth, window.innerWidth || 0);
   const vh = Math.min(document.documentElement.clientHeight, window.innerHeight || 0);
@@ -2756,7 +2706,7 @@
           let errorCount = 0;
           let next;
           try {
-            const [cellRank, equipChangeStat] = await equipChange(region, MODE);
+            const [cellRank, equipChangeStat] = await equipChange(region);
             if (equipChangeStat === 'noEquip') {
               excludeSet.add(region.join(','));
               continue;
@@ -2912,7 +2862,43 @@
       }
     }
 
-    async function getRegions () {
+  async function equipChange (region) {
+        const [ row, col ] = region;
+        const url = `https://donguri.5ch.net/teambattle?r=${row}&c=${col}&`+MODE;
+        try {
+          const res = await fetch(url);
+          if(!res.ok) throw new Error(`[${res.status}] /teambattle?r=${row}&c=${col}`);
+          const text = await res.text();
+          const doc = new DOMParser().parseFromString(text,'text/html');
+          const headerText = doc?.querySelector('header')?.textContent || '';
+          if(!headerText.includes('?? ?`?[????')) return Promise.reject(`title.ng`);
+          const table = doc.querySelector('table');
+          if(!table) throw new Error('table.ng');
+          const equipCond = table.querySelector('td small').textContent;
+          const rank = equipCond
+            .replace('?G???[?g','e')
+            .replace(/.+????|\w+-|???|????|?x????|?x|\s|\[|\]|\|/g,'');
+          const autoEquipItems = JSON.parse(localStorage.getItem('autoEquipItems')) || {};
+          const autoEquipItemsAutojoin = JSON.parse(localStorage.getItem('autoEquipItemsAutojoin')) || {};
+  
+          if (autoEquipItemsAutojoin[rank]?.length > 0) {
+            const index = Math.floor(Math.random() * autoEquipItemsAutojoin[rank].length);
+            await setPresetItems(autoEquipItemsAutojoin[rank][index]);
+            return [rank, 'success'];
+          } else if (autoEquipItems[rank]?.length > 0) {
+            const index = Math.floor(Math.random() * autoEquipItems[rank].length);
+            await setPresetItems(autoEquipItems[rank][index]);
+            return [rank, 'success'];
+          } else {
+            return [rank, 'noEquip'];
+          }
+        } catch (e) {
+          console.error(e);
+          throw e;
+        }
+      }
+
+  async function getRegions () {
   try {
     const res = await fetch(location.pathname + location.search, { cache: 'no-store' });
     if (!res.ok) throw new Error(`[${res.status}] /teambattle`);
@@ -2921,14 +2907,14 @@
     const doc = new DOMParser().parseFromString(text, 'text/html');
 
     const headerText = doc?.querySelector('header')?.textContent || '';
-    if (!headerText.includes('どんぐりチーム戦い')) throw new Error('title.ng info');
+    if (!headerText.includes('?? ?`?[????')) throw new Error('title.ng info');
 
-    // ★ canvas版は script が分散しているので全部結合して拾う
+    // ?? canvas??? script ?????U?????????S??????????E??
     const allScripts = Array.from(doc.querySelectorAll('script'))
       .map(s => s.textContent || '')
       .join('\n');
 
-    // JSONっぽい文字列（末尾カンマ等）をJSONに寄せる
+    // JSON???????????i?????J???}???j??JSON?? ?
     const normalizeJsonish = (s) => {
       return String(s)
         .replace(/'/g, '"')
@@ -2951,13 +2937,14 @@
     const capitalMap = capMatch ? JSON.parse(normalizeJsonish(capMatch[1])) : [];
     const capitalSet = new Set(capitalMap.map(([r,c]) => `${r}-${c}`));
 
-    // ---- terrainsPayload（water判定）
+    // ---- terrainsPayload?iwater????j
     const waterSet = new Set();
     const terrainMatch = allScripts.match(/const\s+terrainsPayload\s*=\s*({[\s\S]*?})\s*;/);
     if (terrainMatch) {
       const payload = JSON.parse(normalizeJsonish(terrainMatch[1]));
       const terrains = Array.isArray(payload?.terrains) ? payload.terrains : [];
       for (const item of terrains) {
+        // HTML???? x/y ???????????i????????HTML???????j:contentReference[oaicite:3]{index=3}
         const r = (item.r ?? item.row ?? item.x);
         const c = (item.c ?? item.col ?? item.y);
         if (!Number.isFinite(r) || !Number.isFinite(c)) continue;
@@ -2965,7 +2952,7 @@
       }
     }
 
-    // 全セル
+    // ?S?Z??
     const cells = [];
     for (let r = 0; r < rows; r++) {
       for (let c = 0; c < cols; c++) {
@@ -2975,7 +2962,7 @@
 
     const directions = [[-1,0],[1,0],[0,-1],[0,1]];
 
-    // 首都隣接
+    // ??s???
     const adjacentSet = new Set();
     for (const [cr, cc] of capitalMap) {
       for (const [dr, dc] of directions) {
@@ -2994,7 +2981,7 @@
       return adjacentSet.has(k) && !waterSet.has(k);
     });
 
-    // 自チーム色＋その隣接
+    // ???`?[???F?{??????i???????????R?[?h??????????????C???j
     const normalizeColor = (v) => String(v || '').replace('#','').toLowerCase();
     const myColor = normalizeColor(teamColor);
 
@@ -3004,7 +2991,7 @@
     }
 
     const teamAdjacentSet = new Set();
-    for (const k of teamColorSet) {
+    for (const k of teamColorSet) { // ?? ??????
       const [tr, tc] = k.split('-').map(Number);
       for (const [dr, dc] of directions) {
         const nr = tr + dr, nc = tc + dc;
@@ -3019,7 +3006,7 @@
       return (teamColorSet.has(k) || teamAdjacentSet.has(k)) && !waterSet.has(k);
     });
 
-    // 端（edge）
+    // ?[?iedge?j
     const mapEdgeSet = new Set();
     for (let i=0; i<rows; i++) {
       mapEdgeSet.add(`${i}-0`);
@@ -3055,170 +3042,6 @@
     return { nonAdjacent: [], capitalAdjacent: [], teamAdjacent: [], mapEdge: [] };
   }
 }
-');
-        cellColors = JSON.parse(validJsonStr);
-
-        const capitalListMatch = scriptContent.match(/const capitalList = (\[.*?\]);/s);
-        capitalMap = JSON.parse(capitalListMatch[1]);
-
-        const gridSizeMatch = scriptContent.match(/const GRID_SIZE = (\d+);/);
-        rows = cols = Number(gridSizeMatch[1]);
-
-        const terrainMatch = scriptContent.match(/const terrainsPayload = ({.+?});/s);
-        if (terrainMatch) {
-          const payload = JSON.parse(terrainMatch[1]);
-          payload.terrains.forEach(item => {
-            if (item.t === 'w') waterSet.add(`${item.x}-${item.y}`);
-          });
-        }
-
-        const cells = [];
-        for (let r = 0; r < rows; r++) {
-          for (let c = 0; c < cols; c++) {
-            cells.push([r, c]);
-          }
-        }
-
-        const directions = [[-1, 0], [1, 0], [0, -1], [0, 1]];
-
-        const adjacentSet = new Set();
-        for (const [cr, cc] of capitalMap) {
-          for (const [dr, dc] of directions) {
-            const nr = cr + dr;
-            const nc = cc + dc;
-            if (nr >= 0 && nr < rows && nc >= 0 && nc < cols) {
-              adjacentSet.add(`${nr}-${nc}`);
-            }
-          }
-        }
-
-        const capitalSet = new Set(capitalMap.map(([r, c]) => `${r}-${c}`));
-
-        const nonAdjacentCells = cells.filter(([r, c]) => {
-          const key = `${r}-${c}`;
-          return !capitalSet.has(key) && !adjacentSet.has(key) && !waterSet.has(key);
-        });
-
-        const capitalAdjacentCells = cells.filter(([r, c]) => {
-          const key = `${r}-${c}`;
-          return adjacentSet.has(key) && !waterSet.has(key);
-        });
-
-        const teamColorSet = new Set();
-        for(const [key, value] of Object.entries(cellColors)) {
-          if (teamColor === value.replace('#','')) {
-            teamColorSet.add(key);
-          }
-        }
-
-        const teamAdjacentSet = new Set();
-        for (const key of [...teamColorSet]) {
-          const [tr, tc] = key.split('-');
-          for (const [dr, dc] of directions) {
-            const nr = Number(tr) + dr;
-            const nc = Number(tc) + dc;
-            if (nr >= 0 && nr < rows && nc >= 0 && nc < cols) {
-              teamAdjacentSet.add(`${nr}-${nc}`);
-            }
-          }
-        }
-
-        const teamAdjacentCells = cells.filter(([r, c]) => {
-          const key = `${r}-${c}`;
-          return (teamColorSet.has(key) || teamAdjacentSet.has(key)) && !waterSet.has(key);
-        })
-
-        const mapEdgeSet = new Set();
-        for (let i=0; i<rows; i++) {
-          mapEdgeSet.add(`${i}-0`);
-          mapEdgeSet.add(`${i}-${cols-1}`);
-        }
-        for (let i=0; i<cols; i++) {
-          mapEdgeSet.add(`0-${i}`);
-          mapEdgeSet.add(`${rows-1}-${i}`);
-        }
-
-        const mapEdgeCells = cells.filter(([r, c]) => {
-          const key = `${r}-${c}`;
-          return mapEdgeSet.has(key) && !capitalSet.has(key) && !waterSet.has(key);
-        })
-
-        function shuffle(arr) {
-          for (let i = arr.length - 1; i > 0; i--) {
-            const j = Math.floor(Math.random() * (i + 1));
-            [arr[i], arr[j]] = [arr[j], arr[i]];
-          }
-          return arr;
-        }
-
-        const regions = {
-          nonAdjacent: shuffle(nonAdjacentCells),
-          capitalAdjacent: shuffle(capitalAdjacentCells),
-          teamAdjacent: shuffle(teamAdjacentCells),
-          mapEdge: shuffle(mapEdgeCells)
-        };
-        return regions;
-      } catch (e) {
-        console.error(e);
-        return;
-      }
-    }
-
-    async function challenge (region) {
-      const [ row, col ] = region;
-      const body = `row=${row}&col=${col}`;
-      try {
-        const res = await fetch('/teamchallenge?'+MODE, {
-          method: 'POST',
-          body: body,
-          headers: headers
-        })
-
-        if(!res.ok) throw new Error(res.status);
-        const text = await res.text();
-        const lastLine = text.trim().split('\n').pop();
-        return [ text, lastLine ];
-      } catch (e) {
-        console.error(e);
-        throw e;
-      }
-
-    }
-    async function equipChange (region) {
-      const [ row, col ] = region;
-      const url = `https://donguri.5ch.net/teambattle?r=${row}&c=${col}&`+MODE;
-      try {
-        const res = await fetch(url);
-        if(!res.ok) throw new Error(`[${res.status}] /teambattle?r=${row}&c=${col}`);
-        const text = await res.text();
-        const doc = new DOMParser().parseFromString(text,'text/html');
-        const headerText = doc?.querySelector('header')?.textContent || '';
-        if(!headerText.includes('?? ?`?[????')) return Promise.reject(`title.ng`);
-        const table = doc.querySelector('table');
-        if(!table) throw new Error('table.ng');
-        const equipCond = table.querySelector('td small').textContent;
-        const rank = equipCond
-          .replace('?G???[?g','e')
-          .replace(/.+????|\w+-|???|????|?x????|?x|\s|\[|\]|\|/g,'');
-        const autoEquipItems = JSON.parse(localStorage.getItem('autoEquipItems')) || {};
-        const autoEquipItemsAutojoin = JSON.parse(localStorage.getItem('autoEquipItemsAutojoin')) || {};
-
-        if (autoEquipItemsAutojoin[rank]?.length > 0) {
-          const index = Math.floor(Math.random() * autoEquipItemsAutojoin[rank].length);
-          await setPresetItems(autoEquipItemsAutojoin[rank][index]);
-          return [rank, 'success'];
-        } else if (autoEquipItems[rank]?.length > 0) {
-          const index = Math.floor(Math.random() * autoEquipItems[rank].length);
-          await setPresetItems(autoEquipItems[rank][index]);
-          return [rank, 'success'];
-        } else {
-          return [rank, 'noEquip'];
-        }
-      } catch (e) {
-        console.error(e);
-        throw e;
-      }
-    }
 
     if (!isAutoJoinRunning) {
       attackRegion();
