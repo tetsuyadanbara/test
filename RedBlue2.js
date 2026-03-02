@@ -11,6 +11,51 @@
 
 
 (()=>{
+
+  // ★ autojoin: ensure equipChange is available on teambattle pages (HTML updates can break scopes)
+  async function equipChange(region, MODE_ARG) {
+    const [row, col] = region;
+    const mode = MODE_ARG || (typeof MODE !== 'undefined' ? MODE : '');
+    const url = `https://donguri.5ch.net/teambattle?r=${row}&c=${col}&` + mode;
+
+    const res = await fetch(url, { cache: 'no-store' });
+    if (!res.ok) throw new Error(`[${res.status}] /teambattle?r=${row}&c=${col}`);
+
+    const text = await res.text();
+    const doc = new DOMParser().parseFromString(text, 'text/html');
+
+    const headerText = doc?.querySelector('header')?.textContent || '';
+    if (!headerText.includes('どんぐりチーム戦い')) throw new Error('title.ng');
+
+    const table = doc.querySelector('table');
+    if (!table) throw new Error('table.ng');
+
+    const equipCond = table.querySelector('td small')?.textContent || '';
+    const rank = equipCond
+      .replace('エリート', 'e')
+      .replace(/.+から|\w+-|まで|だけ|警備員|警|\s|\[|\]|\|/g, '');
+
+    const autoEquipItems = JSON.parse(localStorage.getItem('autoEquipItems')) || {};
+    const autoEquipItemsAutojoin = JSON.parse(localStorage.getItem('autoEquipItemsAutojoin')) || {};
+
+    if (typeof setPresetItems !== 'function') {
+      return [rank || 'unknown', 'noSetPresetItems'];
+    }
+
+    if (autoEquipItemsAutojoin[rank]?.length > 0) {
+      const idx = Math.floor(Math.random() * autoEquipItemsAutojoin[rank].length);
+      await setPresetItems(autoEquipItemsAutojoin[rank][idx]);
+      return [rank, 'success'];
+    } else if (autoEquipItems[rank]?.length > 0) {
+      const idx = Math.floor(Math.random() * autoEquipItems[rank].length);
+      await setPresetItems(autoEquipItems[rank][idx]);
+      return [rank, 'success'];
+    } else {
+      return [rank, 'noEquip'];
+    }
+  }
+
+
   if(location.href === 'https://donguri.5ch.net/bag') {
     function saveCurrentEquip(url, index) {
       let currentEquip = JSON.parse(localStorage.getItem('current_equip')) || [];
@@ -43,42 +88,6 @@
   }
 
   // ★ auto join から必ず参照できるようにグローバル定義
-  async function equipChange(region, MODE_ARG) {
-    const [row, col] = region;
-    const mode = MODE_ARG || (typeof MODE !== 'undefined' ? MODE : '');
-    const url = `https://donguri.5ch.net/teambattle?r=${row}&c=${col}&` + mode;
-
-    const res = await fetch(url, { cache: 'no-store' });
-    if (!res.ok) throw new Error(`[${res.status}] /teambattle?r=${row}&c=${col}`);
-
-    const text = await res.text();
-    const doc = new DOMParser().parseFromString(text, 'text/html');
-
-    const headerText = doc?.querySelector('header')?.textContent || '';
-    if (!headerText.includes('どんぐりチーム戦い')) throw new Error('title.ng');
-
-    const table = doc.querySelector('table');
-    if (!table) throw new Error('table.ng');
-
-    const equipCond = table.querySelector('td small')?.textContent || '';
-    const rank = equipCond
-      .replace('エリート', 'e')
-      .replace(/.+から|\w+-|まで|だけ|警備員|警|\s|\[|\]|\|/g, '');
-
-    const autoEquipItems = JSON.parse(localStorage.getItem('autoEquipItems')) || {};
-    const autoEquipItemsAutojoin = JSON.parse(localStorage.getItem('autoEquipItemsAutojoin')) || {};
-
-    if (autoEquipItemsAutojoin[rank]?.length > 0) {
-      const idx = Math.floor(Math.random() * autoEquipItemsAutojoin[rank].length);
-      await setPresetItems(autoEquipItemsAutojoin[rank][idx]);
-      return [rank, 'success'];
-    } else if (autoEquipItems[rank]?.length > 0) {
-      const idx = Math.floor(Math.random() * autoEquipItems[rank].length);
-      await setPresetItems(autoEquipItems[rank][idx]);
-      return [rank, 'success'];
-    } else {
-      return [rank, 'noEquip'];
-    }
   }
 
 
