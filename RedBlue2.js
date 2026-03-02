@@ -2703,21 +2703,14 @@
         regions[cellType] = regions[cellType]
           .filter(e => !excludeSet.has(e.join(',')));
         for (const region of regions[cellType]) {
-         // region = [row, col] 前提
-         const row = region[0], col = region[1];
-
-        // 未踏セルなら「探索移動」して、この周期はここで終わる
-        const exploreResult = exploreStepTowards({ r: row, c: col }, 14);
-        if (!exploreResult.done) {
-          // exploreStepTowards() が location.href で移動するので、以降の参戦処理を止める
-          return;
-        }
-
-        const [cellRank, equipChangeStat] = await equipChange(region);
-        if (equipChangeStat === 'noEquip') {
-        excludeSet.add(region.join(','));
-        continue;
-        }
+          let errorCount = 0;
+          let next;
+          try {
+            const [cellRank, equipChangeStat] = await equipChange(region);
+            if (equipChangeStat === 'noEquip') {
+              excludeSet.add(region.join(','));
+              continue;
+            }
 
             const [ text, lastLine ] = await challenge(region);
             const messageType = getMessageType(lastLine);
@@ -2870,149 +2863,183 @@
     }
 
   async function getRegions () {
-  try {
-    const res = await fetch(location.pathname + location.search, { cache: 'no-store' });
-    if (!res.ok) throw new Error(`[${res.status}] /teambattle`);
+      try {
+        const res = await fetch('');
+        if (!res.ok) throw new Error(`[${res.status}] /teambattle`);
+        const text = await res.text();
+        const doc = new DOMParser().parseFromString(text, 'text/html');
+        const headerText = doc?.querySelector('header')?.textContent || '';
+        if (!headerText.includes('どんぐりチーム戦い')) throw new Error('title.ng info');
 
-    const text = await res.text();
-    const doc = new DOMParser().parseFromString(text, 'text/html');
+        const scriptContent = doc.querySelector('.grid > script, #gridWrap + script')?.textContent || '';
 
-    const headerText = doc?.querySelector('header')?.textContent || '';
-    if (!headerText.includes('どんぐりチーム戦い')) throw new Error('title.ng info');
+        let cellColors, capitalMap, rows, cols;
+        const waterSet = new Set();
+        const cellColorsMatch = scriptContent.match(/const cellColors = ({.+?});/s);
+        const validJsonStr = cellColorsMatch[1].replace(/'/g, '"').replace(/,\s*}/, '}');
+        cellColors = JSON.parse(validJsonStr);
 
-    // ★ canvas版は script が分散しているので全部結合して拾う
-    const allScripts = Array.from(doc.querySelectorAll('script'))
-      .map(s => s.textContent || '')
-      .join('\n');
+        const capitalListMatch = scriptContent.match(/const capitalList = (\[.*?\]);/s);
+        capitalMap = JSON.parse(capitalListMatch[1]);
 
-    // JSONっぽい文字列（末尾カンマ等）をJSONに寄せる
-    const normalizeJsonish = (s) => {
-      return String(s)
-        .replace(/'/g, '"')
-        .replace(/,\s*([}\]])/g, '$1'); // trailing comma
-    };
+        const gridSizeMatch = scriptContent.match(/const GRID_SIZE = (\d+);/);
+        rows = cols = Number(gridSizeMatch[1]);
 
-    // ---- GRID_SIZE
-    const gridSizeMatch = allScripts.match(/const\s+GRID_SIZE\s*=\s*(\d+)\s*;/);
-    const rows = gridSizeMatch ? Number(gridSizeMatch[1]) : 0;
-    const cols = rows;
-    if (!rows) throw new Error('GRID_SIZE.ng');
-
-    // ---- cellColors
-    const cellColorsMatch = allScripts.match(/const\s+cellColors\s*=\s*({[\s\S]*?})\s*;/);
-    if (!cellColorsMatch) throw new Error('cellColors.ng');
-    const cellColors = JSON.parse(normalizeJsonish(cellColorsMatch[1]));
-
-    // ---- capitalList
-    const capMatch = allScripts.match(/const\s+capitalList\s*=\s*(\[[\s\S]*?\])\s*;/);
-    const capitalMap = capMatch ? JSON.parse(normalizeJsonish(capMatch[1])) : [];
-    const capitalSet = new Set(capitalMap.map(([r,c]) => `${r}-${c}`));
-
-    // ---- terrainsPayload（water判定）
-    const waterSet = new Set();
-    const terrainMatch = allScripts.match(/const\s+terrainsPayload\s*=\s*({[\s\S]*?})\s*;/);
-    if (terrainMatch) {
-      const payload = JSON.parse(normalizeJsonish(terrainMatch[1]));
-      const terrains = Array.isArray(payload?.terrains) ? payload.terrains : [];
-      for (const item of terrains) {
-        // HTML側は x/y のことが多い（あなたの提示HTMLもそう）:contentReference[oaicite:3]{index=3}
-        const r = (item.r ?? item.row ?? item.x);
-        const c = (item.c ?? item.col ?? item.y);
-        if (!Number.isFinite(r) || !Number.isFinite(c)) continue;
-        if ((item.t ?? item.terrain) === 'w') waterSet.add(`${r}-${c}`);
-      }
-    }
-
-    // 全セル
-    const cells = [];
-    for (let r = 0; r < rows; r++) {
-      for (let c = 0; c < cols; c++) {
-        cells.push([r, c]);
-      }
-    }
-
-    const directions = [[-1,0],[1,0],[0,-1],[0,1]];
-
-    // 首都隣接
-    const adjacentSet = new Set();
-    for (const [cr, cc] of capitalMap) {
-      for (const [dr, dc] of directions) {
-        const nr = cr + dr, nc = cc + dc;
-        if (nr >= 0 && nr < rows && nc >= 0 && nc < cols) adjacentSet.add(`${nr}-${nc}`);
-      }
-    }
-
-    const nonAdjacentCells = cells.filter(([r,c]) => {
-      const k = `${r}-${c}`;
-      return !capitalSet.has(k) && !adjacentSet.has(k) && !waterSet.has(k);
-    });
-
-    const capitalAdjacentCells = cells.filter(([r,c]) => {
-      const k = `${r}-${c}`;
-      return adjacentSet.has(k) && !waterSet.has(k);
-    });
-
-    // 自チーム色＋その隣接（★ここが元コードで落ちてた箇所を修正）
-    const normalizeColor = (v) => String(v || '').replace('#','').toLowerCase();
-    const myColor = normalizeColor(teamColor);
-
-    const teamColorSet = new Set();
-    for (const [k, v] of Object.entries(cellColors)) {
-      if (normalizeColor(v) === myColor) teamColorSet.add(k);
-    }
-
-    const teamAdjacentSet = new Set();
-    for (const k of teamColorSet) { // ← 正しい
-      const [tr, tc] = k.split('-').map(Number);
-      for (const [dr, dc] of directions) {
-        const nr = tr + dr, nc = tc + dc;
-        if (nr >= 0 && nr < rows && nc >= 0 && nc < cols) {
-          teamAdjacentSet.add(`${nr}-${nc}`);
+        const terrainMatch = scriptContent.match(/const terrainsPayload = ({.+?});/s);
+        if (terrainMatch) {
+          const payload = JSON.parse(terrainMatch[1]);
+          payload.terrains.forEach(item => {
+            if (item.t === 'w') waterSet.add(`${item.x}-${item.y}`);
+          });
         }
+
+        const cells = [];
+        for (let r = 0; r < rows; r++) {
+          for (let c = 0; c < cols; c++) {
+            cells.push([r, c]);
+          }
+        }
+
+        const directions = [[-1, 0], [1, 0], [0, -1], [0, 1]];
+
+        const adjacentSet = new Set();
+        for (const [cr, cc] of capitalMap) {
+          for (const [dr, dc] of directions) {
+            const nr = cr + dr;
+            const nc = cc + dc;
+            if (nr >= 0 && nr < rows && nc >= 0 && nc < cols) {
+              adjacentSet.add(`${nr}-${nc}`);
+            }
+          }
+        }
+
+        const capitalSet = new Set(capitalMap.map(([r, c]) => `${r}-${c}`));
+
+        const nonAdjacentCells = cells.filter(([r, c]) => {
+          const key = `${r}-${c}`;
+          return !capitalSet.has(key) && !adjacentSet.has(key) && !waterSet.has(key);
+        });
+
+        const capitalAdjacentCells = cells.filter(([r, c]) => {
+          const key = `${r}-${c}`;
+          return adjacentSet.has(key) && !waterSet.has(key);
+        });
+
+        const teamColorSet = new Set();
+        for(const [key, value] of Object.entries(cellColors)) {
+          if (teamColor === value.replace('#','')) {
+            teamColorSet.add(key);
+          }
+        }
+
+        const teamAdjacentSet = new Set();
+        for (const key of [...teamColorSet]) {
+          const [tr, tc] = key.split('-');
+          for (const [dr, dc] of directions) {
+            const nr = Number(tr) + dr;
+            const nc = Number(tc) + dc;
+            if (nr >= 0 && nr < rows && nc >= 0 && nc < cols) {
+              teamAdjacentSet.add(`${nr}-${nc}`);
+            }
+          }
+        }
+
+        const teamAdjacentCells = cells.filter(([r, c]) => {
+          const key = `${r}-${c}`;
+          return (teamColorSet.has(key) || teamAdjacentSet.has(key)) && !waterSet.has(key);
+        })
+
+        const mapEdgeSet = new Set();
+        for (let i=0; i<rows; i++) {
+          mapEdgeSet.add(`${i}-0`);
+          mapEdgeSet.add(`${i}-${cols-1}`);
+        }
+        for (let i=0; i<cols; i++) {
+          mapEdgeSet.add(`0-${i}`);
+          mapEdgeSet.add(`${rows-1}-${i}`);
+        }
+
+        const mapEdgeCells = cells.filter(([r, c]) => {
+          const key = `${r}-${c}`;
+          return mapEdgeSet.has(key) && !capitalSet.has(key) && !waterSet.has(key);
+        })
+
+        function shuffle(arr) {
+          for (let i = arr.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [arr[i], arr[j]] = [arr[j], arr[i]];
+          }
+          return arr;
+        }
+
+        const regions = {
+          nonAdjacent: shuffle(nonAdjacentCells),
+          capitalAdjacent: shuffle(capitalAdjacentCells),
+          teamAdjacent: shuffle(teamAdjacentCells),
+          mapEdge: shuffle(mapEdgeCells)
+        };
+        return regions;
+      } catch (e) {
+        console.error(e);
+        return;
       }
     }
 
-    const teamAdjacentCells = cells.filter(([r,c]) => {
-      const k = `${r}-${c}`;
-      return (teamColorSet.has(k) || teamAdjacentSet.has(k)) && !waterSet.has(k);
-    });
+    async function challenge (region) {
+      const [ row, col ] = region;
+      const body = `row=${row}&col=${col}`;
+      try {
+        const res = await fetch('/teamchallenge?'+MODE, {
+          method: 'POST',
+          body: body,
+          headers: headers
+        })
 
-    // 端（edge）
-    const mapEdgeSet = new Set();
-    for (let i=0; i<rows; i++) {
-      mapEdgeSet.add(`${i}-0`);
-      mapEdgeSet.add(`${i}-${cols-1}`);
-    }
-    for (let i=0; i<cols; i++) {
-      mapEdgeSet.add(`0-${i}`);
-      mapEdgeSet.add(`${rows-1}-${i}`);
-    }
-
-    const mapEdgeCells = cells.filter(([r,c]) => {
-      const k = `${r}-${c}`;
-      return mapEdgeSet.has(k) && !capitalSet.has(k) && !waterSet.has(k);
-    });
-
-    const shuffle = (arr) => {
-      for (let i = arr.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
-        [arr[i], arr[j]] = [arr[j], arr[i]];
+        if(!res.ok) throw new Error(res.status);
+        const text = await res.text();
+        const lastLine = text.trim().split('\n').pop();
+        return [ text, lastLine ];
+      } catch (e) {
+        console.error(e);
+        throw e;
       }
-      return arr;
-    };
 
-    return {
-      nonAdjacent: shuffle(nonAdjacentCells),
-      capitalAdjacent: shuffle(capitalAdjacentCells),
-      teamAdjacent: shuffle(teamAdjacentCells),
-      mapEdge: shuffle(mapEdgeCells),
-    };
+    }
+    async function equipChange (region) {
+      const [ row, col ] = region;
+      const url = `https://donguri.5ch.net/teambattle?r=${row}&c=${col}&`+MODE;
+      try {
+        const res = await fetch(url);
+        if(!res.ok) throw new Error(`[${res.status}] /teambattle?r=${row}&c=${col}`);
+        const text = await res.text();
+        const doc = new DOMParser().parseFromString(text,'text/html');
+        const headerText = doc?.querySelector('header')?.textContent || '';
+        if(!headerText.includes('どんぐりチーム戦い')) return Promise.reject(`title.ng`);
+        const table = doc.querySelector('table');
+        if(!table) throw new Error('table.ng');
+        const equipCond = table.querySelector('td small').textContent;
+        const rank = equipCond
+          .replace('エリート','e')
+          .replace(/.+から|\w+-|まで|だけ|警備員|警|\s|\[|\]|\|/g,'');
+        const autoEquipItems = JSON.parse(localStorage.getItem('autoEquipItems')) || {};
+        const autoEquipItemsAutojoin = JSON.parse(localStorage.getItem('autoEquipItemsAutojoin')) || {};
 
-  } catch (e) {
-    console.error(e);
-    return { nonAdjacent: [], capitalAdjacent: [], teamAdjacent: [], mapEdge: [] };
-  }
-}
+        if (autoEquipItemsAutojoin[rank]?.length > 0) {
+          const index = Math.floor(Math.random() * autoEquipItemsAutojoin[rank].length);
+          await setPresetItems(autoEquipItemsAutojoin[rank][index]);
+          return [rank, 'success'];
+        } else if (autoEquipItems[rank]?.length > 0) {
+          const index = Math.floor(Math.random() * autoEquipItems[rank].length);
+          await setPresetItems(autoEquipItems[rank][index]);
+          return [rank, 'success'];
+        } else {
+          return [rank, 'noEquip'];
+        }
+      } catch (e) {
+        console.error(e);
+        throw e;
+      }
+    }
 
     if (!isAutoJoinRunning) {
       attackRegion();
