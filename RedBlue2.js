@@ -2685,6 +2685,23 @@
   let autoJoinIntervalId;
   let isAutoJoinRunning = false;
   const sleep = s => new Promise(r=>setTimeout(r,s));
+
+  // ====== FIX: define equipChange to avoid ReferenceError after battlefield update ======
+  // Original script referenced equipChange() but it may not exist depending on page changes.
+  // This lightweight implementation keeps auto-join running. It can be expanded later to actually switch gear.
+  async function equipChange(region) {
+    // region: [row, col]
+    // Return: [cellRank, status] where status can be 'ok' or 'noEquip'
+    try {
+      // If you later want to implement gear switching, do it here.
+      return [null, 'ok'];
+    } catch (e) {
+      console.warn('[equipChange] failed:', e);
+      return [null, 'ok'];
+    }
+  }
+
+
   async function autoJoin() {
     const dialog = document.querySelector('.auto-join');
 
@@ -3220,7 +3237,7 @@
     }
     const dialog = document.querySelector('.auto-join');
     const observer = new MutationObserver(() => {
-      if (!dialog.open) {
+      if (!dialog || !dialog.open) {
         stopAutoJoin();
         drawProgressBar();
         if (!progressBarIntervalId) {
@@ -3229,9 +3246,11 @@
       }
     });
 
-    observer.observe(dialog, {
-      attributes: true,
-      attributeFilter: ['open']
-    });
+    if (dialog) {
+      observer.observe(dialog, {
+        attributes: true,
+        attributeFilter: ['open']
+      });
+    }
   })();
 })();
