@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         donguri arena assist tool
-// @version      1.2.2d改 Red vs Blue
+// @version      1.2.2d?? Red vs Blue_fix_autojoin
 // @description  fix arena ui and add functions
-// @author       ぱふぱふ
+// @author       ?????
 // @match        https://donguri.5ch.net/teambattle?m=hc
 // @match        https://donguri.5ch.net/teambattle?m=l
 // @match        https://donguri.5ch.net/teambattle?m=rb
@@ -35,12 +35,53 @@
 
   let MODENAME;
   if (MODE === 'm=hc') {
-      MODENAME = '［ハード］';
+      MODENAME = '?m?n?[?h?n';
   } else if (MODE === 'm=l') {
-      MODENAME = '［ラダー］';
+      MODENAME = '?m???_?[?n';
   } else {
-      MODENAME = '［赤vs青］';
+      MODENAME = '?m??vs??n';
   }
+
+  // ★ auto join から必ず参照できるようにグローバル定義
+  async function equipChange(region, MODE_ARG) {
+    const [row, col] = region;
+    const mode = MODE_ARG || (typeof MODE !== 'undefined' ? MODE : '');
+    const url = `https://donguri.5ch.net/teambattle?r=${row}&c=${col}&` + mode;
+
+    const res = await fetch(url, { cache: 'no-store' });
+    if (!res.ok) throw new Error(`[${res.status}] /teambattle?r=${row}&c=${col}`);
+
+    const text = await res.text();
+    const doc = new DOMParser().parseFromString(text, 'text/html');
+
+    const headerText = doc?.querySelector('header')?.textContent || '';
+    if (!headerText.includes('どんぐりチーム戦い')) throw new Error('title.ng');
+
+    const table = doc.querySelector('table');
+    if (!table) throw new Error('table.ng');
+
+    const equipCond = table.querySelector('td small')?.textContent || '';
+    const rank = equipCond
+      .replace('エリート', 'e')
+      .replace(/.+から|\w+-|まで|だけ|警備員|警|\s|\[|\]|\|/g, '');
+
+    const autoEquipItems = JSON.parse(localStorage.getItem('autoEquipItems')) || {};
+    const autoEquipItemsAutojoin = JSON.parse(localStorage.getItem('autoEquipItemsAutojoin')) || {};
+
+    if (autoEquipItemsAutojoin[rank]?.length > 0) {
+      const idx = Math.floor(Math.random() * autoEquipItemsAutojoin[rank].length);
+      await setPresetItems(autoEquipItemsAutojoin[rank][idx]);
+      return [rank, 'success'];
+    } else if (autoEquipItems[rank]?.length > 0) {
+      const idx = Math.floor(Math.random() * autoEquipItems[rank].length);
+      await setPresetItems(autoEquipItems[rank][idx]);
+      return [rank, 'success'];
+    } else {
+      return [rank, 'noEquip'];
+    }
+  }
+
+
 
   const vw = Math.min(document.documentElement.clientWidth, window.innerWidth || 0);
   const vh = Math.min(document.documentElement.clientHeight, window.innerHeight || 0);
@@ -136,33 +177,33 @@
     }
 
     const menuButton = button.cloneNode();
-    menuButton.textContent = '▼メニュー';
+    menuButton.textContent = '?????j???[';
     menuButton.addEventListener('click', ()=>{
       const isSubMenuOpen = subMenu.style.display === 'flex';
       subMenu.style.display = isSubMenuOpen ? 'none' : 'flex';
     })
 
     const equipButton = button.cloneNode();
-    equipButton.textContent = '■装備';
+    equipButton.textContent = '??????';
     equipButton.addEventListener('click', ()=>{
       panel.style.display = 'flex';
     });
 
     const toggleViewButton = button.cloneNode();
-    toggleViewButton.innerText = '表示\n切り替え';
+    toggleViewButton.innerText = '?\??\n?????';
     toggleViewButton.addEventListener('click', ()=>{
       toggleCellViewMode();
     })
 
 
     const refreshButton = button.cloneNode();
-    refreshButton.innerText = 'エリア情報\n更新';
+    refreshButton.innerText = '?G???A???\n?X?V';
     refreshButton.addEventListener('click',()=>{
       fetchAreaInfo(false);
     });
 
     const skipAreaInfoButton = button.cloneNode();
-    skipAreaInfoButton.innerText = 'セル情報\nスキップ';
+    skipAreaInfoButton.innerText = '?Z?????\n?X?L?b?v';
     skipAreaInfoButton.style.color = '#fff';
     if (settings.skipArenaInfo) {
       skipAreaInfoButton.style.background = '#46f';
@@ -206,13 +247,13 @@
       div.style.height = '100%';
 
       const cellButton = subButton.cloneNode();
-      cellButton.innerText = 'エリア情報\n再取得';
+      cellButton.innerText = '?G???A???\n??擾';
       cellButton.addEventListener('click',()=>{
         fetchAreaInfo(true);
       });
 
       const skipAutoEquipButton = subButton.cloneNode();
-      skipAutoEquipButton.textContent = '自動装備';
+      skipAutoEquipButton.textContent = '????????';
       skipAutoEquipButton.style.color = '#fff';
       skipAutoEquipButton.classList.add('skip-auto-equip');
       if (settings.skipAutoEquip) {
@@ -248,7 +289,7 @@
 
 
       const autoJoinButton = subButton.cloneNode();
-      autoJoinButton.innerText = '自動参加\nモード';
+      autoJoinButton.innerText = '?????Q??\n???[?h';
       autoJoinButton.style.background = '#ffb300';
       autoJoinButton.style.color = '#000';
       autoJoinButton.addEventListener('click',()=>{
@@ -297,8 +338,8 @@
         })
 
         const inputs = {
-          teamName: [input.cloneNode(),'チーム名'],
-          teamColor: [input.cloneNode(),'チームカラー']
+          teamName: [input.cloneNode(),'?`?[????'],
+          teamColor: [input.cloneNode(),'?`?[???J???[']
         }
         for (const key of Object.keys(inputs)) {
           const label_ = label.cloneNode();
@@ -319,7 +360,7 @@
 
         const description = document.createElement('p');
         description.style.fontSize = '90%';
-        description.innerText = 'チームカラーは小文字/大文字も正確に入力してください。（自陣の隣接タイル取得に必要）\nあらかじめ装備パネルからエリートも含め各ランクの装備を登録してください。（所持していない場合は除く）\n※装備を登録していないと成功率が低下します。'
+        description.innerText = '?`?[???J???[???????/?????????m????????????????B?i???w????^?C???擾??K?v?j\n????????????p?l??????G???[?g?????e?????N???????o?^????????????B?i????????????????????j\n????????o?^?????????????????????????B'
         div.append(description,closeButton);
         autoJoinSettingsDialog.append(div);
       })();
@@ -341,21 +382,21 @@
         log.classList.add('auto-join-log');
 
         const settingsButton = document.createElement('button');
-        settingsButton.textContent = '設定';
+        settingsButton.textContent = '???';
         settingsButton.addEventListener('click', ()=>{
           autoJoinSettingsDialog.showModal();
           clearInterval(autoJoinIntervalId);
         })
         const closeButton = document.createElement('button');
         closeButton.style.fontSize = '100%';
-        closeButton.textContent = '自動参加モードを終了';
+        closeButton.textContent = '?????Q?????[?h???I??';
         closeButton.addEventListener('click', ()=>{
           autoJoinDialog.close();
         })
-        //closeButton.autofocus = true; // inputへのオートフォーカス阻止
+        //closeButton.autofocus = true; // input???I?[?g?t?H?[?J?X?j?~
         const p = document.createElement('p');
-        //p.textContent = 'この画面を開いたままにしておくこと。最短600秒';
-        p.textContent = 'この画面を開いたままにしておくこと';
+        //p.textContent = '????????J??????????????????B??Z600?b';
+        p.textContent = '????????J??????????????????';
         p.style.margin = '0';
 
         container.append(log, p, settingsButton, closeButton);
@@ -364,7 +405,7 @@
 
 
       const settingsButton = subButton.cloneNode();
-      settingsButton.textContent = '設定';
+      settingsButton.textContent = '???';
       settingsButton.style.background = '#ffb300';
       settingsButton.style.color = '#000';
       settingsButton.addEventListener('click', ()=>{
@@ -372,7 +413,7 @@
       })
 
       const rangeAttackButton = subButton.cloneNode();
-      rangeAttackButton.textContent = '範囲攻撃';
+      rangeAttackButton.textContent = '???U??';
       rangeAttackButton.style.background = '#f64';
       rangeAttackButton.style.color = '#fff';
       rangeAttackButton.addEventListener('click', ()=>{
@@ -381,7 +422,7 @@
       })
 
       const closeSlideMenuButton = subButton.cloneNode();
-      closeSlideMenuButton.textContent = 'やめる';
+      closeSlideMenuButton.textContent = '????';
       closeSlideMenuButton.style.background = '#888';
       closeSlideMenuButton.style.color = '#fff';
       closeSlideMenuButton.addEventListener('click', ()=>{
@@ -390,7 +431,7 @@
       })
 
       const startRangeAttackButton = subButton.cloneNode();
-      startRangeAttackButton.textContent = '攻撃開始';
+      startRangeAttackButton.textContent = '?U???J?n';
       startRangeAttackButton.style.background = '#f64';
       startRangeAttackButton.style.color = '#fff';
       startRangeAttackButton.addEventListener('click', async()=>{
@@ -403,7 +444,7 @@
       })
 
       const pauseRangeAttackButton = subButton.cloneNode();
-      pauseRangeAttackButton.textContent = '中断';
+      pauseRangeAttackButton.textContent = '???f';
       pauseRangeAttackButton.style.background = '#888';
       pauseRangeAttackButton.style.color = '#fff';
       pauseRangeAttackButton.addEventListener('click', ()=>{
@@ -413,7 +454,7 @@
       })
 
       const resumeRangeAttackButton = subButton.cloneNode();
-      resumeRangeAttackButton.textContent = '再開';
+      resumeRangeAttackButton.textContent = '??J';
       resumeRangeAttackButton.style.background = '#f64';
       resumeRangeAttackButton.style.color = '#fff';
       resumeRangeAttackButton.style.display = 'none';
@@ -440,7 +481,7 @@
       }
 
       const deselectButton = subButton.cloneNode();
-      deselectButton.textContent = '選択解除';
+      deselectButton.textContent = '?I??????';
       deselectButton.style.background = '#888';
       deselectButton.style.color = '#fff';
       deselectButton.addEventListener('click', ()=>{
@@ -452,7 +493,7 @@
       })
 
       const batchSelectButton = subButton.cloneNode();
-      batchSelectButton.textContent = '一括選択';
+      batchSelectButton.textContent = '???I??';
       batchSelectButton.style.background = '#ffb300';
       batchSelectButton.style.color = '#000';
       batchSelectButton.addEventListener('click', ()=>{
@@ -480,7 +521,7 @@
             const cells = document.querySelectorAll('.cell');
             cells.forEach(cell => {
               const cellRank = cell.querySelector('p').textContent;
-              const regex = new RegExp(`\\b${rank}(だけ)?e?$`);
+              const regex = new RegExp(`\\b${rank}(????)?e?$`);
               const match = cellRank.match(regex);
               if(match) {
                 cell.classList.add('selected');
@@ -498,7 +539,7 @@
         closeButton.style.width = '4.5em';
         closeButton.style.background = '#888';
         closeButton.style.color = '#fff';
-        closeButton.textContent = 'やめる';
+        closeButton.textContent = '????';
         closeButton.addEventListener('click', ()=>{
           batchSelectMenu.style.display = 'none';
         })
@@ -563,7 +604,7 @@
     }
 
     const challengeButton = button.cloneNode();
-    challengeButton.textContent = 'エリアに挑む';
+    challengeButton.textContent = '?G???A?????';
     challengeButton.style.flexGrow = '2';
     challengeButton.addEventListener('click', async(e)=>{
       const table = arenaField.querySelector('table');
@@ -574,27 +615,27 @@
     })
 
     const reinforceButton = button.cloneNode();
-    reinforceButton.textContent = '強化する';
+    reinforceButton.textContent = '????????';
     reinforceButton.style.flexGrow = '1';
     reinforceButton.addEventListener('click', ()=>{
       arenaModDialog.dataset.action = 'ReinforceArena';
-      modButton.textContent = '強化する';
-      p.textContent = `木材: ${wood}, 鉄: ${steel} (1ptにつき各25個)`;
+      modButton.textContent = '????????';
+      p.textContent = `???: ${wood}, ?S: ${steel} (1pt?????e25??)`;
       arenaModDialog.show();
     })
 
     const siegeButton = button.cloneNode();
-    siegeButton.textContent = '弱体化';
+    siegeButton.textContent = '????';
     siegeButton.style.flexGrow = '1';
     siegeButton.addEventListener('click', ()=>{
       arenaModDialog.dataset.action = 'SiegeArena';
-      modButton.textContent = '弱体化';
-      p.textContent = `木材: ${wood}, 鉄: ${steel} (1ptにつき各25個)`;
+      modButton.textContent = '????';
+      p.textContent = `???: ${wood}, ?S: ${steel} (1pt?????e25??)`;
       arenaModDialog.show();
     })
 
     const closeButton = button.cloneNode();
-    closeButton.textContent = '×';
+    closeButton.textContent = '?~';
     closeButton.marginLeft = 'auto';
     closeButton.style.fontSize = '24px';
     closeButton.style.width = '48px';
@@ -621,7 +662,7 @@
 
       const input = document.createElement('input');
       input.type = 'number';
-      input.placeholder = '改造の量';
+      input.placeholder = '???????';
 
       modButton.addEventListener('click', ()=>{
         const amt = Number(input.value);
@@ -634,7 +675,7 @@
 
       input.addEventListener('keydown', (e)=>{
         if (e.key === "Enter") {
-          e.preventDefault(); // これが無いとdialogが閉じない
+          e.preventDefault(); // ??????????dialog????????
           const amt = Number(input.value);
           const table = arenaField.querySelector('table');
           const { row, col } = table.dataset;
@@ -660,11 +701,11 @@
         const res = await fetch('/teamvol/', options);
         if(!res.ok) throw new Error('/teamvol/ failed to load');
         const text = await res.text();
-        if(text.includes('資源パックを開ける')) {
+        if(text.includes('?????p?b?N???J????')) {
           open('/craft', '_blank');
           return;
         }
-        if(text !== '改造成功') throw new Error(text);
+        if(text !== '????????') throw new Error(text);
         wood = wood - 25 * Math.trunc(amt);
         steel = steel - 25 * Math.trunc(amt);
         arenaResult.textContent = text;
@@ -819,12 +860,12 @@
     header.style.display = 'flex';
 
     const h2 = document.createElement('h2');
-    h2.textContent = '設定'
+    h2.textContent = '???'
     h2.style.fontSize = '1.2rem';
     h2.style.margin = '2px';
 
     const closeButton = button.cloneNode();
-    closeButton.textContent = '×';
+    closeButton.textContent = '?~';
     closeButton.style.marginLeft = 'auto';
     closeButton.style.background = 'none';
     closeButton.style.border = 'none';
@@ -846,7 +887,7 @@
 
     (()=>{
       const saveButton = button.cloneNode();
-      saveButton.textContent = '保存';
+      saveButton.textContent = '???';
       saveButton.addEventListener('click', ()=>{
         const settingElements = settingsMenu.querySelectorAll('[data-setting]');
         settingElements.forEach(elm => {
@@ -872,7 +913,7 @@
       })
 
       const cancelButton = button.cloneNode();
-      cancelButton.textContent = 'キャンセル';
+      cancelButton.textContent = '?L?????Z??';
       cancelButton.addEventListener('click', ()=>{
         refreshSettings();
         settingsDialog.close();
@@ -962,130 +1003,130 @@
       const toolbar = container.cloneNode();
       addHeader('toolbar', toolbar);
       const arenaResult = container.cloneNode();
-      addHeader('アリーナログ', arenaResult);
+      addHeader('?A???[?i???O', arenaResult);
       const arenaField = container.cloneNode();
-      addHeader('アリーナ情報', arenaField);
+      addHeader('?A???[?i???', arenaField);
       //const grid = container.cloneNode();
-      //addHeader('グリッド', grid);
+      //addHeader('?O???b?h', grid);
       const settingsPanel = container.cloneNode();
-      addHeader('設定パネル', settingsPanel);
+      addHeader('???p?l??', settingsPanel);
       const equipPanel = container.cloneNode();
-      addHeader('装備パネル', equipPanel);
+      addHeader('?????p?l??', equipPanel);
 
       const settingItems = {
         toolbarPosition: {
-          text: '位置:',
+          text: '??u:',
           type: 'select',
           options: {
-            left: '左寄せ',
-            right: '右寄せ',
-            center: '中央寄せ'
+            left: '????',
+            right: '?E??',
+            center: '??????'
           },
           parent: toolbar
         },
         toolbarPositionLength: {
-          text: '端の距離:',
+          text: '?[?????:',
           type: 'width',
           parent: toolbar
         },
         arenaResultScrollPosition: {
-          text: 'スクロール位置:',
+          text: '?X?N???[????u:',
           type: 'select',
           options: {
-            top: '上',
-            bottom: '下'
+            top: '??',
+            bottom: '??'
           },
           parent: arenaResult
         },
         arenaResultBottom: {
-          text: '下部の距離:',
+          text: '?????????:',
           type: 'height',
           parent: arenaResult
         },
         arenaResultPosition: {
-          text: '位置:',
+          text: '??u:',
           type: 'select',
           options: {
-            right: '右寄せ',
-            left: '左寄せ'
+            right: '?E??',
+            left: '????'
           },
           parent: arenaResult
         },
         arenaResultPositionLength: {
-          text: '左端からの距離:',
+          text: '???[????????:',
           type: 'width',
           parent: arenaResult
         },
         arenaResultHeight: {
-          text: 'ログの高さ:',
+          text: '???O?????:',
           type: 'height',
           parent: arenaResult
         },
         arenaResultWidth: {
-          text: 'ログの横幅:',
+          text: '???O?????:',
           type: 'width',
           parent: arenaResult
         },
         arenaFieldBottom: {
-          text: '下部の距離:',
+          text: '?????????:',
           type: 'height',
           parent: arenaField
         },
         arenaFieldPosition: {
-          text: '位置:',
+          text: '??u:',
           type: 'select',
           options: {
-            left: '左寄せ',
-            right: '右寄せ',
-            center: '中央寄せ'
+            left: '????',
+            right: '?E??',
+            center: '??????'
           },
           parent: arenaField
         },
         arenaFieldPositionLength: {
-          text: '端からの距離:',
+          text: '?[????????:',
           type: 'width',
           parent: arenaField
         },
         arenaFieldWidth: {
-          text: '横幅:',
+          text: '????:',
           type: 'width',
           parent: arenaField
         },
         settingsPanelPosition: {
-          text: '位置:',
+          text: '??u:',
           type: 'select',
           options: {
-            right: '右寄せ',
-            left: '左寄せ'
+            right: '?E??',
+            left: '????'
           },
           parent: settingsPanel
         },
         settingsPanelHeight: {
-          text: '高さ:',
+          text: '????:',
           type: 'height',
           parent: settingsPanel
         },
         settingsPanelWidth: {
-          text: '横幅:',
+          text: '????:',
           type: 'width',
           parent: settingsPanel
         },
         equipPanelPosition: {
-          text: '位置:',
+          text: '??u:',
           type: 'select',
           options: {
-            right: '右寄せ',
-            left: '左寄せ'
+            right: '?E??',
+            left: '????'
           },
           parent: equipPanel
         },
         equipPanelHeight: {
-          text: '高さ:',
+          text: '????:',
           type: 'height',
           parent: equipPanel
         },
         equipPanelWidth: {
-          text: '横幅:',
+          text: '????:',
           type: 'width',
           parent: equipPanel
         }
@@ -1129,7 +1170,7 @@
     (()=>{
       const link = document.createElement('a');
       link.style.color = '#333';
-      link.textContent = '1.2.2d改 Red vs Blue';
+      link.textContent = '1.2.2d?? Red vs Blue';
       footer.append(link);
     })();
 
@@ -1140,7 +1181,7 @@
 
   document.body.append(settingsDialog);
 
-  //-- 装備 --//
+  //-- ???? --//
   const panel = document.createElement('div');
   panel.style.position = 'fixed';
   panel.style.top = '0';
@@ -1184,7 +1225,7 @@
     // input.style.background = '#eee';
     // input.style.color = '#000';
     // input.style.borderRadius = 'unset';
-    // input.placeholder = 'フィルタ…';
+    // input.placeholder = '?t?B???^?c';
     button.type = 'button';
     button.style.borderRadius = 'unset';
     button.style.border = 'solid 1px #000';
@@ -1211,7 +1252,7 @@
     showEquipPreset();
 
     const resetCurrentEquip = document.createElement('div');
-    resetCurrentEquip.textContent = '装備情報をリセット';
+    resetCurrentEquip.textContent = '???????????Z?b?g';
     resetCurrentEquip.style.borderTop = 'solid 1px #000';
     resetCurrentEquip.style.cursor = 'pointer';
     resetCurrentEquip.style.color = '#a62';
@@ -1220,7 +1261,7 @@
     resetCurrentEquip.addEventListener('click', ()=>{
       localStorage.removeItem('current_equip');
       const stat = document.querySelector('.equip-preset-stat');
-      stat.textContent = '現在の装備情報を初期化';
+      stat.textContent = '??????????????????';
       weaponTable = null;
       armorTable = null;
       necklaceTable = null;
@@ -1242,7 +1283,7 @@
       } else if (currentMode === 'auto') {
         selectAutoEquipItems(presetLi, presetName, currentRank);
       } else if (currentMode === 'edit') {
-        alert('未実装');
+        alert('??????');
       }
     });
 
@@ -1257,7 +1298,7 @@
 
       /*
       const closeButton = button.cloneNode();
-      closeButton.textContent = '×';
+      closeButton.textContent = '?~';
       closeButton.style.marginLeft = 'auto';
       closeButton.style.background = 'none';
       closeButton.style.border = 'none';
@@ -1271,7 +1312,7 @@
       */
 
       const addButton = button.cloneNode();
-      addButton.textContent = '追加';
+      addButton.textContent = '???';
       addButton.addEventListener('click', async()=>{
         selectedEquips = {id:[], rank:[]};
         addButton.disabled = true;
@@ -1280,19 +1321,19 @@
       })
 
       const removeButton = button.cloneNode();
-      removeButton.textContent = '削除';
-      removeButton.dataset.text = '削除';
+      removeButton.textContent = '??';
+      removeButton.dataset.text = '??';
       removeButton.dataset.mode = 'remove';
       /*
       const editButton = button.cloneNode();
-      editButton.textContent = '編集';
-      editButton.dataset.text = '編集';
+      editButton.textContent = '??W';
+      editButton.dataset.text = '??W';
       editButton.dataset.mode = 'edit';
       */
 
       const equipSettingsButton = button.cloneNode();
-      equipSettingsButton.textContent = '装備登録';
-      equipSettingsButton.dataset.text = '装備登録';
+      equipSettingsButton.textContent = '?????o?^';
+      equipSettingsButton.dataset.text = '?????o?^';
       equipSettingsButton.dataset.mode = 'auto';
 
       const equipSettingsDialog = document.createElement('dialog');
@@ -1337,7 +1378,7 @@
         const closeButton = button.cloneNode();
         closeButton.style.width = '100px';
         closeButton.style.background = '#caa';
-        closeButton.textContent = '×';
+        closeButton.textContent = '?~';
         closeButton.addEventListener('click',()=>{
           equipSettingsDialog.close();
         })
@@ -1345,16 +1386,16 @@
         const div2 = document.createElement('div');
         div2.style.textAlign = 'center';
         const toggleButton = button.cloneNode();
-        toggleButton.textContent = '対戦用';
+        toggleButton.textContent = '???p';
         toggleButton.style.width = '7em';
         toggleButton.style.background = '#acc';
         toggleButton.addEventListener('click',()=>{
           if (autoEquipMode === 'normal') {
             autoEquipMode = 'autojoin';
-            toggleButton.textContent = '自動参加用';
+            toggleButton.textContent = '?????Q???p';
           } else {
             autoEquipMode = 'normal';
-            toggleButton.textContent = '対戦用';
+            toggleButton.textContent = '???p';
           }
         })
 
@@ -1367,20 +1408,20 @@
           settings.autoEquipRandomly = checkRandom.checked;
           localStorage.setItem('aat_settings', JSON.stringify(settings));
         })
-        label.append(checkRandom, 'ランダム装備');
+        label.append(checkRandom, '?????_??????');
 
         div.append(closeButton);
         div2.append(toggleButton,label);
 
         const description = document.createElement('div');
-        description.innerText = '対戦に使用する装備を選択してください。バトル開始前に自動的に装備を変更します。複数登録した場合は開始時に装備するものを選択します。\nヒント: メインとなる1つのセットを使うことがほとんどなら1つのみ登録／複数の装備を使い分けることが多いなら複数登録しておくと切り替えの手間が少なくなる。\nまたは、ランダム装備にチェックを入れると、登録してある中から自動でランダムに選択\n\n自動参加用を登録しておくと、通常の対戦用とは別の装備を使用する。登録していない場合は対戦用装備を使用。';
+        description.innerText = '????g?p????????I??????????????B?o?g???J?n?O??????I????????X??????B?????o?^????????J?n???????????????I????????B\n?q???g: ???C??????1???Z?b?g???g??????????????1????o?^?^????????????g???????邱?????????????o?^??????????????????????????B\n?????A?????_????????`?F?b?N???????A?o?^??????????玩????????_????I??\n\n?????Q???p??o?^?????????A??????p???????????g?p????B?o?^??????????????p???????g?p?B';
         description.style.fontSize = '70%';
 
         equipSettingsDialog.append(div, div2, description);
       })();
 
       const backupButton = button.cloneNode();
-      backupButton.innerText = 'バック\nアップ';
+      backupButton.innerText = '?o?b?N\n?A?b?v';
 
       const backupDialog = document.createElement('dialog');
       backupDialog.style.background = '#fff';
@@ -1397,7 +1438,7 @@
 
         const div = document.createElement('div');
         const saveButton = button.cloneNode();
-        saveButton.textContent = '保存';
+        saveButton.textContent = '???';
         saveButton.addEventListener('click', ()=>{
           const isSuccess = importEquipPresets(textarea.value);
           if(isSuccess) {
@@ -1418,10 +1459,10 @@
           }
         });
         const copyButton = button.cloneNode();
-        copyButton.textContent = 'コピー';
+        copyButton.textContent = '?R?s?[';
         copyButton.addEventListener('click', ()=>{navigator.clipboard.writeText(textarea.value).then(alert('copy'));})
         const closeButton = button.cloneNode();
-        closeButton.textContent = '閉じる';
+        closeButton.textContent = '?????';
         closeButton.addEventListener('click', ()=>{backupDialog.close()})
         div.append(saveButton, copyButton, closeButton);
         backupDialog.append(textarea, div);
@@ -1456,11 +1497,11 @@
       function setMode(mode, button) {
         resetMode();
         currentMode = mode;
-        button.textContent = '完了';
+        button.textContent = '????';
         button.classList.add('active');
-        if(mode === 'remove') stat.textContent = '削除したいものを選択';
-        else if (mode === 'edit') stat.textContent = 'クリックで編集';
-        else if (mode === 'auto') stat.textContent = 'クリックで選択(複数選択可)';
+        if(mode === 'remove') stat.textContent = '?????????????I??';
+        else if (mode === 'edit') stat.textContent = '?N???b?N???W';
+        else if (mode === 'auto') stat.textContent = '?N???b?N??I??(?????I????)';
       }
 
       function resetMode() {
@@ -1511,7 +1552,7 @@
     equipField.style.maxWidth = '90vw';
     equipField.style.height = '95vh';
     const closeButton = button.cloneNode();
-    closeButton.textContent = '×';
+    closeButton.textContent = '?~';
     closeButton.style.position = 'absolute';
     closeButton.style.background = 'none';
     closeButton.style.border = 'none';
@@ -1545,7 +1586,7 @@
     p.style.height = '28px';
 
     const equipSwitchButton = button.cloneNode();
-    equipSwitchButton.textContent = '?武器';
+    equipSwitchButton.textContent = '?????';
     equipSwitchButton.style.width = '4em';
     equipSwitchButton.style.height = '42px';
     equipSwitchButton.style.fontSize = '';
@@ -1556,23 +1597,23 @@
         weaponTable.style.display = 'none';
         armorTable.style.display = '';
         necklaceTable.style.display = 'none';
-        event.target.textContent = '?防具';
+        event.target.textContent = '??h??';
       } else if (!armorTable.style.display) {
         weaponTable.style.display = 'none';
         armorTable.style.display = 'none';
         necklaceTable.style.display = '';
-        event.target.textContent = '?首';
+        event.target.textContent = '???';
       } else if (!necklaceTable.style.display) {
         weaponTable.style.display = '';
         armorTable.style.display = 'none';
         necklaceTable.style.display = 'none';
-        event.target.textContent = '?武器';
+        event.target.textContent = '?????';
       }
     });
 
     // register
     const registerButton = button.cloneNode();
-    registerButton.textContent = '登録';
+    registerButton.textContent = '?o?^';
     registerButton.style.width = '4em';
     registerButton.style.height = '42px';
     registerButton.style.fontSize = '';
@@ -1584,14 +1625,14 @@
       dialog.style.color = '#000';
       dialog.style.textAlign = 'center';
       const presetNameInput = document.createElement('input');
-      presetNameInput.placeholder = 'プリセット名';
+      presetNameInput.placeholder = '?v???Z?b?g??';
       presetNameInput.style.background = '#fff';
       presetNameInput.style.color = '#000';
       const p = document.createElement('p');
-      p.textContent = '同名のプリセットが存在する場合は上書きされます。';
+      p.textContent = '??????v???Z?b?g??????????????????????B';
       p.style.margin = '0';
       const confirmButton = button.cloneNode();
-      confirmButton.textContent = '保存';
+      confirmButton.textContent = '???';
       confirmButton.addEventListener('click', ()=>{
         if(presetNameInput.value.trim() === '') return;
         saveEquipPreset(presetNameInput.value.substring(0,32), selectedEquips);
@@ -1600,7 +1641,7 @@
       })
       presetNameInput.addEventListener('keydown', (e)=>{
         if (e.key === "Enter") {
-          e.preventDefault(); // これが無いとdialogが閉じない
+          e.preventDefault(); // ??????????dialog????????
           if(presetNameInput.value.trim() === '') return;
           saveEquipPreset(presetNameInput.value.substring(0,32), selectedEquips);
           dialog.close();
@@ -1608,13 +1649,13 @@
         }
       })
       const cancelButton = button.cloneNode();
-      cancelButton.textContent = 'キャンセル';
+      cancelButton.textContent = '?L?????Z??';
       cancelButton.addEventListener('click', ()=>{dialog.close()});
       dialog.append(presetNameInput, confirmButton, cancelButton, p);
       equipField.append(dialog);
       registerButton.addEventListener('click', ()=>{
         if(!selectedEquips.id[0] && !selectedEquips.id[1] && !selectedEquips.id[2]) {
-          alert('装備が未選択です');
+          alert('?????????I?????');
           return;
         }
         dialog.showModal();
@@ -1647,7 +1688,7 @@
           const text = await res.text();
           const doc = new DOMParser().parseFromString(text, 'text/html');
           const h1 = doc.querySelector('h1');
-          if(h1?.textContent !== 'アイテムバッグ') throw new Error(text);
+          if(h1?.textContent !== '?A?C?e???o?b?O') throw new Error(text);
           weaponTable = doc.querySelector('#weaponTable');
           armorTable = doc.querySelector('#armorTable');
           necklaceTable = doc.querySelector('#necklaceTable');
@@ -1694,7 +1735,7 @@
         }
       }
 
-      equipSwitchButton.textContent = '?武器';
+      equipSwitchButton.textContent = '?????';
       weaponTable.style.display = '';
       armorTable.style.display = 'none';
       necklaceTable.style.display = 'none';
@@ -1757,7 +1798,7 @@
         return true;
       } catch (e) {
         if (e instanceof SyntaxError) {
-          alert('書式エラー');
+          alert('?????G???[');
         }
         return false;
       }
@@ -1766,7 +1807,7 @@
 
 
     function removePresetItems(presetName) {
-      const userConfirmed = confirm(presetName + ' を削除しますか？');
+      const userConfirmed = confirm(presetName + ' ????????????H');
       if(!userConfirmed) return;
       const stat = document.querySelector('.equip-preset-stat');
       const equipPresets = JSON.parse(localStorage.getItem('equipPresets')) || {};
@@ -1813,17 +1854,17 @@
       console.log(items[rank]);
     }
   })();
-  //-- ここまで --//
+  //-- ??????? --//
   async function setPresetItems (presetName) {
     let currentEquip = JSON.parse(localStorage.getItem('current_equip')) || [];
     const stat = document.querySelector('.equip-preset-stat');
-    if (stat.textContent === '装備中...') return;
+    if (stat.textContent === '??????...') return;
     const equipPresets = JSON.parse(localStorage.getItem('equipPresets')) || {};
     const fetchPromises = equipPresets[presetName].id
-      .filter(id => id !== undefined && id !== null && !currentEquip.includes(id)) // 未登録or既に装備中の部位は除外
+      .filter(id => id !== undefined && id !== null && !currentEquip.includes(id)) // ???o?^or?????????????????O
       .map(id => fetch('https://donguri.5ch.net/equip/' + id));
 
-    stat.textContent = '装備中...';
+    stat.textContent = '??????...';
     try {
       const responses = await Promise.all(fetchPromises);
       const texts = await Promise.all(
@@ -1835,20 +1876,20 @@
         })
       );
 
-      if(texts.includes('どんぐりが見つかりませんでした。')) {
-        throw new Error('再ログインしてください');
-      } else if(texts.includes('アイテムが見つかりませんでした。')) {
-        throw new Error('アイテムが見つかりませんでした');
+      if(texts.includes('?? 肪????????????????B')) {
+        throw new Error('????O?C?????????????');
+      } else if(texts.includes('?A?C?e????????????????????B')) {
+        throw new Error('?A?C?e???????????????????');
       }
 
       const docs = texts.map(text => new DOMParser().parseFromString(text,'text/html'));
       const titles = docs.map(doc => doc.querySelector('h1')?.textContent);
-      if(titles.includes('どんぐり基地')) {
-        throw new Error('再ログインしてください');
-      } else if (!titles.every(title => title === 'アイテムバッグ')) {
-        throw new Error('装備エラー');
+      if(titles.includes('?? ??n')) {
+        throw new Error('????O?C?????????????');
+      } else if (!titles.every(title => title === '?A?C?e???o?b?O')) {
+        throw new Error('?????G???[');
       }
-      stat.textContent = '完了: ' + presetName;
+      stat.textContent = '????: ' + presetName;
       localStorage.setItem('current_equip', JSON.stringify(equipPresets[presetName].id));
       currentEquipName = presetName;
     } catch (e) {
@@ -2025,11 +2066,11 @@
       const text = await res.text();
       const doc = new DOMParser().parseFromString(text, 'text/html');
       const headerText = doc?.querySelector('header')?.textContent || '';
-      if(!headerText.includes('どんぐりチーム戦い')) throw new Error(`title.ng [${row}][${col}]`);
+      if(!headerText.includes('?? ?`?[????')) throw new Error(`title.ng [${row}][${col}]`);
       const rank = doc.querySelector('small')?.textContent || '';
       if(!rank) return Promise.reject(`rank.ng [${row}][${col}]`);
       const leader = doc.querySelector('strong')?.textContent || '';
-      const shortenRank = rank.replace('[エリート]','e').replace('[警備員]だけ','警').replace('から','-').replace(/(まで|\[|\]|\||\s)/g,'');
+      const shortenRank = rank.replace('[?G???[?g]','e').replace('[?x????]????','?x').replace('????','-').replace(/(???|\[|\]|\||\s)/g,'');
       const teamname = doc.querySelector('table').rows[1]?.cells[2].textContent;
 
       const cell = elm.cloneNode();
@@ -2052,7 +2093,7 @@
         p.style.alignItems = 'center';
         p.style.lineHeight = '1';
         p.style.justifyContent = 'center';
-        const str = shortenRank.replace(/\w+-|だけ/g,'');
+        const str = shortenRank.replace(/\w+-|????/g,'');
         p.textContent = str;
         if (str.length === 3) p.style.fontSize = '14px';
         if (str.length === 4) p.style.fontSize = '13px';
@@ -2092,7 +2133,7 @@
     button.style.marginLeft = '2px';
 
     const editButton = button.cloneNode();
-    editButton.textContent = '▼';
+    editButton.textContent = '??';
     editButton.addEventListener('click', ()=>{
       editButton.style.display = 'none';
       editEndButton.style.display = '';
@@ -2147,30 +2188,30 @@
     })
 
     const helpButton = button.cloneNode();
-    helpButton.textContent = '？';
+    helpButton.textContent = '?H';
     helpButton.addEventListener('click', ()=>{
       helpDialog.innerHTML = '';
       const div = document.createElement('div');
       div.style.lineHeight = '150%';
-      div.innerText = `・[▼]を押すと色を編集できます。編集後は一度[エリア情報再取得]を実行してください。
-      ・変更したチームのセルは[エリア情報更新]時に必ず取得されるようになります。
-      *更新時の読み込みを増やしたくない場合は、無闇に変更しないことを推奨します。
-      ・同色のチームが複数存在する場合、それぞれの色を変更することで同色の塗り替えに対応可能です。(カスタムカラーで上書きされたセルは常に読み込みの対象になるため)
-      ・編集した色を戻すには入力欄の文字を全て消した状態で保存してください。
+      div.innerText = `?E[??]????????F???W???????B??W????x[?G???A????擾]?????s????????????B
+      ?E??X?????`?[????Z????[?G???A???X?V]????K???擾?????????????B
+      *?X?V????????? ????????????A??????X????????? ???????B
+      ?E???F??`?[?????????????????A???????F???X???邱?????F??h??????????\????B(?J?X?^???J???[??????????Z???????????????????)
+      ?E??W?????F??????????????????S?????????????????????????B
 
-      仕様 (読まなくてよい)：
-      [エリア情報再取得]は全エリアにアクセスし情報を取得するのに対し、[エリア情報更新]は色が更新されたセルのみを取得するようにしてある。
-      ここで、同色のAとBのチームが存在する状況を想定する。
-      ・Bの色のみを編集した場合、Aが保持するセルをBが獲得した際、編集前の色情報が同一のためセル情報の取得が行われない。
-      ・AとBの双方を編集しておくと、Aが保持するセルは常に色情報が更新された扱いとなり取得対象になる。
-      要するに、同色の場合は全て色を変えておくとよいということ。同色がいなくなったら戻せばOK.
+      ?d?l (????????)?F
+      [?G???A????擾]??S?G???A??A?N?Z?X???????擾?????????A[?G???A???X?V]??F???X?V?????Z???????擾?????????????B
+      ??????A???F??A??B??`?[??????????? ?z????B
+      ?EB??F?????W???????AA?????????Z????B???l????????A??W?O??F?? ???????Z??????擾???s??????B
+      ?EA??B??o?????W?????????AA?????????Z??????F?? X?V????????????擾??????B
+      ?v?????A???F?????S??F?????????????????????B???F??????????????????OK.
       `;
       const resetButton = button.cloneNode();
-      resetButton.textContent = '色設定初期化';
+      resetButton.textContent = '?F???????';
       resetButton.addEventListener('click', ()=>{
         delete settings.customColors;
         localStorage.setItem('aat_settings', JSON.stringify(settings));
-        alert('色の設定を初期化しました（要エリア更新）');
+        alert('?F???????????????????i?v?G???A?X?V?j');
       })
       helpDialog.append(resetButton, div);
       helpDialog.show();
@@ -2224,7 +2265,7 @@
       const text = await res.text();
       const doc = new DOMParser().parseFromString(text,'text/html');
       const headerText = doc?.querySelector('header')?.textContent || '';
-      if(!headerText.includes('どんぐりチーム戦い')) return Promise.reject(`title.ng`);
+      if(!headerText.includes('?? ?`?[????')) return Promise.reject(`title.ng`);
       const table = doc.querySelector('table');
       if(!table) throw new Error('table.ng');
       showArenaTable(table);
@@ -2235,7 +2276,7 @@
     function showArenaTable (table){
       const tableRow = table.querySelector('tbody > tr');
       if(!tableRow) return;
-      const coordinate = tableRow.cells[0].textContent.replace('アリーナ','').trim();
+      const coordinate = tableRow.cells[0].textContent.replace('?A???[?i','').trim();
       const holderName = tableRow.cells[1].querySelector('strong');
       const equipCond = tableRow.cells[1].querySelector('small');
       const teamName = tableRow.cells[2].textContent;
@@ -2259,8 +2300,8 @@
 
       cells[0].append(coordinate, hr, equipCond);
       cells[1].append(holderName, document.createElement('br'), `${teamName}`);
-      cells[2].innerText = `勝:${statistics[0]}\n負:${statistics[1]}\n引:${statistics[2]}`;
-      cells[3].innerText = `強化:${modCounts[0]}\n弱体:${modCounts[1]}\n${modders}人`;
+      cells[2].innerText = `??:${statistics[0]}\n??:${statistics[1]}\n??:${statistics[2]}`;
+      cells[3].innerText = `????:${modCounts[0]}\n???:${modCounts[1]}\n${modders}?l`;
       cells[3].style.whiteSpace = 'nowrap';
 
       const [dataRow, dataCol] = coordinate.match(/\d+/g);
@@ -2305,8 +2346,8 @@
       return;
     }
     rank = rank
-      .replace('エリート','e')
-      .replace(/.+から|\w+-|まで|だけ|警備員|警|\s|\[|\]|\|/g,'');
+      .replace('?G???[?g','e')
+      .replace(/.+????|\w+-|???|????|?x????|?x|\s|\[|\]|\|/g,'');
     const autoEquipItems = JSON.parse(localStorage.getItem('autoEquipItems')) || {};
     if (autoEquipItems[rank] && !autoEquipItems[rank]?.includes(currentEquipName)) {
       if (autoEquipItems[rank].length === 0) {
@@ -2381,7 +2422,7 @@
       }
 
       arenaResult.show();
-      // arenaResult.show();のあとでsetTimeoutを使用しないと位置がずれる
+      // arenaResult.show();??????setTimeout???g?p????????u???????
       setTimeout(() => {
         if (settings.arenaResultScrollPosition === 'bottom') {
           arenaResult.scrollTop = arenaResult.scrollHeight;
@@ -2391,7 +2432,7 @@
       }, 0);
       arenaResult.style.display = '';
 
-      if (lastLine === 'リーダーになった' || lastLine.includes('は新しいアリーナリーダーです。')) {
+      if (lastLine === '???[?_?[??????' || lastLine.includes('??V?????A???[?i???[?_?[????B')) {
         if (!settings.teamColor) return;
         const cell = document.querySelector(`div[data-row="${row}"][data-col="${col}"]`);
         cell.style.background = '#' + settings.teamColor;
@@ -2410,7 +2451,7 @@
     }
 
     if(rangeAttackQueue.length === 0) {
-      alert('セルを選択してください');
+      alert('?Z????I?????????????');
       return;
     }
 
@@ -2428,7 +2469,7 @@
       if(!rangeAttackProcessing) return;
 
       const cell = rangeAttackQueue[0];
-      // 攻撃前に選択解除された場合
+      // ?U???O??I????????????
       if(!cell.classList.contains('selected')) {
         rangeAttackQueue.shift();
         continue;
@@ -2450,15 +2491,15 @@
         let lastLine = text.trim().split('\n').pop();
         if(
           lastLine.length > 100 ||
-          lastLine === 'どんぐりが見つかりませんでした。'
+          lastLine === '?? 肪????????????????B'
         ) {
-          throw new Error('どんぐりが見つかりませんでした。');
+          throw new Error('?? 肪????????????????B');
         }
         if(
-          lastLine === 'あなたのチームは動きを使い果たしました。しばらくお待ちください。' ||
+          lastLine === '???????`?[??????????g?????????????B????炭??????????????B' ||
           lastLine === 'ng<>too fast' ||
-          lastLine === '武器と防具を装備しなければなりません。' ||
-          lastLine === '最初にチームに参加する必要があります。'
+          lastLine === '?????h?? ???????????????B' ||
+          lastLine === '?????`?[????Q??????K?v?????????B'
         ) {
           throw new Error(lastLine);
         }
@@ -2469,7 +2510,7 @@
         rangeAttackQueue.shift();
       } catch (e) {
         const p = pTemplate.cloneNode();
-        p.textContent = `(${row}, ${col}) [中断] ${e}`;
+        p.textContent = `(${row}, ${col}) [???f] ${e}`;
         arenaResult.prepend(p);
         errorOccurred = true;
         break;
@@ -2481,7 +2522,7 @@
     }
     if(!errorOccurred) {
       const p = pTemplate.cloneNode();
-      p.textContent = `完了`;
+      p.textContent = `????`;
       arenaResult.prepend(p);
       return true;
     } else {
@@ -2517,7 +2558,7 @@
         p.style.alignItems = 'center';
         p.style.lineHeight = '1';
         p.style.justifyContent = 'center';
-        const rank = cell.dataset.rank.replace(/\w+-|だけ/g,'');
+        const rank = cell.dataset.rank.replace(/\w+-|????/g,'');
         p.textContent = rank;
         if (rank.length === 3) p.style.fontSize = '14px';
         if (rank.length === 4) p.style.fontSize = '13px';
@@ -2571,7 +2612,7 @@
       timestamp.style.whiteSpace = 'nowrap';
 
       const regionDiv = document.createElement('div');
-      const progress = `${currentPeriod}期 ${currentProgress}%`;
+      const progress = `${currentPeriod}?? ${currentProgress}%`;
       if (region) regionDiv.innerText = `${progress}\ntarget: ${region}\n${next}`;
       else regionDiv.innerText = next;
       regionDiv.style.fontSize = '90%';
@@ -2596,52 +2637,52 @@
 
     const messageTypes = {
       breaktime: [
-        'チームに参加または離脱してから間もないため、次のバトルが始まるまでお待ちください。',
-        'もう一度バトルに参加する前に、待たなければなりません。',
-        'ng: ちょっとゆっくり'
+        '?`?[????Q?????????E????????????????A????o?g?????n??????????????????B',
+        '??????x?o?g????Q??????O??A???????????????B',
+        'ng: ?????????????'
       ],
       toofast: [
         'ng<>too fast'
       ],
       retry: [
-        'あなたのチームは動きを使い果たしました。しばらくお待ちください。'
+        '???????`?[??????????g?????????????B????炭??????????????B'
       ],
       reset: [
-        'このタイルは攻撃できません。範囲外です。'
+        '????^?C????U??????????B???O????B'
       ],
       quit: [
-        '最初にチームに参加する必要があります。',
-        'どんぐりが見つかりませんでした。',
-        'あなたのどんぐりが理解できませんでした。',
-        'レベルが低すぎます。'
+        '?????`?[????Q??????K?v?????????B',
+        '?? 肪????????????????B',
+        '???????? 肪?????????????????B',
+        '???x????????????B'
       ],
       guardError: [
-        '[警備員]だけ'
+        '[?x????]????'
       ],
       equipError: [
-        '武器と防具を装備しなければなりません。',
-        '装備している防具と武器が力不足です。',
-        '装備している防具と武器が強すぎます',
-        '装備しているものは改造が多すぎます。改造の少ない他のものをお試しください',
-        '参加するには、装備中の武器と防具のアイテムID'
+        '?????h?? ???????????????B',
+        '???????????h????????s??????B',
+        '???????????h???????????????',
+        '??????????????????????????????B????????????????????????????????',
+        '?Q????????A????????????h???A?C?e??ID'
       ],
       nonAdjacent: [
-        'このタイルは攻撃できません。あなたのチームが首都を持つまで、どの首都にも隣接するタイルを主張することはできません。',
-        'あなたのチームは首都を持っていないため、他のチームの首都に攻撃できません。'
+        '????^?C????U??????????B???????`?[??????s????????A????s?????????^?C?????????邱??????????B',
+        '???????`?[?????s????????????????A????`?[?????s??U??????????B'
       ],
       teamAdjacent: [
-        'このタイルは攻撃できません。あなたのチームの制御領土に隣接していなければなりません。',
-        'このタイルは攻撃できません。首都を奪取するには、隣接タイルを少なくとも3つ支配している必要があります。',
-        'このタイルは攻撃できません。首都を奪取するには、隣接タイルを少なくとも2つ支配している必要があります。',
-        'このタイルは攻撃できません。首都を奪取するには、隣接タイルを少なくとも1つ支配している必要があります。',
-        'このタイルは攻撃できません。自分の首都は攻撃できません。',
-        'この首都は攻撃できません。相手の総タイル数の少なくとも'
+        '????^?C????U??????????B???????`?[????????y????????????????????B',
+        '????^?C????U??????????B??s??D??????A???^?C????????????3??x?z???????K?v?????????B',
+        '????^?C????U??????????B??s??D??????A???^?C????????????2??x?z???????K?v?????????B',
+        '????^?C????U??????????B??s??D??????A???^?C????????????1??x?z???????K?v?????????B',
+        '????^?C????U??????????B???????s??U??????????B',
+        '?????s??U??????????B???????^?C?????????????'
       ],
       capitalAdjacent: [
-        'このタイルは攻撃できません。混雑したマップでは、初期主張は正確に1つの首都に隣接していなければなりません。'
+        '????^?C????U??????????B???G?????}?b?v???A??????????m??1????s????????????????????B'
       ],
       mapEdge: [
-        'このタイルは攻撃できません。混雑したマップでは、初期主張はマップの端でなければなりません。'
+        '????^?C????U??????????B???G?????}?b?v???A????????}?b?v??[?????????????B'
       ]
     }
 
@@ -2667,14 +2708,14 @@
           if (res.ok) {
             const text = await res.text();
             const doc = new DOMParser().parseFromString(text, 'text/html');
-            const target = Array.from(doc.querySelectorAll('header span')).find(s => s.textContent.includes('チーム:'));
+            const target = Array.from(doc.querySelectorAll('header span')).find(s => s.textContent.includes('?`?[??:'));
             if (target) {
               const raw = target.textContent;
-              if (raw.includes('レッド')) {
-                teamName = 'レッド';
+              if (raw.includes('???b?h')) {
+                teamName = '???b?h';
                 teamColor = 'd32f2f';
-              } else if (raw.includes('ブルー')) {
-                teamName = 'ブルー';
+              } else if (raw.includes('?u???[')) {
+                teamName = '?u???[';
                 teamColor = '1976d2';
               }
             }
@@ -2706,7 +2747,7 @@
           let errorCount = 0;
           let next;
           try {
-            const [cellRank, equipChangeStat] = await equipChange(region);
+            const [cellRank, equipChangeStat] = await equipChange(region, MODE);
             if (equipChangeStat === 'noEquip') {
               excludeSet.add(region.join(','));
               continue;
@@ -2718,9 +2759,9 @@
             let processType;
             let sleepTime = 2;
 
-            if (text.startsWith('アリーナチャレンジ開始')||text.startsWith('リーダーになった')) {
+            if (text.startsWith('?A???[?i?`???????W?J?n')||text.startsWith('???[?_?[??????')) {
               success = true;
-              message = '[成功] ' + lastLine;
+              message = '[????] ' + lastLine;
               processType = 'return';
             } else if (messageType === 'breaktime') {
               success = true;
@@ -2739,10 +2780,10 @@
               message += ` (${cellRank}, ${currentEquipName})`;
               processType = 'continue';
             } else if (lastLine.length > 100) {
-              message = 'どんぐりシステム';
+              message = '?? ?V?X?e??';
               processType = 'continue';
             } else if (messageType === 'quit') {
-              message = '[停止] ' + lastLine;
+              message = '[??~] ' + lastLine;
               processType = 'return';
               clearInterval(autoJoinIntervalId);
             } else if (messageType === 'reset') {
@@ -2780,13 +2821,13 @@
                } else {
                 nextProgress = 3;
                }
-              next = `→ ${nextProgress}±2%`;
+              next = `?? ${nextProgress}?}2%`;
               isAutoJoinRunning = false;
             } else if (processType === 'return') {
               next = '';
               isAutoJoinRunning = false;
             } else {
-              next = `→ ${sleepTime}s`;
+              next = `?? ${sleepTime}s`;
             }
 
             logMessage(region, message, next);
@@ -2817,8 +2858,8 @@
                 message = e;
                 break;
             }
-            if (e.message === '再ログインしてください') {
-              logMessage(region, '[停止] どんぐりが見つかりませんでした', '');
+            if (e.message === '????O?C?????????????') {
+              logMessage(region, '[??~] ?? 肪???????????????', '');
               isAutoJoinRunning = false;
               clearInterval(autoJoinIntervalId);
               return;
@@ -2831,11 +2872,11 @@
               errorCount++;
               let sleepTime = 20 * errorCount;
               if(sleepTime > 600) sleepTime = 600;
-              logMessage(region, message, `→ ${sleepTime}s`);
+              logMessage(region, message, `?? ${sleepTime}s`);
               await sleep(sleepTime * 1000);
             } else {
               let sleepTime = 20;
-              logMessage(region, e, `→ ${sleepTime}s`);
+              logMessage(region, e, `?? ${sleepTime}s`);
               await sleep(sleepTime * 1000);
             }
           }
@@ -2854,15 +2895,15 @@
                } else {
                 nextProgress = 3;
                }
-          const next = `→ ${nextProgress}±2%`;
+          const next = `?? ${nextProgress}?}2%`;
           isAutoJoinRunning = false;
-          logMessage(null, '攻撃可能なタイルが見つかりませんでした。', next);
+          logMessage(null, '?U????\??^?C????????????????????B', next);
           return;
         }
       }
     }
 
-  async function getRegions () {
+    async function getRegions () {
   try {
     const res = await fetch(location.pathname + location.search, { cache: 'no-store' });
     if (!res.ok) throw new Error(`[${res.status}] /teambattle`);
@@ -2908,7 +2949,6 @@
       const payload = JSON.parse(normalizeJsonish(terrainMatch[1]));
       const terrains = Array.isArray(payload?.terrains) ? payload.terrains : [];
       for (const item of terrains) {
-        // HTML側は x/y のことが多い（あなたの提示HTMLもそう）:contentReference[oaicite:3]{index=3}
         const r = (item.r ?? item.row ?? item.x);
         const c = (item.c ?? item.col ?? item.y);
         if (!Number.isFinite(r) || !Number.isFinite(c)) continue;
@@ -2945,7 +2985,7 @@
       return adjacentSet.has(k) && !waterSet.has(k);
     });
 
-    // 自チーム色＋その隣接（★ここが元コードで落ちてた箇所を修正）
+    // 自チーム色＋その隣接
     const normalizeColor = (v) => String(v || '').replace('#','').toLowerCase();
     const myColor = normalizeColor(teamColor);
 
@@ -2955,7 +2995,7 @@
     }
 
     const teamAdjacentSet = new Set();
-    for (const k of teamColorSet) { // ← 正しい
+    for (const k of teamColorSet) {
       const [tr, tc] = k.split('-').map(Number);
       for (const [dr, dc] of directions) {
         const nr = tr + dr, nc = tc + dc;
@@ -3006,6 +3046,170 @@
     return { nonAdjacent: [], capitalAdjacent: [], teamAdjacent: [], mapEdge: [] };
   }
 }
+');
+        cellColors = JSON.parse(validJsonStr);
+
+        const capitalListMatch = scriptContent.match(/const capitalList = (\[.*?\]);/s);
+        capitalMap = JSON.parse(capitalListMatch[1]);
+
+        const gridSizeMatch = scriptContent.match(/const GRID_SIZE = (\d+);/);
+        rows = cols = Number(gridSizeMatch[1]);
+
+        const terrainMatch = scriptContent.match(/const terrainsPayload = ({.+?});/s);
+        if (terrainMatch) {
+          const payload = JSON.parse(terrainMatch[1]);
+          payload.terrains.forEach(item => {
+            if (item.t === 'w') waterSet.add(`${item.x}-${item.y}`);
+          });
+        }
+
+        const cells = [];
+        for (let r = 0; r < rows; r++) {
+          for (let c = 0; c < cols; c++) {
+            cells.push([r, c]);
+          }
+        }
+
+        const directions = [[-1, 0], [1, 0], [0, -1], [0, 1]];
+
+        const adjacentSet = new Set();
+        for (const [cr, cc] of capitalMap) {
+          for (const [dr, dc] of directions) {
+            const nr = cr + dr;
+            const nc = cc + dc;
+            if (nr >= 0 && nr < rows && nc >= 0 && nc < cols) {
+              adjacentSet.add(`${nr}-${nc}`);
+            }
+          }
+        }
+
+        const capitalSet = new Set(capitalMap.map(([r, c]) => `${r}-${c}`));
+
+        const nonAdjacentCells = cells.filter(([r, c]) => {
+          const key = `${r}-${c}`;
+          return !capitalSet.has(key) && !adjacentSet.has(key) && !waterSet.has(key);
+        });
+
+        const capitalAdjacentCells = cells.filter(([r, c]) => {
+          const key = `${r}-${c}`;
+          return adjacentSet.has(key) && !waterSet.has(key);
+        });
+
+        const teamColorSet = new Set();
+        for(const [key, value] of Object.entries(cellColors)) {
+          if (teamColor === value.replace('#','')) {
+            teamColorSet.add(key);
+          }
+        }
+
+        const teamAdjacentSet = new Set();
+        for (const key of [...teamColorSet]) {
+          const [tr, tc] = key.split('-');
+          for (const [dr, dc] of directions) {
+            const nr = Number(tr) + dr;
+            const nc = Number(tc) + dc;
+            if (nr >= 0 && nr < rows && nc >= 0 && nc < cols) {
+              teamAdjacentSet.add(`${nr}-${nc}`);
+            }
+          }
+        }
+
+        const teamAdjacentCells = cells.filter(([r, c]) => {
+          const key = `${r}-${c}`;
+          return (teamColorSet.has(key) || teamAdjacentSet.has(key)) && !waterSet.has(key);
+        })
+
+        const mapEdgeSet = new Set();
+        for (let i=0; i<rows; i++) {
+          mapEdgeSet.add(`${i}-0`);
+          mapEdgeSet.add(`${i}-${cols-1}`);
+        }
+        for (let i=0; i<cols; i++) {
+          mapEdgeSet.add(`0-${i}`);
+          mapEdgeSet.add(`${rows-1}-${i}`);
+        }
+
+        const mapEdgeCells = cells.filter(([r, c]) => {
+          const key = `${r}-${c}`;
+          return mapEdgeSet.has(key) && !capitalSet.has(key) && !waterSet.has(key);
+        })
+
+        function shuffle(arr) {
+          for (let i = arr.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [arr[i], arr[j]] = [arr[j], arr[i]];
+          }
+          return arr;
+        }
+
+        const regions = {
+          nonAdjacent: shuffle(nonAdjacentCells),
+          capitalAdjacent: shuffle(capitalAdjacentCells),
+          teamAdjacent: shuffle(teamAdjacentCells),
+          mapEdge: shuffle(mapEdgeCells)
+        };
+        return regions;
+      } catch (e) {
+        console.error(e);
+        return;
+      }
+    }
+
+    async function challenge (region) {
+      const [ row, col ] = region;
+      const body = `row=${row}&col=${col}`;
+      try {
+        const res = await fetch('/teamchallenge?'+MODE, {
+          method: 'POST',
+          body: body,
+          headers: headers
+        })
+
+        if(!res.ok) throw new Error(res.status);
+        const text = await res.text();
+        const lastLine = text.trim().split('\n').pop();
+        return [ text, lastLine ];
+      } catch (e) {
+        console.error(e);
+        throw e;
+      }
+
+    }
+    async function equipChange (region) {
+      const [ row, col ] = region;
+      const url = `https://donguri.5ch.net/teambattle?r=${row}&c=${col}&`+MODE;
+      try {
+        const res = await fetch(url);
+        if(!res.ok) throw new Error(`[${res.status}] /teambattle?r=${row}&c=${col}`);
+        const text = await res.text();
+        const doc = new DOMParser().parseFromString(text,'text/html');
+        const headerText = doc?.querySelector('header')?.textContent || '';
+        if(!headerText.includes('?? ?`?[????')) return Promise.reject(`title.ng`);
+        const table = doc.querySelector('table');
+        if(!table) throw new Error('table.ng');
+        const equipCond = table.querySelector('td small').textContent;
+        const rank = equipCond
+          .replace('?G???[?g','e')
+          .replace(/.+????|\w+-|???|????|?x????|?x|\s|\[|\]|\|/g,'');
+        const autoEquipItems = JSON.parse(localStorage.getItem('autoEquipItems')) || {};
+        const autoEquipItemsAutojoin = JSON.parse(localStorage.getItem('autoEquipItemsAutojoin')) || {};
+
+        if (autoEquipItemsAutojoin[rank]?.length > 0) {
+          const index = Math.floor(Math.random() * autoEquipItemsAutojoin[rank].length);
+          await setPresetItems(autoEquipItemsAutojoin[rank][index]);
+          return [rank, 'success'];
+        } else if (autoEquipItems[rank]?.length > 0) {
+          const index = Math.floor(Math.random() * autoEquipItems[rank].length);
+          await setPresetItems(autoEquipItems[rank][index]);
+          return [rank, 'success'];
+        } else {
+          return [rank, 'noEquip'];
+        }
+      } catch (e) {
+        console.error(e);
+        throw e;
+      }
+    }
 
     if (!isAutoJoinRunning) {
       attackRegion();
@@ -3025,7 +3229,7 @@
       let str,min,totalSec,sec,margin;
 
       if (currentProgress === 0 || currentProgress === 50 || (location.href.includes('/teambattle?m=rb') && (currentProgress === 16 || currentProgress === 33 || currentProgress === 66 || currentProgress === 83))) {
-        str = '（マップ更新）';
+        str = '?i?}?b?v?X?V?j';
       } else {
         if (currentProgress === 100) {
           min = 0;
@@ -3054,15 +3258,15 @@
           sec = totalSec % 60;
           margin = 20;
         }
-        str = '（残り' + min + '分' + sec + '秒 \xb1' + margin + '秒）';
+        str = '?i?c??' + min + '??' + sec + '?b \xb1' + margin + '?b?j';
       }
       progressBarBody.textContent = currentProgress + '%';
       progressBarBody.style.width = currentProgress + '%';
-      progressBarInfo.textContent = `${MODENAME}第${currentPeriod}期${str}`;
+      progressBarInfo.textContent = `${MODENAME}??${currentPeriod}??${str}`;
 
       const statBlock = doc.querySelector('.stat-block');
-      wood = statBlock.textContent.match(/木材の数: (\d+)/)[1];
-      steel = statBlock.textContent.match(/鉄の数: (\d+)/)[1];
+      wood = statBlock.textContent.match(/?????: (\d+)/)[1];
+      steel = statBlock.textContent.match(/?S???: (\d+)/)[1];
     } catch (e) {
       console.error(e+' drawProgressBar()')
     }
@@ -3075,7 +3279,7 @@
     autoJoin();
   }
   let progressBarIntervalId = setInterval(drawProgressBar, 18000);
-  (()=>{ // autoJoinとprogressBarのinterval管理
+  (()=>{ // autoJoin??progressBar??interval???
     function stopAutoJoin() {
       if (autoJoinIntervalId) {
         clearInterval(autoJoinIntervalId);
