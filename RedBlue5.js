@@ -316,7 +316,31 @@
             localStorage.setItem('aat_settings',JSON.stringify(settings));
           })
         }
+          // ===== AutoFill toggle (attack/fill continuously) =====
+         {
+            const label_ = label.cloneNode();
+            const span_ = span.cloneNode();
+            const span2_ = span2.cloneNode();
+            const cb = document.createElement('input');
+            cb.type = 'checkbox';
+            cb.checked = !!settings.autoFillEnabled;
+            span_.textContent = 'AutoFill (continuous)';
+            span2_.append(cb);
+            label_.append(span_, span2_);
+            div.append(label_);
 
+            cb.addEventListener('change', () => {
+              settings.autoFillEnabled = cb.checked;
+              localStorage.setItem('aat_settings', JSON.stringify(settings));
+            });
+
+            const note = document.createElement('p');
+            note.style.margin = '6px 0 0';
+            note.style.fontSize = '85%';
+            note.textContent = 'ON: success後に「%待ち」へ入らず、短い待機(秒)で連続攻撃します。';
+            div.append(note);
+          }
+          // ===== /AutoFill toggle =====
         const description = document.createElement('p');
         description.style.fontSize = '90%';
         description.innerText = 'チームカラーは小文字/大文字も正確に入力してください。（自陣の隣接タイル取得に必要）\nあらかじめ装備パネルからエリートも含め各ランクの装備を登録してください。（所持していない場合は除く）\n※装備を登録していないと成功率が低下します。'
