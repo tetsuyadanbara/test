@@ -3022,22 +3022,25 @@ function pickNextUnexplored(allCells, exploredSet) {
       }
 
       let regions = await getRegions();
-      const excludeSet = new Set();
+       const excludeSet = new Set();
 
-      let cellType;
-      if (regions.nonAdjacent.length > 0) {
-        cellType = 'nonAdjacent';
-      } else if (regions.teamAdjacent.length > 0) {
-        cellType = 'teamAdjacent';
-      } else if (regions.capitalAdjacent.length > 0) {
-        cellType = 'capitalAdjacent';
-      } else {
-        cellType = 'mapEdge';
-      }
+       const pickCellType = (rgn) => {
+         if (rgn.nonAdjacent.length > 0) return 'nonAdjacent';
+         if (rgn.teamAdjacent.length > 0) return 'teamAdjacent';
+         if (rgn.capitalAdjacent.length > 0) return 'capitalAdjacent';
+         return 'mapEdge';
+       };
 
-      while(dialog.open) {
-        let success = false;
-        isAutoJoinRunning = true;
+       while(dialog.open) {
+         let cellType = pickCellType(regions);
+
+         let success = false;
+         isAutoJoinRunning = true;
+
+         // ※ cellType は毎周回 pickCellType(regions) で更新される
+
+
+
 
         regions[cellType] = regions[cellType]
           .filter(e => !excludeSet.has(e.join(',')));
@@ -3192,24 +3195,34 @@ function pickNextUnexplored(allCells, exploredSet) {
             }
           }
         }
-        if (!success && regions[cellType].length === 0) {
-              if (currentProgress < 7) {
-                nextProgress = 20;
-               } else if (currentProgress < 24) {
-                nextProgress = 37;
-               } else if (currentProgress < 41) {
-                nextProgress = 53;
-               } else if (currentProgress < 57) {
-                nextProgress = 70;
-               } else if (currentProgress < 74) {
-                nextProgress = 86;
-               } else {
-                nextProgress = 3;
-               }
-          const next = `→ ${nextProgress}±2%`;
-          isAutoJoinRunning = false;
-          logMessage(null, '攻撃可能なタイルが見つかりませんでした。', next);
-          return;
+        if (!success) {
+           const allEmpty = ['nonAdjacent','teamAdjacent','capitalAdjacent','mapEdge']
+             .every(k => (regions[k] || []).length === 0);
+
+           if (!allEmpty) {
+             // 他カテゴリに候補がある：次周回で cellType を更新して続行
+             continue;
+           }
+
+           // 全カテゴリ空：ここで初めて「次の%待ち」で停止
+           if (currentProgress < 7) {
+             nextProgress = 20;
+           } else if (currentProgress < 24) {
+             nextProgress = 37;
+           } else if (currentProgress < 41) {
+             nextProgress = 53;
+           } else if (currentProgress < 57) {
+             nextProgress = 70;
+           } else if (currentProgress < 74) {
+             nextProgress = 86;
+           } else {
+             nextProgress = 3;
+           }
+           const next = `→ ${nextProgress}±2%`;
+           isAutoJoinRunning = false;
+           logMessage(null, '攻撃可能なタイルが見つかりませんでした。', next);
+           return;
+         }
         }
       }
     }
