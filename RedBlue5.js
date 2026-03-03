@@ -3035,11 +3035,13 @@ function pickNextUnexplored(allCells, exploredSet) {
             if (text.startsWith('アリーナチャレンジ開始')||text.startsWith('リーダーになった')) {
               success = true;
               message = '[成功] ' + lastLine;
-              processType = 'return';
+              if (settings && settings.autoFillEnabled) sleepTime = 3;
+              processType = (settings && settings.autoFillEnabled) ? 'break' : 'return';
             } else if (messageType === 'breaktime') {
               success = true;
               message = lastLine;
-              processType = 'return';
+              if (settings && settings.autoFillEnabled) sleepTime = 3;
+              processType = (settings && settings.autoFillEnabled) ? 'break' : 'return';
             } else if (messageType === 'toofast') {
               sleepTime = 3;
               processType = 'continue';
@@ -3101,7 +3103,7 @@ function pickNextUnexplored(allCells, exploredSet) {
                 nextProgress = 3;
                }
               next = `→ ${nextProgress}±2%`;
-              isAutoJoinRunning = false;
+              if (!(settings && settings.autoFillEnabled)) isAutoJoinRunning = false;
             } else if (processType === 'return') {
               next = '';
               isAutoJoinRunning = false;
