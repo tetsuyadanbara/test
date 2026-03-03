@@ -2970,10 +2970,11 @@ function pickNextUnexplored(allCells, exploredSet) {
 
     let nextProgress;
     async function attackRegion () {
-      await drawProgressBar();
-      if (isAutoJoinRunning || Math.abs(nextProgress - currentProgress) >= 3) {
-        return;
-      }
+       await drawProgressBar();
+       const autoFill = !!(settings && settings.autoFillEnabled);
+       if (isAutoJoinRunning) return;
+       if (!autoFill && Math.abs(nextProgress - currentProgress) >= 3) return;
+
 
     if (location.href.includes('/teambattle?m=rb')) {
         try {
@@ -3084,32 +3085,37 @@ function pickNextUnexplored(allCells, exploredSet) {
 
             if (success) {
               if (settings && settings.autoFillEnabled) {
-              const u = new URL(location.href);
-              const r = Number(u.searchParams.get('r'));
-              const c = Number(u.searchParams.get('c'));
-              if (Number.isFinite(r) && Number.isFinite(c)) __autoFill.markAttacked(r, c);
-               }
-              if (currentProgress < 7) {
-                nextProgress = 20;
-               } else if (currentProgress < 24) {
-                nextProgress = 37;
-               } else if (currentProgress < 41) {
-                nextProgress = 53;
-               } else if (currentProgress < 57) {
-                nextProgress = 70;
-               } else if (currentProgress < 74) {
-                nextProgress = 86;
+                const u = new URL(location.href);
+                const r = Number(u.searchParams.get('r'));
+                const c = Number(u.searchParams.get('c'));
+                if (Number.isFinite(r) && Number.isFinite(c)) __autoFill.markAttacked(r, c);
+
+                 // AutoFill中は「次の%待ち」に入らない
+                 nextProgress = currentProgress;
+                 next = `→ ${sleepTime}s`;
                } else {
-                nextProgress = 3;
+                 if (currentProgress < 7) {
+                   nextProgress = 20;
+                 } else if (currentProgress < 24) {
+                   nextProgress = 37;
+                 } else if (currentProgress < 41) {
+                   nextProgress = 53;
+                 } else if (currentProgress < 57) {
+                   nextProgress = 70;
+                 } else if (currentProgress < 74) {
+                   nextProgress = 86;
+                 } else {
+                   nextProgress = 3;
+                 }
+                 next = `→ ${nextProgress}±2%`;
+                 isAutoJoinRunning = false;
                }
-              next = `→ ${nextProgress}±2%`;
-              if (!(settings && settings.autoFillEnabled)) isAutoJoinRunning = false;
-            } else if (processType === 'return') {
-              next = '';
-              isAutoJoinRunning = false;
-            } else {
-              next = `→ ${sleepTime}s`;
-            }
+             } else if (processType === 'return') {
+               next = '';
+               isAutoJoinRunning = false;
+             } else {
+               next = `→ ${sleepTime}s`;
+             }
 
             logMessage(region, message, next);
             await sleep(sleepTime * 1000);
