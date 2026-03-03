@@ -19,15 +19,15 @@
       currentEquip[index] = equipId;
       localStorage.setItem('current_equip', JSON.stringify(currentEquip));
     }
-    const tableIds = ['weaponTable', 'armorTable', 'necklaceTable'];
-    tableIds.forEach((elm, index)=>{
-      const equipLinks = document.querySelectorAll(`#${elm} a[href^="https://donguri.5ch.net/equip/"]`);
-      [...equipLinks].forEach(link => {
-        link.addEventListener('click', ()=>{
-          saveCurrentEquip(link.href, index);
-        })
-      })
-    })
+       const tableIds = ['weaponTable', 'armorTable', 'necklaceTable'];
+       tableIds.forEach((elm, index)=>{
+         const equipLinks = document.querySelectorAll(`#${elm} a[href^="https://donguri.5ch.net/equip/"]`);
+         [...equipLinks].forEach(link => {
+           link.addEventListener('click', ()=>{
+             saveCurrentEquip(link.href, index);
+           })
+         })
+       })
     return;
   }
 
