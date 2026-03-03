@@ -48,42 +48,53 @@
   const settings = JSON.parse(localStorage.getItem('aat_settings')) || {};
 
   const header = document.querySelector('header');
-  header.style.marginTop = '100px';
-  const toolbar = document.createElement('div');
-  toolbar.style.position = 'fixed';
-  toolbar.style.top = '0';
-  toolbar.style.zIndex = '1';
-  toolbar.style.background = '#fff';
-  toolbar.style.border = 'solid 1px #000';
-  (()=>{ // settings.toolbarPosition
-    const position = settings.toolbarPosition || 'left';
-    let distance = settings.toolbarPositionLength || '0px';
+   const toolbarHost = header || document.body; // header無い場合の退避先
+   if (!header) {
+     console.warn('[AAT] <header> not found. Fallback to document.body.');
+   } else {
+     header.style.marginTop = '100px';
+   }
+ 
+   const toolbar = document.createElement('div');
+   toolbar.style.position = 'fixed';
+   toolbar.style.top = '0';
+   toolbar.style.zIndex = '1';
+   toolbar.style.background = '#fff';
+   toolbar.style.border = 'solid 1px #000';
 
-    const match = distance.match(/^(\d+)(px|%|vw)?$/);
-    let value = match ? parseFloat(match[1]) : 0;
-    let unit = match ? match[2] || 'px' : 'px';
-
-    const maxPx = vw / 3;
-    const maxPercent = 33;
-    const maxVw = 33;
-    if (unit === 'px') value = Math.min(value, maxPx);
-    else if (unit === '%') value = Math.min(value, maxPercent);
-    else if (unit === 'vw') value = Math.min(value, maxVw);
-
-    distance = `${value}${unit}`;
-
-    if (position === 'left') {
-      toolbar.style.left = distance;
-    } else if (position === 'right') {
-      toolbar.style.right = distance;
-    } else if (position === 'center') {
-      toolbar.style.left = distance;
-      toolbar.style.right = distance;
-    }
-  })();
-  const h4 = header.querySelector('h4');
-  if (h4) h4.style.display = 'none';
-  header.append(toolbar);
+   (()=>{ // settings.toolbarPosition
+     const position = settings.toolbarPosition || 'left';
+     let distance = settings.toolbarPositionLength || '0px';
+ 
+     const match = distance.match(/^(\d+)(px|%|vw)?$/);
+     let value = match ? parseFloat(match[1]) : 0;
+     let unit = match ? match[2] || 'px' : 'px';
+ 
+     const maxPx = vw / 3;
+     const maxPercent = 33;
+     const maxVw = 33;
+     if (unit === 'px') value = Math.min(value, maxPx);
+     else if (unit === '%') value = Math.min(value, maxPercent);
+     else if (unit === 'vw') value = Math.min(value, maxVw);
+ 
+     distance = `${value}${unit}`;
+ 
+     if (position === 'left') {
+       toolbar.style.left = distance;
+     } else if (position === 'right') {
+       toolbar.style.right = distance;
+     } else if (position === 'center') {
+       toolbar.style.left = distance;
+       toolbar.style.right = distance;
+     }
+   })();
+ 
+   if (header) {
+     const h4 = header.querySelector('h4');
+     if (h4) h4.style.display = 'none';
+   }
+   // headerが無くても必ず表示されるように host へ付与
+   toolbarHost.append(toolbar);
   const progressBarContainer = document.createElement('div');
   const progressBar = document.createElement('div');
   const progressBarBody = document.createElement('div');
