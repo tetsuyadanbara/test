@@ -1,0 +1,3474 @@
+// ==UserScript==
+// @name         donguri arena assist tool
+// @version      1.2.2d?? Red vs Blue
+// @description  fix arena ui and add functions
+// @author       ?????
+// @match        https://donguri.5ch.net/teambattle?m=hc
+// @match        https://donguri.5ch.net/teambattle?m=l
+// @match        https://donguri.5ch.net/teambattle?m=rb
+// @match        https://donguri.5ch.net/bag
+// ==/UserScript==
+
+
+(()=>{
+  if(location.href === 'https://donguri.5ch.net/bag') {
+    function saveCurrentEquip(url, index) {
+      let currentEquip = JSON.parse(localStorage.getItem('current_equip')) || [];
+      const regex = /https:\/\/donguri\.5ch\.net\/equip\/(\d+)/;
+      const equipId = url.match(regex)[1];
+      currentEquip[index] = equipId;
+      localStorage.setItem('current_equip', JSON.stringify(currentEquip));
+    }
+    const tableIds = ['weaponTable', 'armorTable', 'necklaceTable'];
+    tableIds.forEach((elm, index)=>{
+      const equipLinks = document.querySelectorAll(`#${elm} a[href^="https://donguri.5ch.net/equip/"]`);
+      [...equipLinks].forEach(link => {
+        link.addEventListener('click', ()=>{
+          saveCurrentEquip(link.href, index);
+        })
+      })
+    })
+    return;
+  }
+
+  const MODE = location.search.slice(1);
+
+  let MODENAME;
+  if (MODE === 'm=hc') {
+      MODENAME = '?m?n?[?h?n';
+  } else if (MODE === 'm=l') {
+      MODENAME = '?m???_?[?n';
+  } else {
+      MODENAME = '?m??vs??n';
+  }
+
+  const vw = Math.min(document.documentElement.clientWidth, window.innerWidth || 0);
+  const vh = Math.min(document.documentElement.clientHeight, window.innerHeight || 0);
+
+  const settings = JSON.parse(localStorage.getItem('aat_settings')) || {};
+
+  const header = document.querySelector('header');
+  header.style.marginTop = '100px';
+  const toolbar = document.createElement('div');
+  toolbar.style.position = 'fixed';
+  toolbar.style.top = '0';
+  toolbar.style.zIndex = '1';
+  toolbar.style.background = '#fff';
+  toolbar.style.border = 'solid 1px #000';
+  (()=>{ // settings.toolbarPosition
+    const position = settings.toolbarPosition || 'left';
+    let distance = settings.toolbarPositionLength || '0px';
+
+    const match = distance.match(/^(\d+)(px|%|vw)?$/);
+    let value = match ? parseFloat(match[1]) : 0;
+    let unit = match ? match[2] || 'px' : 'px';
+
+    const maxPx = vw / 3;
+    const maxPercent = 33;
+    const maxVw = 33;
+    if (unit === 'px') value = Math.min(value, maxPx);
+    else if (unit === '%') value = Math.min(value, maxPercent);
+    else if (unit === 'vw') value = Math.min(value, maxVw);
+
+    distance = `${value}${unit}`;
+
+    if (position === 'left') {
+      toolbar.style.left = distance;
+    } else if (position === 'right') {
+      toolbar.style.right = distance;
+    } else if (position === 'center') {
+      toolbar.style.left = distance;
+      toolbar.style.right = distance;
+    }
+  })();
+  const h4 = header.querySelector('h4');
+  if (h4) h4.style.display = 'none';
+  header.append(toolbar);
+  const progressBarContainer = document.createElement('div');
+  const progressBar = document.createElement('div');
+  const progressBarBody = document.createElement('div');
+  const progressBarInfo = document.createElement('p');
+  progressBar.classList.add('progress-bar');
+  progressBar.style.display = 'inline-block';
+  progressBar.style.width = '400px';
+  progressBar.style.maxWidth = '100vw';
+  progressBar.style.height = '20px';
+  progressBar.style.background = '#ccc';
+  progressBar.style.borderRadius = '8px';
+  progressBar.style.fontSize = '16px';
+  progressBar.style.overflow = 'hidden';
+  progressBar.style.marginTop = '5px';
+  progressBarBody.style.height = '100%';
+  progressBarBody.style.lineHeight = 'normal';
+  progressBarBody.style.background = '#428bca';
+  progressBarBody.style.textAlign = 'right';
+  progressBarBody.style.paddingRight = '5px';
+  progressBarBody.style.boxSizing = 'border-box';
+  progressBarBody.style.color = 'white';
+  progressBarInfo.style.marginTop = '0';
+  progressBarInfo.style.marginBottom = '0';
+  progressBarInfo.style.overflow = 'auto';
+  progressBarInfo.style.whiteSpace = 'nowrap';
+
+  progressBarContainer.append(progressBarInfo,progressBar);
+  progressBar.append(progressBarBody)
+  toolbar.append(progressBarContainer);
+
+  // add buttons and select to custom menu
+  let shouldSkipAreaInfo, shouldSkipAutoEquip, cellSelectorActivate, rangeAttackProcessing,
+    currentPeriod, currentProgress;
+  let currentEquipName = '';
+  (()=>{
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.style.flexShrink = '1';
+    button.style.flexGrow = '0';
+    button.style.whiteSpace = 'nowrap';
+    button.style.overflow = 'hidden';
+    button.style.boxSizing = 'border-box';
+    button.style.padding = '2px';
+    button.style.width = '6em';
+    button.style.fontSize = '65%';
+    button.style.border = 'none';
+
+    if (vw < 768) {
+      progressBarContainer.style.fontSize = '60%';
+    }
+
+    const menuButton = button.cloneNode();
+    menuButton.textContent = '?????j???[';
+    menuButton.addEventListener('click', ()=>{
+      const isSubMenuOpen = subMenu.style.display === 'flex';
+      subMenu.style.display = isSubMenuOpen ? 'none' : 'flex';
+    })
+
+    const equipButton = button.cloneNode();
+    equipButton.textContent = '??????';
+    equipButton.addEventListener('click', ()=>{
+      panel.style.display = 'flex';
+    });
+
+    const toggleViewButton = button.cloneNode();
+    toggleViewButton.innerText = '?\??\n?????';
+    toggleViewButton.addEventListener('click', ()=>{
+      toggleCellViewMode();
+    })
+
+
+    const refreshButton = button.cloneNode();
+    refreshButton.innerText = '?G???A???\n?X?V';
+    refreshButton.addEventListener('click',()=>{
+      fetchAreaInfo(false);
+    });
+
+    const skipAreaInfoButton = button.cloneNode();
+    skipAreaInfoButton.innerText = '?Z?????\n?X?L?b?v';
+    skipAreaInfoButton.style.color = '#fff';
+    if (settings.skipArenaInfo) {
+      skipAreaInfoButton.style.background = '#46f';
+      shouldSkipAreaInfo = true;
+    } else {
+      skipAreaInfoButton.style.background = '#888';
+      shouldSkipAreaInfo = false;
+    }
+    skipAreaInfoButton.addEventListener('click', ()=>{
+      if(shouldSkipAreaInfo) {
+        skipAreaInfoButton.style.background = '#888';
+        shouldSkipAreaInfo = false;
+      } else {
+        skipAreaInfoButton.style.background = '#46f';
+        shouldSkipAreaInfo = true;
+      }
+      settings.skipArenaInfo = shouldSkipAreaInfo;
+      localStorage.setItem('aat_settings', JSON.stringify(settings));
+    });
+
+
+    const subMenu = document.createElement('div');
+    subMenu.style.display = 'none';
+    subMenu.style.flexWrap = 'nowrap';
+    subMenu.style.overflowX = 'hidden';
+    subMenu.style.position = 'relative';
+
+    (()=>{
+      const subButton = button.cloneNode();
+      subButton.style.fontSize = '65%';
+      subButton.style.width = '6em';
+      subButton.style.border = 'none';
+      subButton.style.padding = '2px';
+
+      const div = document.createElement('div');
+      div.style.display = 'flex';
+      div.style.flex = '1';
+      div.style.justifyContent = 'center';
+      div.style.gap = '2px';
+      div.style.overflowX = 'auto';
+      div.style.height = '100%';
+
+      const cellButton = subButton.cloneNode();
+      cellButton.innerText = '?G???A???\n??擾';
+      cellButton.addEventListener('click',()=>{
+        fetchAreaInfo(true);
+      });
+
+      const skipAutoEquipButton = subButton.cloneNode();
+      skipAutoEquipButton.textContent = '????????';
+      skipAutoEquipButton.style.color = '#fff';
+      skipAutoEquipButton.classList.add('skip-auto-equip');
+      if (settings.skipAutoEquip) {
+        skipAutoEquipButton.style.background = '#888';
+        shouldSkipAutoEquip = true;
+      } else {
+        skipAutoEquipButton.style.background = '#46f';
+        shouldSkipAutoEquip = false;
+      }
+      skipAutoEquipButton.addEventListener('click', ()=>{
+        if (shouldSkipAutoEquip) {
+          skipAutoEquipButton.style.background = '#46f';
+          shouldSkipAutoEquip = false;
+        } else {
+          skipAutoEquipButton.style.background = '#888';
+          shouldSkipAutoEquip = true;
+        }
+        settings.skipAutoEquip = shouldSkipAutoEquip;
+        localStorage.setItem('aat_settings', JSON.stringify(settings));
+      });
+
+      const slideMenu = document.createElement('div');
+      slideMenu.style.display = 'flex';
+      slideMenu.style.flex = '1';
+      slideMenu.style.justifyContent = 'center';
+      slideMenu.style.gap = '2px';
+      slideMenu.style.position = 'absolute';
+      slideMenu.style.width = '100%';
+      slideMenu.style.height = '100%';
+      slideMenu.style.right = '-100%';
+      slideMenu.style.background = '#fff';
+      slideMenu.style.transition = 'transform 0.1s ease';
+
+
+      const autoJoinButton = subButton.cloneNode();
+      autoJoinButton.innerText = '?????Q??\n???[?h';
+      autoJoinButton.style.background = '#ffb300';
+      autoJoinButton.style.color = '#000';
+      autoJoinButton.addEventListener('click',()=>{
+        autoJoinDialog.showModal();
+        if (!settings.teamColor) {
+          autoJoinSettingsDialog.showModal();
+        } else {
+          startAutoJoin();
+        }
+      })
+
+      const autoJoinDialog = document.createElement('dialog');
+      autoJoinDialog.style.background = '#fff';
+      autoJoinDialog.style.color = '#000';
+      autoJoinDialog.style.width = '90vw';
+      autoJoinDialog.style.height = '90vh';
+      autoJoinDialog.style.fontSize = '80%';
+      autoJoinDialog.style.textAlign = 'center';
+      autoJoinDialog.style.marginTop = '2vh';
+      autoJoinDialog.classList.add('auto-join');
+      document.body.append(autoJoinDialog);
+
+      const autoJoinSettingsDialog = document.createElement('dialog');
+      autoJoinSettingsDialog.style.background = '#fff';
+      autoJoinSettingsDialog.style.color = '#000';
+      autoJoinSettingsDialog.style.textAlign = 'left';
+      autoJoinDialog.append(autoJoinSettingsDialog);
+
+      (()=>{ // autoJoinSettingsDialog
+        const div = document.createElement('div');
+        const input = document.createElement('input');
+        const label = document.createElement('label');
+        label.style.display = 'flex';
+        label.style.width = '100%';
+        const span = document.createElement('span');
+        span.style.whiteSpace = 'nowrap';
+        span.style.width = '50%';
+        const span2 = document.createElement('span');
+        span2.style.width = '50%';
+        const closeButton = document.createElement('button');
+        closeButton.type = 'button';
+        closeButton.textContent = 'OK';
+        closeButton.addEventListener('click',()=>{
+          autoJoinSettingsDialog.close();
+          startAutoJoin();
+        })
+
+        const inputs = {
+          teamName: [input.cloneNode(),'?`?[????'],
+          teamColor: [input.cloneNode(),'?`?[???J???[']
+        }
+        for (const key of Object.keys(inputs)) {
+          const label_ = label.cloneNode();
+          const span_ = span.cloneNode();
+          const span2_ = span2.cloneNode();
+          span_.textContent = inputs[key][1];
+          span2_.append(inputs[key][0]);
+          label_.append(span_, span2_);
+          div.append(label_);
+
+          inputs[key][0].value = settings[key] || '';
+          inputs[key][0].addEventListener('input', ()=>{
+            inputs.teamColor[0].value = inputs.teamColor[0].value.replace(/[^0-9a-fA-F]/g,'');
+            settings[key] = inputs[key][0].value;
+            localStorage.setItem('aat_settings',JSON.stringify(settings));
+          })
+        }
+
+        const description = document.createElement('p');
+        description.style.fontSize = '90%';
+        description.innerText = '?`?[???J???[???????/?????????m????????????????B?i???w????^?C???擾??K?v?j\n????????????p?l??????G???[?g?????e?????N???????o?^????????????B?i????????????????????j\n????????o?^?????????????????????????B'
+        // AutoFill (全マス埋め) toggle
+        const autoFillLabel = document.createElement('label');
+        autoFillLabel.style.display = 'flex';
+        autoFillLabel.style.alignItems = 'center';
+        autoFillLabel.style.gap = '8px';
+        autoFillLabel.style.margin = '8px 0 0 0';
+        const autoFillChk = document.createElement('input');
+        autoFillChk.type = 'checkbox';
+        autoFillChk.checked = !!settings.autoFillEnabled;
+        autoFillChk.addEventListener('change', ()=>{
+          settings.autoFillEnabled = autoFillChk.checked;
+          localStorage.setItem('aat_settings', JSON.stringify(settings));
+        });
+        const autoFillTxt = document.createElement('span');
+        autoFillTxt.textContent = 'AutoFill（自動で全てのマスを埋める）';
+        autoFillLabel.append(autoFillChk, autoFillTxt);
+        div.append(autoFillLabel);
+
+        div.append(description,closeButton);
+        autoJoinSettingsDialog.append(div);
+      })();
+
+      //autoJoin
+      (()=>{
+        const container = document.createElement('div');
+        container.style.display = 'flex';
+        container.style.flexDirection = 'column';
+        container.style.height = '100%';
+        container.style.color = '#000';
+
+        const log = document.createElement('div');
+        log.style.margin = '2px';
+        log.style.border = 'solid 1px #000';
+        log.style.overflow = 'auto';
+        log.style.flexGrow = '1';
+        log.style.textAlign = 'left';
+        log.classList.add('auto-join-log');
+
+        const settingsButton = document.createElement('button');
+        settingsButton.textContent = '???';
+        settingsButton.addEventListener('click', ()=>{
+          autoJoinSettingsDialog.showModal();
+          clearInterval(autoJoinIntervalId);
+        })
+        const closeButton = document.createElement('button');
+        closeButton.style.fontSize = '100%';
+        closeButton.textContent = '?????Q?????[?h???I??';
+        closeButton.addEventListener('click', ()=>{
+          autoJoinDialog.close();
+        })
+        //closeButton.autofocus = true; // input???I?[?g?t?H?[?J?X?j?~
+        const p = document.createElement('p');
+        //p.textContent = '????????J??????????????????B??Z600?b';
+        p.textContent = '????????J??????????????????';
+        p.style.margin = '0';
+
+        container.append(log, p, settingsButton, closeButton);
+        autoJoinDialog.append(container);
+      })();
+
+
+      const settingsButton = subButton.cloneNode();
+      settingsButton.textContent = '???';
+      settingsButton.style.background = '#ffb300';
+      settingsButton.style.color = '#000';
+      settingsButton.addEventListener('click', ()=>{
+        settingsDialog.show();
+      })
+
+      const rangeAttackButton = subButton.cloneNode();
+      rangeAttackButton.textContent = '???U??';
+      rangeAttackButton.style.background = '#f64';
+      rangeAttackButton.style.color = '#fff';
+      rangeAttackButton.addEventListener('click', ()=>{
+        slideMenu.style.transform = 'translateX(-100%)';
+        cellSelectorActivate = true;
+      })
+
+      const closeSlideMenuButton = subButton.cloneNode();
+      closeSlideMenuButton.textContent = '????';
+      closeSlideMenuButton.style.background = '#888';
+      closeSlideMenuButton.style.color = '#fff';
+      closeSlideMenuButton.addEventListener('click', ()=>{
+        slideMenu.style.transform = 'translateX(0)';
+        cellSelectorActivate = false;
+      })
+
+      const startRangeAttackButton = subButton.cloneNode();
+      startRangeAttackButton.textContent = '?U???J?n';
+      startRangeAttackButton.style.background = '#f64';
+      startRangeAttackButton.style.color = '#fff';
+      startRangeAttackButton.addEventListener('click', async()=>{
+        rangeAttackProcessing = true;
+        rangeAttackQueue.length = 0;
+        switchRangeAttackButtons();
+        await rangeAttack();
+        rangeAttackProcessing = false;
+        switchRangeAttackButtons();
+      })
+
+      const pauseRangeAttackButton = subButton.cloneNode();
+      pauseRangeAttackButton.textContent = '???f';
+      pauseRangeAttackButton.style.background = '#888';
+      pauseRangeAttackButton.style.color = '#fff';
+      pauseRangeAttackButton.addEventListener('click', ()=>{
+        if (!rangeAttackProcessing) return;
+        rangeAttackProcessing = false;
+        switchRangeAttackButtons();
+      })
+
+      const resumeRangeAttackButton = subButton.cloneNode();
+      resumeRangeAttackButton.textContent = '??J';
+      resumeRangeAttackButton.style.background = '#f64';
+      resumeRangeAttackButton.style.color = '#fff';
+      resumeRangeAttackButton.style.display = 'none';
+      resumeRangeAttackButton.addEventListener('click', async()=>{
+        rangeAttackProcessing = true;
+        switchRangeAttackButtons();
+        await rangeAttack();
+        rangeAttackProcessing = false;
+        switchRangeAttackButtons();
+      })
+
+      function switchRangeAttackButtons (){
+        if(rangeAttackProcessing) {
+          startRangeAttackButton.disabled = true;
+          resumeRangeAttackButton.style.display = 'none';
+          pauseRangeAttackButton.style.display = '';
+        } else {
+          startRangeAttackButton.disabled = false;
+          if (rangeAttackQueue.length > 0) {
+            resumeRangeAttackButton.style.display = '';
+            pauseRangeAttackButton.style.display = 'none';
+          }
+        }
+      }
+
+      const deselectButton = subButton.cloneNode();
+      deselectButton.textContent = '?I??????';
+      deselectButton.style.background = '#888';
+      deselectButton.style.color = '#fff';
+      deselectButton.addEventListener('click', ()=>{
+        const cells = document.querySelectorAll('.cell');
+        cells.forEach(cell => {
+          cell.classList.remove('selected');
+          cell.style.borderColor = '#ccc';
+        });
+      })
+
+      const batchSelectButton = subButton.cloneNode();
+      batchSelectButton.textContent = '???I??';
+      batchSelectButton.style.background = '#ffb300';
+      batchSelectButton.style.color = '#000';
+      batchSelectButton.addEventListener('click', ()=>{
+        batchSelectMenu.style.display = 'flex';
+      })
+      const batchSelectMenu = document.createElement('div');
+      batchSelectMenu.style.display = 'none';
+      batchSelectMenu.style.flex = '1';
+      batchSelectMenu.style.justifyContent = 'center';
+      batchSelectMenu.style.gap = '2px';
+      batchSelectMenu.style.position = 'absolute';
+      batchSelectMenu.style.width = '100%';
+      batchSelectMenu.style.height = '100%';
+      batchSelectMenu.style.background = '#fff';
+
+      (()=>{
+        const ranks = ['N', 'R', 'SR', 'SSR', 'UR'];
+        ranks.forEach(rank=>{
+          const rankButton = subButton.cloneNode();
+          rankButton.style.width = '4.5em';
+          rankButton.style.background = '#ffb300';
+          rankButton.style.color = '#000';
+          rankButton.textContent = rank;
+          rankButton.addEventListener('click', ()=>{
+            const cells = document.querySelectorAll('.cell');
+            cells.forEach(cell => {
+              const cellRank = cell.querySelector('p').textContent;
+              const regex = new RegExp(`\\b${rank}(????)?e?$`);
+              const match = cellRank.match(regex);
+              if(match) {
+                cell.classList.add('selected');
+                cell.style.borderColor = '#f64';
+              } else {
+                cell.classList.remove('selected');
+                cell.style.borderColor = '#ccc';
+              }
+              batchSelectMenu.style.display = 'none';
+            })
+          })
+          batchSelectMenu.append(rankButton);
+        })
+        const closeButton = subButton.cloneNode();
+        closeButton.style.width = '4.5em';
+        closeButton.style.background = '#888';
+        closeButton.style.color = '#fff';
+        closeButton.textContent = '????';
+        closeButton.addEventListener('click', ()=>{
+          batchSelectMenu.style.display = 'none';
+        })
+        batchSelectMenu.prepend(closeButton);
+      })();
+
+      div.append(skipAutoEquipButton, rangeAttackButton, autoJoinButton, settingsButton, cellButton);
+      slideMenu.append(closeSlideMenuButton, startRangeAttackButton, pauseRangeAttackButton, resumeRangeAttackButton, batchSelectButton, deselectButton, batchSelectMenu);
+      subMenu.append(div, slideMenu);
+
+    })();
+
+    const main = document.createElement('div');
+    main.style.display = 'flex';
+    main.style.flexWrap = 'nowrap';
+    main.style.gap = '2px';
+    main.style.justifyContent = 'center';
+    main.append(menuButton, skipAreaInfoButton, equipButton, toggleViewButton, refreshButton);
+
+    toolbar.append(main, subMenu);
+  })();
+
+  const arenaField = document.createElement('dialog');
+  arenaField.style.position = 'fixed';
+  arenaField.style.background = '#fff';
+  arenaField.style.color = '#000';
+  arenaField.style.border = 'solid 1px #000';
+  if(vw < 768) arenaField.style.fontSize = '85%';
+  (()=>{
+    arenaField.style.bottom = settings.arenaFieldBottom ? settings.arenaFieldBottom : '4vh';
+    if (settings.arenaFieldPosition === 'left') {
+      arenaField.style.right = 'auto';
+      arenaField.style.left = settings.arenaFieldPositionLength || '0';
+    } else if (settings.arenaFieldPosition === 'right') {
+      arenaField.style.left = 'auto';
+      arenaField.style.right = settings.arenaFieldPositionLength || '0';
+    }
+
+    if (settings.arenaFieldWidth) {
+      arenaField.style.width = settings.arenaFieldWidth;
+      arenaField.style.maxWidth = '100vw';
+    } else {
+      arenaField.style.maxWidth = '480px';
+    }
+  })();
+
+  const arenaModDialog = document.createElement('dialog');
+  let wood, steel
+
+  (()=>{
+    const div = document.createElement('div');
+    div.style.display = 'flex';
+    div.style.gap = '2px';
+
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.style.fontSize = '90%';
+    button.style.whiteSpace = 'nowrap';
+
+    if (vw < 768) {
+      button.style.fontSize = '80%';
+    }
+
+    const challengeButton = button.cloneNode();
+    challengeButton.textContent = '?G???A?????';
+    challengeButton.style.flexGrow = '2';
+    challengeButton.addEventListener('click', async(e)=>{
+      const table = arenaField.querySelector('table');
+      const { row, col, rank } = table.dataset;
+      autoEquipDialog.style.top = `${e.clientY}px`;
+      autoEquipDialog.style.transform = 'translateY(-60%)';
+      await autoEquipAndChallenge(row, col, rank);
+    })
+
+    const reinforceButton = button.cloneNode();
+    reinforceButton.textContent = '????????';
+    reinforceButton.style.flexGrow = '1';
+    reinforceButton.addEventListener('click', ()=>{
+      arenaModDialog.dataset.action = 'ReinforceArena';
+      modButton.textContent = '????????';
+      p.textContent = `???: ${wood}, ?S: ${steel} (1pt?????e25??)`;
+      arenaModDialog.show();
+    })
+
+    const siegeButton = button.cloneNode();
+    siegeButton.textContent = '????';
+    siegeButton.style.flexGrow = '1';
+    siegeButton.addEventListener('click', ()=>{
+      arenaModDialog.dataset.action = 'SiegeArena';
+      modButton.textContent = '????';
+      p.textContent = `???: ${wood}, ?S: ${steel} (1pt?????e25??)`;
+      arenaModDialog.show();
+    })
+
+    const closeButton = button.cloneNode();
+    closeButton.textContent = '?~';
+    closeButton.marginLeft = 'auto';
+    closeButton.style.fontSize = '24px';
+    closeButton.style.width = '48px';
+    closeButton.style.height = '48px';
+    closeButton.style.lineHeight = '1';
+
+    const p = document.createElement('p');
+    const modButton = button.cloneNode();
+
+    closeButton.addEventListener('click', ()=>{arenaField.close()});
+    const table = document.createElement('table');
+    div.append(challengeButton, reinforceButton, siegeButton, closeButton);
+    arenaField.append(div, table, arenaModDialog);
+    (()=>{
+      arenaModDialog.style.background = '#fff';
+      arenaModDialog.style.border = 'solid 1px #000';
+      arenaModDialog.style.color = '#000';
+      arenaModDialog.style.position = 'fixed';
+      arenaModDialog.style.bottom = '4vh';
+
+      const div = document.createElement('div');
+      div.style.display = 'flex';
+      div.style.gap = '2px';
+
+      const input = document.createElement('input');
+      input.type = 'number';
+      input.placeholder = '???????';
+
+      modButton.addEventListener('click', ()=>{
+        const amt = Number(input.value);
+        const table = arenaField.querySelector('table');
+        const { row, col } = table.dataset;
+        const action = arenaModDialog.dataset.action;
+        arenaMod(row, col, action, amt);
+        arenaModDialog.close();
+      })
+
+      input.addEventListener('keydown', (e)=>{
+        if (e.key === "Enter") {
+          e.preventDefault(); // ??????????dialog????????
+          const amt = Number(input.value);
+          const table = arenaField.querySelector('table');
+          const { row, col } = table.dataset;
+          const action = arenaModDialog.dataset.action;
+          arenaMod(row, col, action, amt);
+          arenaModDialog.close();
+        }
+      })
+
+      div.append(input, modButton);
+      arenaModDialog.append(div, p);
+    })();
+
+    async function arenaMod(row, col, action, amt){
+      const options = {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded'
+        },
+        body: `row=${row}&col=${col}&action=${action}&amt=${amt}&${MODE}`
+      };
+      try{
+        const res = await fetch('/teamvol/', options);
+        if(!res.ok) throw new Error('/teamvol/ failed to load');
+        const text = await res.text();
+        if(text.includes('?????p?b?N???J????')) {
+          open('/craft', '_blank');
+          return;
+        }
+        if(text !== '????????') throw new Error(text);
+        wood = wood - 25 * Math.trunc(amt);
+        steel = steel - 25 * Math.trunc(amt);
+        arenaResult.textContent = text;
+        arenaResult.show();
+      } catch (e) {
+        arenaResult.textContent = e;
+        arenaResult.show();
+      }
+    }
+  })();
+
+  const arenaResult = document.createElement('dialog');
+  arenaResult.style.position = 'fixed';
+  arenaResult.style.bottom = settings.arenaResultBottom ? settings.arenaResultBottom : '4vh';
+  arenaResult.style.left = 'auto';
+  arenaResult.style.background = '#fff';
+  arenaResult.style.color = '#000';
+  arenaResult.style.fontSize = '70%';
+  arenaResult.style.border = 'solid 1px #000';
+  arenaResult.style.margin = '0';
+  arenaResult.style.textAlign = 'left';
+  arenaResult.style.overflowY = 'auto';
+  arenaResult.style.zIndex = '1';
+  (()=>{
+    if (settings.arenaResultHeight) {
+      arenaResult.style.height = settings.arenaResultHeight;
+      arenaResult.style.maxHeight = '100vh';
+    } else {
+      arenaResult.style.height = '60vh';
+      arenaResult.style.maxHeight = '640px';
+    }
+
+    if (settings.arenaResultWidth) {
+      arenaResult.style.width = settings.arenaResultWidth;
+      arenaResult.style.maxWidth = '100vw';
+    } else {
+      arenaResult.style.width = '60%';
+      arenaResult.style.maxWidth = '480px';
+    }
+
+    if (settings.arenaResultPosition === 'left') {
+      arenaResult.style.left = settings.arenaResultPositionLength || '0';
+    } else {
+      arenaResult.style.left = settings.arenaResultPositionLength || 'auto';
+    }
+  })();
+  const helpDialog = document.createElement('dialog');
+  helpDialog.style.background = '#fff';
+  helpDialog.style.color = '#000';
+  helpDialog.style.fontSize = '80%';
+  helpDialog.style.textAlign = 'left';
+  helpDialog.style.maxHeight = '60vh';
+  helpDialog.style.width = '80vw';
+  helpDialog.style.overflow = 'auto';
+  helpDialog.style.position = 'fixed';
+  helpDialog.style.bottom = '8vh';
+  helpDialog.style.left = 'auto';
+
+  window.addEventListener('mousedown', (event) => {
+    if (!arenaResult.contains(event.target) && !rangeAttackProcessing) {
+      arenaResult.close();
+    }
+    if (!arenaModDialog.contains(event.target)) {
+      arenaModDialog.close();
+    }
+    if (!settingsDialog.contains(event.target)) {
+      settingsDialog.close();
+    }
+    if (!panel.contains(event.target)) {
+      panel.style.display = 'none';
+    }
+    if (!helpDialog.contains(event.target)) {
+      helpDialog.close();
+    }
+  });
+  document.body.append(arenaResult, arenaField, helpDialog);
+
+  const grid = document.querySelector('.grid') || document.querySelector('#gridWrap');
+
+  if (grid && grid.parentNode) {
+    grid.parentNode.style.height = null;
+    grid.style.maxWidth = '100%';
+
+    const canvases = grid.querySelectorAll('canvas');
+    canvases.forEach(c => { c.style.display = 'none'; });
+
+    grid.style.display = 'grid';
+    grid.style.justifyContent = 'center';
+  }
+
+  const table = document.querySelector('table');
+  if (table && table.parentNode) {
+    table.parentNode.style.maxWidth = '100%';
+    table.parentNode.style.overflow = 'auto';
+    table.parentNode.style.height = '60vh';
+  }
+
+  //-- settings --//
+  const settingsDialog = document.createElement('dialog');
+  settingsDialog.style.position = 'fixed';
+  settingsDialog.style.top = '0';
+  settingsDialog.style.background = '#f0f0f0';
+  settingsDialog.style.border = 'solid 1px #000';
+  settingsDialog.style.padding = '2px';
+  settingsDialog.style.margin = '0';
+  settingsDialog.style.zIndex = '2';
+  settingsDialog.style.textAlign = 'left';
+  (()=>{
+    if (settings.settingsPanelPosition === 'left') {
+      settingsDialog.style.left = '0';
+    } else {
+      settingsDialog.style.left = 'auto';
+    }
+
+    if (settings.settingsPanelWidth) {
+      settingsDialog.style.width = settings.settingsPanelWidth;
+      settingsDialog.style.minWidth = '20vw';
+      settingsDialog.style.maxWidth = '100vw';
+    } else {
+      settingsDialog.style.width = '400px';
+      settingsDialog.style.maxWidth = '75vw';
+    }
+
+    if (settings.settingsPanelHeight) {
+      settingsDialog.style.height = settings.settingsPanelHeight;
+      settingsDialog.style.maxHeight = '100vh';
+      settingsDialog.style.minHeight = '20vw';
+    } else {
+      settingsDialog.style.height = '96vh';
+    }
+  })();
+  (()=>{
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.style.borderRadius = 'unset';
+    button.style.border = 'solid 1px #000';
+    button.style.background = '#ccc';
+    button.style.color = '#000';
+    button.style.margin = '2px';
+    button.style.height = '42px';
+    button.style.lineHeight = '1';
+    button.style.whiteSpace = 'nowrap';
+    button.style.overflowX = 'hidden';
+
+    const container = document.createElement('div');
+    container.style.display = 'flex';
+    container.style.flexDirection = 'column';
+    container.style.height = '100%';
+    container.style.color = '#000';
+
+    const header = document.createElement('div');
+    header.style.display = 'flex';
+
+    const h2 = document.createElement('h2');
+    h2.textContent = '???'
+    h2.style.fontSize = '1.2rem';
+    h2.style.margin = '2px';
+
+    const closeButton = button.cloneNode();
+    closeButton.textContent = '?~';
+    closeButton.style.marginLeft = 'auto';
+    closeButton.style.background = 'none';
+    closeButton.style.border = 'none';
+    closeButton.style.height = '40px';
+    closeButton.style.width = '40px';
+    closeButton.style.fontSize = '32px';
+    closeButton.style.lineHeight = '1';
+    closeButton.addEventListener('click', ()=>{
+      settingsDialog.close();
+    })
+
+    const settingsMenu = document.createElement('div');
+    settingsMenu.style.flexGrow = '1';
+    settingsMenu.style.overflowY = 'auto';
+    settingsMenu.style.overflowX = 'hidden';
+
+    const settingsButtons = document.createElement('div');
+    settingsButtons.style.display = 'flex';
+
+    (()=>{
+      const saveButton = button.cloneNode();
+      saveButton.textContent = '???';
+      saveButton.addEventListener('click', ()=>{
+        const settingElements = settingsMenu.querySelectorAll('[data-setting]');
+        settingElements.forEach(elm => {
+          if (elm.dataset.type === 'value') {
+            if(elm.value !== '') {
+              settings[elm.dataset.setting] = elm.value;
+            } else {
+              settings[elm.dataset.setting] = null;
+            }
+          }
+          if (elm.dataset.type === 'unit') {
+            const input = elm.querySelector('input');
+            const unit = elm.querySelector('select');
+            if(input.value !== '') {
+              settings[elm.dataset.setting] = input.value + unit.value;
+            } else {
+              settings[elm.dataset.setting] = null;
+            }
+          }
+        })
+        localStorage.setItem('aat_settings', JSON.stringify(settings));
+        location.reload();
+      })
+
+      const cancelButton = button.cloneNode();
+      cancelButton.textContent = '?L?????Z??';
+      cancelButton.addEventListener('click', ()=>{
+        refreshSettings();
+        settingsDialog.close();
+      })
+      function refreshSettings (){
+        const settingElements = settingsMenu.querySelectorAll('[data-setting]');
+        settingElements.forEach(elm => {
+          if (elm.dataset.type === 'value') {
+            if (settings[elm.dataset.setting]) elm.value = settings[elm.dataset.setting];
+            else if (elm.tagName === 'SELECT') elm.selectedIndex = 0;
+            else elm.value = '';
+          }
+          if (elm.dataset.type === 'unit') {
+            const value = settings[elm.dataset.setting];
+            const input = elm.querySelector('input');
+            const unit = elm.querySelector('select');
+            if (value) {
+              const match = value.match(/(\d+)(\D+)/);
+              input.value = match[1];
+              unit.value = match[2];
+            } else {
+              input.value = '';
+              unit.selectedIndex = 0;
+            }
+          }
+        })
+      }
+      settingsButtons.append(saveButton, cancelButton);
+
+      const container = document.createElement('div');
+      container.style.background = 'none';
+      container.style.color = '#000';
+      container.style.padding = '0';
+      container.style.margin = '2px';
+      container.style.border = 'none';
+      container.style.display = 'flex';
+      container.style.flexDirection = 'column';
+      const h3 = document.createElement('h3');
+      h3.style.margin = '8px 0';
+      h3.style.fontSize = '1.1em';
+      h3.style.textDecoration = 'underline';
+      const select = document.createElement('select');
+      select.style.background = '#ddd';
+      select.style.color = '#000';
+      select.style.lineHeight = '1';
+      select.style.width = 'fit-content';
+      const wrapper = document.createElement('div');
+      wrapper.style.display = 'flex';
+      wrapper.style.justifyContent = 'space-between';
+      wrapper.style.whiteSpace = 'nowrap';
+      wrapper.style.padding = '0 2px';
+      const span = document.createElement('span');
+      span.style.flexGrow = '1';
+      span.style.overflowX = 'auto';
+
+      function addHeader (text, elm) {
+        const header = h3.cloneNode();
+        header.textContent = text;
+        elm.append(header);
+      }
+      function createOptions (select, items){
+        if (Array.isArray(items)) {
+          items.forEach(value => select.add(new Option(value, value)));
+        } else if (typeof items === 'object' && items !== null) {
+          Object.entries(items)
+            .forEach(([key, value]) => select.add(new Option(value, key)));
+        }
+      }
+      function wrappingItems (text, elm, parent){
+        const wrapper_ = wrapper.cloneNode();
+        const span_ = span.cloneNode();
+        span_.textContent = text;
+        wrapper_.append(span_, elm);
+        parent.append(wrapper_);
+      }
+      const widthUnit = select.cloneNode();
+      const heightUnit = select.cloneNode();
+      createOptions(widthUnit, ['px','%','vw']);
+      createOptions(heightUnit, ['px','%','vh']);
+      const number = document.createElement('input');
+      number.type = 'number';
+      number.style.background = '#ddd';
+      number.style.color = '#000';
+      number.style.height = '2em';
+      number.style.width = '4em';
+
+      const toolbar = container.cloneNode();
+      addHeader('toolbar', toolbar);
+      const arenaResult = container.cloneNode();
+      addHeader('?A???[?i???O', arenaResult);
+      const arenaField = container.cloneNode();
+      addHeader('?A???[?i???', arenaField);
+      //const grid = container.cloneNode();
+      //addHeader('?O???b?h', grid);
+      const settingsPanel = container.cloneNode();
+      addHeader('???p?l??', settingsPanel);
+      const equipPanel = container.cloneNode();
+      addHeader('?????p?l??', equipPanel);
+
+      const settingItems = {
+        toolbarPosition: {
+          text: '??u:',
+          type: 'select',
+          options: {
+            left: '????',
+            right: '?E??',
+            center: '??????'
+          },
+          parent: toolbar
+        },
+        toolbarPositionLength: {
+          text: '?[?????:',
+          type: 'width',
+          parent: toolbar
+        },
+        arenaResultScrollPosition: {
+          text: '?X?N???[????u:',
+          type: 'select',
+          options: {
+            top: '??',
+            bottom: '??'
+          },
+          parent: arenaResult
+        },
+        arenaResultBottom: {
+          text: '?????????:',
+          type: 'height',
+          parent: arenaResult
+        },
+        arenaResultPosition: {
+          text: '??u:',
+          type: 'select',
+          options: {
+            right: '?E??',
+            left: '????'
+          },
+          parent: arenaResult
+        },
+        arenaResultPositionLength: {
+          text: '???[????????:',
+          type: 'width',
+          parent: arenaResult
+        },
+        arenaResultHeight: {
+          text: '???O?????:',
+          type: 'height',
+          parent: arenaResult
+        },
+        arenaResultWidth: {
+          text: '???O?????:',
+          type: 'width',
+          parent: arenaResult
+        },
+        arenaFieldBottom: {
+          text: '?????????:',
+          type: 'height',
+          parent: arenaField
+        },
+        arenaFieldPosition: {
+          text: '??u:',
+          type: 'select',
+          options: {
+            left: '????',
+            right: '?E??',
+            center: '??????'
+          },
+          parent: arenaField
+        },
+        arenaFieldPositionLength: {
+          text: '?[????????:',
+          type: 'width',
+          parent: arenaField
+        },
+        arenaFieldWidth: {
+          text: '????:',
+          type: 'width',
+          parent: arenaField
+        },
+        settingsPanelPosition: {
+          text: '??u:',
+          type: 'select',
+          options: {
+            right: '?E??',
+            left: '????'
+          },
+          parent: settingsPanel
+        },
+        settingsPanelHeight: {
+          text: '????:',
+          type: 'height',
+          parent: settingsPanel
+        },
+        settingsPanelWidth: {
+          text: '????:',
+          type: 'width',
+          parent: settingsPanel
+        },
+        equipPanelPosition: {
+          text: '??u:',
+          type: 'select',
+          options: {
+            right: '?E??',
+            left: '????'
+          },
+          parent: equipPanel
+        },
+        equipPanelHeight: {
+          text: '????:',
+          type: 'height',
+          parent: equipPanel
+        },
+        equipPanelWidth: {
+          text: '????:',
+          type: 'width',
+          parent: equipPanel
+        }
+      }
+
+      Object.entries(settingItems).forEach(([key,item]) => {
+        if (item.type === 'select') {
+          const elm = select.cloneNode();
+          elm.dataset.setting = key;
+          elm.dataset.type = 'value';
+          createOptions(elm, item.options);
+          wrappingItems(item.text, elm, item.parent);
+        } else if (item.type === 'number') {
+          const elm = number.cloneNode();
+          elm.dataset.setting = key;
+          elm.dataset.type = 'value';
+          wrappingItems(item.text, elm, item.parent);
+        } else if (item.type === 'width') {
+          const elm = document.createElement('div');
+          elm.dataset.setting = key;
+          elm.dataset.type = 'unit';
+          elm.append(number.cloneNode(), widthUnit.cloneNode(true));
+          wrappingItems(item.text, elm, item.parent);
+        } else if (item.type === 'height') {
+          const elm = document.createElement('div');
+          elm.dataset.setting = key;
+          elm.dataset.type = 'unit';
+          elm.append(number.cloneNode(), heightUnit.cloneNode(true));
+          wrappingItems(item.text, elm, item.parent);
+        }
+      })
+
+      settingsMenu.append(toolbar, arenaResult, arenaField, settingsPanel, equipPanel);
+      refreshSettings();
+    })();
+
+    const footer = document.createElement('div');
+    footer.style.fontSize = '80%';
+    footer.style.textAlign = 'right';
+
+    (()=>{
+      const link = document.createElement('a');
+      link.style.color = '#333';
+      link.textContent = '1.2.2d?? Red vs Blue';
+      footer.append(link);
+    })();
+
+    header.append(h2, closeButton);
+    container.append(header, settingsButtons, settingsMenu, footer)
+    settingsDialog.append(container);
+  })();
+
+  document.body.append(settingsDialog);
+
+  //-- ???? --//
+  const panel = document.createElement('div');
+  panel.style.position = 'fixed';
+  panel.style.top = '0';
+  panel.style.background = '#f0f0f0';
+  panel.style.border = 'solid 1px #000';
+  panel.style.padding = '2px';
+  panel.style.zIndex = '1';
+  panel.style.textAlign = 'left';
+  panel.style.display = 'none';
+  panel.style.flexDirection = 'column';
+  (()=>{
+    if (settings.equipPanelPosition === 'left') {
+      panel.style.left = '0';
+    } else {
+      panel.style.right = '0';
+    }
+
+    if (settings.equipPanelWidth) {
+      panel.style.width = settings.equipPanelWidth;
+      panel.style.minWidth = '20vw';
+      panel.style.maxWidth = '100vw';
+    } else {
+      panel.style.width = '400px';
+      panel.style.maxWidth = '75vw';
+    }
+
+    if (settings.equipPanelHeight) {
+      panel.style.height = settings.equipPanelHeight;
+      panel.style.maxHeight = '100vh';
+      panel.style.minHeight = '20vw';
+    } else {
+      panel.style.height = '96vh';
+    }
+  })();
+
+  (()=>{
+    const input = document.createElement('input');
+    const button = document.createElement('button');
+    // input.style.width = '100%';
+    // input.style.boxSizing = 'border';
+    // input.style.background = '#eee';
+    // input.style.color = '#000';
+    // input.style.borderRadius = 'unset';
+    // input.placeholder = '?t?B???^?c';
+    button.type = 'button';
+    button.style.borderRadius = 'unset';
+    button.style.border = 'solid 1px #000';
+    button.style.background = '#ccc';
+    button.style.color = '#000';
+    button.style.margin = '2px';
+    button.style.width = '6em';
+    button.style.fontSize = '65%';
+    button.style.whiteSpace = 'nowrap';
+    button.style.overflow = 'hidden';
+    button.style.lineHeight = '1';
+
+    let currentMode = 'equip';
+    let currentRank = '';
+    let autoEquipMode = 'normal';
+    const presetList = document.createElement('ul');
+    presetList.style.listStyle = 'none';
+    presetList.style.margin = '0';
+    presetList.style.padding = '0';
+    presetList.style.borderTop = 'solid 1px #000';
+    presetList.style.height = '100%';
+    presetList.style.overflowY = 'auto';
+    presetList.style.flexGrow = '1';
+    showEquipPreset();
+
+    const resetCurrentEquip = document.createElement('div');
+    resetCurrentEquip.textContent = '???????????Z?b?g';
+    resetCurrentEquip.style.borderTop = 'solid 1px #000';
+    resetCurrentEquip.style.cursor = 'pointer';
+    resetCurrentEquip.style.color = '#a62';
+    resetCurrentEquip.style.whiteSpace = 'nowrap';
+    resetCurrentEquip.style.overflow = 'hidden';
+    resetCurrentEquip.addEventListener('click', ()=>{
+      localStorage.removeItem('current_equip');
+      const stat = document.querySelector('.equip-preset-stat');
+      stat.textContent = '??????????????????';
+      weaponTable = null;
+      armorTable = null;
+      necklaceTable = null;
+    })
+
+    presetList.addEventListener('click', (event)=>{
+      const presetLi = event.target.closest('li');
+      if(!presetLi) return;
+      const presetName = presetLi.querySelector('span').textContent;
+      if(currentMode === 'equip') {
+        setPresetItems(presetName);
+        const skipAutoEquipButton = document.querySelector('.skip-auto-equip');
+        skipAutoEquipButton.style.background = '#888';
+        shouldSkipAutoEquip = true;
+        settings.skipAutoEquip = true;
+        localStorage.setItem('aat_settings', JSON.stringify(settings));
+      } else if (currentMode === 'remove') {
+        removePresetItems(presetName);
+      } else if (currentMode === 'auto') {
+        selectAutoEquipItems(presetLi, presetName, currentRank);
+      } else if (currentMode === 'edit') {
+        alert('??????');
+      }
+    });
+
+    (()=>{
+      const div = document.createElement('div');
+      div.style.marginTop = '2px';
+      div.style.lineHeight = 'normal';
+      const buttonsContainer = document.createElement('div');
+      buttonsContainer.style.display = 'flex';
+
+      button.style.flex = '0 0 auto';
+
+      /*
+      const closeButton = button.cloneNode();
+      closeButton.textContent = '?~';
+      closeButton.style.marginLeft = 'auto';
+      closeButton.style.background = 'none';
+      closeButton.style.border = 'none';
+      //closeButton.style.height = '40px';
+      closeButton.style.width = '40px';
+      closeButton.style.fontSize = '32px';
+      closeButton.style.lineHeight = '1';
+      closeButton.addEventListener('click', ()=>{
+        panel.style.display = 'none';
+      })
+      */
+
+      const addButton = button.cloneNode();
+      addButton.textContent = '???';
+      addButton.addEventListener('click', async()=>{
+        selectedEquips = {id:[], rank:[]};
+        addButton.disabled = true;
+        await showEquipList();
+        addButton.disabled = false;
+      })
+
+      const removeButton = button.cloneNode();
+      removeButton.textContent = '??';
+      removeButton.dataset.text = '??';
+      removeButton.dataset.mode = 'remove';
+      /*
+      const editButton = button.cloneNode();
+      editButton.textContent = '??W';
+      editButton.dataset.text = '??W';
+      editButton.dataset.mode = 'edit';
+      */
+
+      const equipSettingsButton = button.cloneNode();
+      equipSettingsButton.textContent = '?????o?^';
+      equipSettingsButton.dataset.text = '?????o?^';
+      equipSettingsButton.dataset.mode = 'auto';
+
+      const equipSettingsDialog = document.createElement('dialog');
+      equipSettingsDialog.style.background = '#fff';
+      equipSettingsDialog.style.color = '#000';
+      equipSettingsDialog.style.padding = '1px';
+      equipSettingsDialog.style.maxWidth = '280px';
+      (()=>{
+        const div = document.createElement('div');
+        div.style.display = 'grid';
+        div.style.gap = '2px';
+        div.style.gridTemplateColumns = 'repeat(2, 4em)';
+        div.style.justifyContent = 'center';
+
+        const ranks = ['N', 'Ne', 'R', 'Re', 'SR', 'SRe', 'SSR', 'SSRe', 'UR', 'URe'];
+        ranks.forEach(rank => {
+          const rankButton = button.cloneNode();
+          rankButton.style.width = '100px';
+          rankButton.textContent = rank;
+          rankButton.addEventListener('click',()=>{
+            currentRank = rank;
+            currentMode = 'auto';
+            setMode('auto', equipSettingsButton);
+
+            const target = autoEquipMode === 'autojoin' ? 'autoEquipItemsAutojoin' : 'autoEquipItems';
+            const items = JSON.parse(localStorage.getItem(target)) || {};
+            if(items[rank]) {
+              const li = [...presetList.querySelectorAll('li')];
+              const registeredItems = li.filter(elm => {
+                const name = elm.querySelector('span').textContent;
+                return items[rank].includes(name);
+              })
+              for(const e of registeredItems) {
+                e.style.color = 'rgb(202, 139, 66)';
+              }
+            }
+            equipSettingsDialog.close();
+          })
+          div.append(rankButton);
+        })
+
+        const closeButton = button.cloneNode();
+        closeButton.style.width = '100px';
+        closeButton.style.background = '#caa';
+        closeButton.textContent = '?~';
+        closeButton.addEventListener('click',()=>{
+          equipSettingsDialog.close();
+        })
+
+        const div2 = document.createElement('div');
+        div2.style.textAlign = 'center';
+        const toggleButton = button.cloneNode();
+        toggleButton.textContent = '???p';
+        toggleButton.style.width = '7em';
+        toggleButton.style.background = '#acc';
+        toggleButton.addEventListener('click',()=>{
+          if (autoEquipMode === 'normal') {
+            autoEquipMode = 'autojoin';
+            toggleButton.textContent = '?????Q???p';
+          } else {
+            autoEquipMode = 'normal';
+            toggleButton.textContent = '???p';
+          }
+        })
+
+        const label = document.createElement('label');
+        label.style.fontSize = '80%';
+        const checkRandom = document.createElement('input');
+        checkRandom.type = 'checkbox';
+        if (settings.autoEquipRandomly) checkRandom.checked = true;
+        checkRandom.addEventListener('change', ()=>{
+          settings.autoEquipRandomly = checkRandom.checked;
+          localStorage.setItem('aat_settings', JSON.stringify(settings));
+        })
+        label.append(checkRandom, '?????_??????');
+
+        div.append(closeButton);
+        div2.append(toggleButton,label);
+
+        const description = document.createElement('div');
+        description.innerText = '????g?p????????I??????????????B?o?g???J?n?O??????I????????X??????B?????o?^????????J?n???????????????I????????B\n?q???g: ???C??????1???Z?b?g???g??????????????1????o?^?^????????????g???????邱?????????????o?^??????????????????????????B\n?????A?????_????????`?F?b?N???????A?o?^??????????玩????????_????I??\n\n?????Q???p??o?^?????????A??????p???????????g?p????B?o?^??????????????p???????g?p?B';
+        description.style.fontSize = '70%';
+
+        equipSettingsDialog.append(div, div2, description);
+      })();
+
+      const backupButton = button.cloneNode();
+      backupButton.innerText = '?o?b?N\n?A?b?v';
+
+      const backupDialog = document.createElement('dialog');
+      backupDialog.style.background = '#fff';
+      backupDialog.style.color = '#000';
+      backupDialog.style.left = 'auto';
+      (()=>{
+        const textarea = document.createElement('textarea');
+        textarea.style.background = '#fff';
+        textarea.style.color = '#000';
+        textarea.style.whiteSpace = 'nowrap';
+        textarea.style.width = '70vw';
+        textarea.style.height = '50vh';
+        textarea.style.overflowX = 'auto';
+
+        const div = document.createElement('div');
+        const saveButton = button.cloneNode();
+        saveButton.textContent = '???';
+        saveButton.addEventListener('click', ()=>{
+          const isSuccess = importEquipPresets(textarea.value);
+          if(isSuccess) {
+            backupDialog.close();
+            const equipPresets = JSON.parse(localStorage.getItem('equipPresets')) || {};
+            const autoEquipItems = JSON.parse(localStorage.getItem('autoEquipItems')) || {};
+            const autoEquipItemsAutojoin = JSON.parse(localStorage.getItem('autoEquipItemsAutojoin')) || {};
+
+            const validKeys = new Set(Object.keys(equipPresets));
+
+            for (const target of [autoEquipItems, autoEquipItemsAutojoin]) {
+              for (const key of Object.keys(target)) {
+                target[key] = target[key].filter(v => validKeys.has(v))
+              }
+            }
+            localStorage.setItem('autoEquipItems', JSON.stringify(autoEquipItems));
+            localStorage.setItem('autoEquipItemsAutojoin', JSON.stringify(autoEquipItemsAutojoin));
+          }
+        });
+        const copyButton = button.cloneNode();
+        copyButton.textContent = '?R?s?[';
+        copyButton.addEventListener('click', ()=>{navigator.clipboard.writeText(textarea.value).then(alert('copy'));})
+        const closeButton = button.cloneNode();
+        closeButton.textContent = '?????';
+        closeButton.addEventListener('click', ()=>{backupDialog.close()})
+        div.append(saveButton, copyButton, closeButton);
+        backupDialog.append(textarea, div);
+        backupButton.addEventListener('click', ()=>{
+          const data = localStorage.getItem('equipPresets');
+          if(data) {
+            const json = JSON.parse(data);
+            const formattedString = Object.entries(json)
+              .map(([key, value]) => {return `  "${key.replace(/"/g,'\\"')}": ${JSON.stringify(value)}`;})
+              .join(',\n');
+            textarea.value = `{\n${formattedString}\n}`;
+          }
+          backupDialog.showModal();
+        })
+      })();
+
+      [removeButton].forEach(button => {
+        button.addEventListener('click', () => {
+          const mode = button.dataset.mode;
+          if (currentMode === mode) {
+            resetMode();
+            return;
+          }
+          setMode(mode, button);
+        })
+      });
+
+      equipSettingsButton.addEventListener('click',()=>{
+        equipSettingsDialog.showModal();
+        resetMode();
+      })
+      function setMode(mode, button) {
+        resetMode();
+        currentMode = mode;
+        button.textContent = '????';
+        button.classList.add('active');
+        if(mode === 'remove') stat.textContent = '?????????????I??';
+        else if (mode === 'edit') stat.textContent = '?N???b?N???W';
+        else if (mode === 'auto') stat.textContent = '?N???b?N??I??(?????I????)';
+      }
+
+      function resetMode() {
+        if (currentMode) {
+          const activeButton = document.querySelector('.active');
+          if (activeButton) {
+            activeButton.textContent = activeButton.dataset.text;
+            activeButton.classList.remove('active');
+          }
+          if (currentMode === 'auto') {
+            for(const li of presetList.querySelectorAll('li')) {
+              li.style.color = 'rgb(66, 139, 202)';
+            }
+          }
+        }
+        currentMode = 'equip';
+        stat.textContent = '';
+      }
+
+      const stat = document.createElement('p');
+      stat.style.margin = '0';
+      stat.style.height = '24px';
+      stat.style.fontSize = '16px';
+      stat.style.whiteSpace = 'nowrap';
+      stat.style.overflow = 'hidden';
+      stat.classList.add('equip-preset-stat');
+
+      (()=>{
+        const div = document.createElement('div');
+        div.style.display = 'flex';
+        div.style.flexWrap = 'nowrap';
+        div.style.overflowX = 'auto';
+        div.style.width = 'max-content';
+        div.append(addButton, removeButton, equipSettingsButton, backupButton);
+        buttonsContainer.append(div);
+      })();
+      div.append(buttonsContainer, equipSettingsDialog, backupDialog, stat);
+      panel.append(div);
+    })();
+
+    panel.append(resetCurrentEquip, presetList);
+    document.body.append(panel);
+
+    // equip item table dialog
+    const equipField = document.createElement('dialog');
+    equipField.style.background = '#fff';
+    equipField.style.color = '#000';
+    equipField.style.maxWidth = '90vw';
+    equipField.style.height = '95vh';
+    const closeButton = button.cloneNode();
+    closeButton.textContent = '?~';
+    closeButton.style.position = 'absolute';
+    closeButton.style.background = 'none';
+    closeButton.style.border = 'none';
+    closeButton.style.height = '40px';
+    closeButton.style.width = '40px';
+    closeButton.style.fontSize = '32px';
+    closeButton.style.top = '2px';
+    closeButton.style.right = '2px';
+    closeButton.style.lineHeight = '1';
+    closeButton.addEventListener('click', ()=>{equipField.close()});
+    const tableContainer = document.createElement('div');
+    tableContainer.style.height = '75vh';
+    tableContainer.style.overflow = 'auto';
+    const rankSelect = document.createElement('select');
+    rankSelect.style.maxWidth = '64px';
+    const ranks = ['N','R','SR','SSR','UR'];
+    ranks.forEach(rank => {
+      const option = document.createElement('option');
+      option.textContent = rank;
+      option.value = rank;
+      rankSelect.append(option);
+    })
+    rankSelect.addEventListener('change', ()=>{filterItemsByRank(rankSelect.value)});
+    const bar = document.createElement('div');
+    bar.style.textAlign = 'center';
+    const p = document.createElement('p');
+    p.classList.add('equip-preset-selected');
+    p.style.background = '#fff';
+    p.style.color = '#000';
+    p.style.margin = '2px';
+    p.style.height = '28px';
+
+    const equipSwitchButton = button.cloneNode();
+    equipSwitchButton.textContent = '?????';
+    equipSwitchButton.style.width = '4em';
+    equipSwitchButton.style.height = '42px';
+    equipSwitchButton.style.fontSize = '';
+
+    equipSwitchButton.style.whiteSpace = 'nowrap';
+    equipSwitchButton.addEventListener('click', (event)=>{
+      if(!weaponTable.style.display) {
+        weaponTable.style.display = 'none';
+        armorTable.style.display = '';
+        necklaceTable.style.display = 'none';
+        event.target.textContent = '??h??';
+      } else if (!armorTable.style.display) {
+        weaponTable.style.display = 'none';
+        armorTable.style.display = 'none';
+        necklaceTable.style.display = '';
+        event.target.textContent = '???';
+      } else if (!necklaceTable.style.display) {
+        weaponTable.style.display = '';
+        armorTable.style.display = 'none';
+        necklaceTable.style.display = 'none';
+        event.target.textContent = '?????';
+      }
+    });
+
+    // register
+    const registerButton = button.cloneNode();
+    registerButton.textContent = '?o?^';
+    registerButton.style.width = '4em';
+    registerButton.style.height = '42px';
+    registerButton.style.fontSize = '';
+
+    (()=>{
+      const dialog = document.createElement('dialog');
+      dialog.style.background = '#fff';
+      dialog.style.border = 'solid 1px #000';
+      dialog.style.color = '#000';
+      dialog.style.textAlign = 'center';
+      const presetNameInput = document.createElement('input');
+      presetNameInput.placeholder = '?v???Z?b?g??';
+      presetNameInput.style.background = '#fff';
+      presetNameInput.style.color = '#000';
+      const p = document.createElement('p');
+      p.textContent = '??????v???Z?b?g??????????????????????B';
+      p.style.margin = '0';
+      const confirmButton = button.cloneNode();
+      confirmButton.textContent = '???';
+      confirmButton.addEventListener('click', ()=>{
+        if(presetNameInput.value.trim() === '') return;
+        saveEquipPreset(presetNameInput.value.substring(0,32), selectedEquips);
+        dialog.close();
+        presetNameInput.value = '';
+      })
+      presetNameInput.addEventListener('keydown', (e)=>{
+        if (e.key === "Enter") {
+          e.preventDefault(); // ??????????dialog????????
+          if(presetNameInput.value.trim() === '') return;
+          saveEquipPreset(presetNameInput.value.substring(0,32), selectedEquips);
+          dialog.close();
+          presetNameInput.value = '';
+        }
+      })
+      const cancelButton = button.cloneNode();
+      cancelButton.textContent = '?L?????Z??';
+      cancelButton.addEventListener('click', ()=>{dialog.close()});
+      dialog.append(presetNameInput, confirmButton, cancelButton, p);
+      equipField.append(dialog);
+      registerButton.addEventListener('click', ()=>{
+        if(!selectedEquips.id[0] && !selectedEquips.id[1] && !selectedEquips.id[2]) {
+          alert('?????????I?????');
+          return;
+        }
+        dialog.showModal();
+      });
+    })();
+
+    bar.append(rankSelect, equipSwitchButton, registerButton, p);
+    equipField.append(bar, tableContainer, closeButton);
+    panel.append(equipField);
+
+    let weaponTable, armorTable, necklaceTable;
+    let selectedEquips = {id:[], rank:[]};
+
+    function sortTable(table){
+      const tbody = table.querySelector('tbody');
+      const rows = Array.from(tbody.rows);
+      rows.sort((a,b) => {
+        const nameA = a.cells[0].textContent;
+        const nameB = b.cells[0].textContent;
+        return nameA.localeCompare(nameB);
+      })
+      rows.forEach(row => tbody.appendChild(row));
+    }
+
+    async function showEquipList(){
+      if(!weaponTable || !armorTable || !necklaceTable) {
+        try {
+          const res = await fetch('https://donguri.5ch.net/bag');
+          if(!res.ok) throw new Error('bag response error');
+          const text = await res.text();
+          const doc = new DOMParser().parseFromString(text, 'text/html');
+          const h1 = doc.querySelector('h1');
+          if(h1?.textContent !== '?A?C?e???o?b?O') throw new Error(text);
+          weaponTable = doc.querySelector('#weaponTable');
+          armorTable = doc.querySelector('#armorTable');
+          necklaceTable = doc.querySelector('#necklaceTable');
+          if(!weaponTable || !armorTable || !necklaceTable) throw new Error('failed to find weapon/armor table');
+
+          [weaponTable,armorTable,necklaceTable].forEach((table,index) => {
+            sortTable(table);
+            table.style.color = '#000';
+            table.style.margin = '0';
+            const rows = table.querySelectorAll('tr');
+            rows.forEach(row => {
+              const id = row.cells[1].querySelector('a')?.href.replace('https://donguri.5ch.net/equip/','');
+              row.cells[0].style.textDecorationLine = 'underline';
+              row.cells[0].style.cursor = 'pointer';
+              row.cells[0].dataset.id = id;
+              row.cells[1].style.display = 'none';
+              row.cells[2].style.display = 'none';
+              if(index !== 2) {
+                const modLink = row.cells[7].querySelector('a');
+                if(modLink) modLink.target = '_blank';
+                row.cells[9].style.display = 'none';
+              } else if (index === 2) {
+                row.cells[3].style.whiteSpace = 'nowrap';
+                const ul = row.cells[3].querySelector('ul');
+                if(ul) ul.style.padding = '0';
+                row.cells[5].style.display = 'none';
+              }
+              row.cells[0].addEventListener('click', (event)=>{
+                if(!event.target.closest('td')) return;
+                const target = event.target.closest('td');
+                const itemName = target.textContent;
+                const rank = itemName.match(/\[(.+?)\]/)[1];
+                const id = target.dataset.id;
+                selectedEquips.id[index] = id;
+                selectedEquips.rank[index] = rank;
+                document.querySelector('.equip-preset-selected').textContent = selectedEquips.id;
+              })
+            })
+          })
+          tableContainer.append(weaponTable, armorTable, necklaceTable);
+        } catch(e) {
+          console.error(e);
+          return;
+        }
+      }
+
+      equipSwitchButton.textContent = '?????';
+      weaponTable.style.display = '';
+      armorTable.style.display = 'none';
+      necklaceTable.style.display = 'none';
+      filterItemsByRank(rankSelect.value);
+      document.querySelector('.equip-preset-selected').textContent = '';
+      equipField.showModal();
+    }
+    function filterItemsByRank (rank){
+      [weaponTable, armorTable].forEach(table => {
+        table.querySelectorAll('tbody > tr').forEach(row => {
+          const itemName = row.cells[0].textContent;
+          row.style.display = itemName.includes(`[${rank}]`) ? null : 'none';
+        })
+      })
+    }
+    function saveEquipPreset(name, obj){
+      let equipPresets = JSON.parse(localStorage.getItem('equipPresets')) || {};
+      equipPresets[name] = obj;
+      localStorage.setItem('equipPresets', JSON.stringify(equipPresets));
+      showEquipPreset();
+    }
+    function showEquipPreset(){
+      let equipPresets = JSON.parse(localStorage.getItem('equipPresets')) || {};
+      const liTemplate = document.createElement('li');
+      liTemplate.style.display = 'flex';
+      liTemplate.style.justifyContent = 'space-between';
+      liTemplate.style.borderBottom = 'solid 1px #000';
+      liTemplate.style.color = '#428bca';
+      liTemplate.style.cursor = 'pointer';
+      const span1 = document.createElement('span');
+      span1.style.flexGrow = '1';
+      span1.style.whiteSpace = 'nowrap';
+      span1.style.overflow = 'hidden';
+      const span2 = document.createElement('span');
+      span2.style.whiteSpace = 'nowrap';
+      span2.style.textAlign = 'right';
+      span2.style.overflow = 'hidden';
+      span2.style.fontSize = '90%';
+      liTemplate.append(span1,span2);
+      const fragment = document.createDocumentFragment();
+      Object.entries(equipPresets).forEach(([key, value])=>{
+        const li = liTemplate.cloneNode(true);
+        const span = li.querySelectorAll('span');
+        span[0].textContent = key;
+        span[1].textContent = value.rank.join(',');
+        fragment.append(li);
+      })
+      presetList.replaceChildren(fragment);
+    }
+    function importEquipPresets(text){
+      try{
+        if(text.trim() === ''){
+          localStorage.removeItem('equipPresets');
+          showEquipPreset();
+          return true;
+        }
+        const json = JSON.parse(text);
+        localStorage.setItem('equipPresets', JSON.stringify(json));
+        showEquipPreset();
+        return true;
+      } catch (e) {
+        if (e instanceof SyntaxError) {
+          alert('?????G???[');
+        }
+        return false;
+      }
+
+    }
+
+
+    function removePresetItems(presetName) {
+      const userConfirmed = confirm(presetName + ' ????????????H');
+      if(!userConfirmed) return;
+      const stat = document.querySelector('.equip-preset-stat');
+      const equipPresets = JSON.parse(localStorage.getItem('equipPresets')) || {};
+      const autoEquipItems = JSON.parse(localStorage.getItem('autoEquipItems')) || {};
+      const autoEquipItemsAutojoin = JSON.parse(localStorage.getItem('autoEquipItemsAutojoin')) || {};
+
+      if(!equipPresets || !equipPresets[presetName]) {
+        stat.textContent = '';
+        return;
+      }
+      delete equipPresets[presetName];
+      for (const key in autoEquipItems) {
+        if (Array.isArray(autoEquipItems[key])) {
+          autoEquipItems[key] = autoEquipItems[key].filter(v => v !== presetName);
+        }
+      }
+      for (const key in autoEquipItemsAutojoin) {
+        if (Array.isArray(autoEquipItemsAutojoin[key])) {
+          autoEquipItemsAutojoin[key] = autoEquipItemsAutojoin[key].filter(v => v !== presetName);
+        }
+      }
+      localStorage.setItem('equipPresets', JSON.stringify(equipPresets));
+      localStorage.setItem('autoEquipItems', JSON.stringify(autoEquipItems));
+      localStorage.setItem('autoEquipItemsAutojoin', JSON.stringify(autoEquipItemsAutojoin));
+      showEquipPreset();
+    }
+
+    function selectAutoEquipItems(li, name, rank) {
+      const target = autoEquipMode === 'autojoin' ? 'autoEquipItemsAutojoin' : 'autoEquipItems';
+      const items = JSON.parse(localStorage.getItem(target)) || {};
+
+      if(getComputedStyle(li).color === 'rgb(66, 139, 202)') {
+        li.style.color = 'rgb(202, 139, 66)';
+        (items[rank] ||= []).push(name);
+      } else {
+        li.style.color = 'rgb(66, 139, 202)';
+        const index = items[rank].indexOf(name);
+        if (index !== -1){
+          items[rank].splice(index,1);
+        }
+      }
+
+      localStorage.setItem(target, JSON.stringify(items));
+      console.log(items[rank]);
+    }
+  })();
+  //-- ??????? --//
+  async function setPresetItems (presetName) {
+    let currentEquip = JSON.parse(localStorage.getItem('current_equip')) || [];
+    const stat = document.querySelector('.equip-preset-stat');
+    if (stat.textContent === '??????...') return;
+    const equipPresets = JSON.parse(localStorage.getItem('equipPresets')) || {};
+    const fetchPromises = equipPresets[presetName].id
+      .filter(id => id !== undefined && id !== null && !currentEquip.includes(id)) // ???o?^or?????????????????O
+      .map(id => fetch('https://donguri.5ch.net/equip/' + id));
+
+    stat.textContent = '??????...';
+    try {
+      const responses = await Promise.all(fetchPromises);
+      const texts = await Promise.all(
+        responses.map(async response => {
+          if (!response.ok) {
+            throw new Error(`[${response.status}] /equip/`);
+          }
+          return response.text();
+        })
+      );
+
+      if(texts.includes('?? 肪????????????????B')) {
+        throw new Error('????O?C?????????????');
+      } else if(texts.includes('?A?C?e????????????????????B')) {
+        throw new Error('?A?C?e???????????????????');
+      }
+
+      const docs = texts.map(text => new DOMParser().parseFromString(text,'text/html'));
+      const titles = docs.map(doc => doc.querySelector('h1')?.textContent);
+      if(titles.includes('?? ??n')) {
+        throw new Error('????O?C?????????????');
+      } else if (!titles.every(title => title === '?A?C?e???o?b?O')) {
+        throw new Error('?????G???[');
+      }
+      stat.textContent = '????: ' + presetName;
+      localStorage.setItem('current_equip', JSON.stringify(equipPresets[presetName].id));
+      currentEquipName = presetName;
+    } catch (e) {
+      stat.textContent = e;
+      localStorage.removeItem('current_equip');
+      throw e;
+    }
+  }
+
+  function scaleContentsToFit(container, contents){
+    const containerWidth = container.clientWidth;
+    const contentsWidth = contents.scrollWidth;
+    const scaleFactor = Math.min(1, containerWidth / contentsWidth);
+    contents.style.transform = `scale(${scaleFactor})`;
+    contents.style.transformOrigin = 'top left';
+
+    const scaledHeight = contents.scrollHeight * scaleFactor;
+
+    contents.style.height = `${scaledHeight}px`;
+  }
+
+  async function refreshArenaInfo() {
+    const refreshedCells = [];
+    function includesCoord(arr, row, col) {
+      if (!arr) return false;
+      return arr.some(([r, c]) => r === Number(row) && c === Number(col));
+    }
+
+    try {
+      const res = await fetch('');
+      if (!res.ok) throw new Error('res.ng');
+
+      const text = await res.text();
+      const doc = new DOMParser().parseFromString(text, 'text/html');
+
+      const allScripts = Array.from(doc.querySelectorAll('script')).map(s => s.textContent).join('\n');
+
+      const cellColorsMatch = allScripts.match(/cellColors\s*=\s*({.+?})/s);
+      const validJsonStr = cellColorsMatch[1].replace(/'/g, '"').replace(/,\s*}/g, '}');
+      const cellColors = JSON.parse(validJsonStr);
+
+      const capMatch = allScripts.match(/const (?:capitalMap|capitalList)\s*=\s*(\[.*?\]);/s);
+      const capitalMap = capMatch ? JSON.parse(capMatch[1]) : [];
+
+      const gridSizeMatch = allScripts.match(/const GRID_SIZE\s*=\s*(\d+);/);
+      const rows = gridSizeMatch ? Number(gridSizeMatch[1]) : 5;
+      const cols = rows;
+
+      const terrainData = {};
+      try {
+        const terrainMatch = allScripts.match(/const terrainsPayload\s*=\s*({.+?});/s);
+        if (terrainMatch) {
+          const payload = JSON.parse(terrainMatch[1]);
+          if (payload.terrains && Array.isArray(payload.terrains)) {
+            payload.terrains.forEach(item => {
+              if (item.t === 'w') {
+                terrainData[`${item.x}-${item.y}`] = 'water';
+              }
+            });
+          }
+        }
+      } catch (e) {
+        console.error("Terrain parse error", e);
+      }
+
+      const currentCells = grid.querySelectorAll('.cell');
+
+      grid.style.display = 'grid';
+      grid.style.gridTemplateRows = `repeat(${rows}, 35px)`;
+      grid.style.gridTemplateColumns = `repeat(${cols}, 35px)`;
+      grid.style.gap = '2px';
+      grid.style.justifyContent = 'center';
+      grid.style.position = 'relative';
+
+      grid.style.maxWidth = '100%';
+      grid.style.boxSizing = 'border-box';
+
+      if (currentCells.length !== rows * cols) {
+        grid.innerHTML = '';
+        for (let i = 0; i < rows; i++) {
+          for (let j = 0; j < cols; j++) {
+            const cell = document.createElement('div');
+            cell.className = 'cell';
+            cell.dataset.row = i;
+            cell.dataset.col = j;
+            cell.style.width = '30px';
+            cell.style.height = '30px';
+            cell.style.border = '1px solid #ccc';
+            cell.style.cursor = 'pointer';
+            cell.style.zIndex = '100';
+
+            const cellKey = `${i}-${j}`;
+
+            if (terrainData[cellKey] === 'water') {
+              cell.dataset.terrain = 'water';
+              cell.style.backgroundColor = '#bbdefb';
+            } else {
+              cell.style.backgroundColor = cellColors[cellKey] || '#ffffff00';
+            }
+
+            if (includesCoord(capitalMap, i, j)) {
+              cell.style.outline = 'black solid 2px';
+              cell.style.borderColor = 'gold';
+            }
+            grid.appendChild(cell);
+            refreshedCells.push(cell);
+          }
+        }
+      } else {
+        currentCells.forEach(cell => {
+          const { row, col } = cell.dataset;
+          const cellKey = `${row}-${col}`;
+
+          let targetColor;
+          if (terrainData[cellKey] === 'water') {
+            cell.dataset.terrain = 'water';
+            targetColor = '#bbdefb';
+          } else {
+            delete cell.dataset.terrain;
+            targetColor = cellColors[cellKey] || '#ffffff00';
+          }
+
+          if (cell.style.backgroundColor !== targetColor) {
+            cell.style.backgroundColor = targetColor;
+            refreshedCells.push(cell);
+          }
+          cell.style.outline = includesCoord(capitalMap, row, col) ? 'black solid 2px' : '';
+        });
+      }
+
+      const tables = document.querySelectorAll('table');
+      const newTables = doc.querySelectorAll('table');
+      newTables.forEach((table, i) => { if (tables[i]) tables[i].replaceWith(table); });
+
+      addCustomColor();
+      return refreshedCells;
+    } catch (e) {
+      console.error('refreshArenaInfo Error:', e);
+      return [];
+    }
+  }
+
+  async function fetchAreaInfo(refreshAll){
+    const refreshedCells = await refreshArenaInfo();
+    if (currentViewMode === 'detail') {
+      if (grid) {
+        grid.style.gridTemplateRows = grid.style.gridTemplateRows.replace('35px','65px');
+        grid.style.gridTemplateColumns = grid.style.gridTemplateColumns.replace('35px','105px');
+      }
+    }
+    if (grid && grid.parentNode) {
+      grid.parentNode.style.height = null;
+      grid.parentNode.style.padding = '20px 0';
+      grid.parentNode.style.maxWidth = '100%';
+      grid.parentNode.style.overflowX = 'auto';
+    }
+
+    const cells = grid ? grid.querySelectorAll('.cell') : [];
+    cells.forEach(async(elm) => {
+      const hasInfo = elm.dataset.rank !== undefined;
+      const isRefreshed = refreshedCells.includes(elm);
+      if(refreshAll || !hasInfo || isRefreshed) {
+        fetchSingleArenaInfo(elm)
+      }
+    })
+  }
+
+  async function fetchSingleArenaInfo(elm) {
+    try {
+      const { row, col } = elm.dataset;
+      const url = `https://donguri.5ch.net/teambattle?r=${row}&c=${col}&`+MODE;
+      const res = await fetch(url);
+      if(!res.ok) throw new Error(res.status + ' res.ng');
+      const text = await res.text();
+      const doc = new DOMParser().parseFromString(text, 'text/html');
+      const headerText = doc?.querySelector('header')?.textContent || '';
+      if(!headerText.includes('?? ?`?[????')) throw new Error(`title.ng [${row}][${col}]`);
+      const rank = doc.querySelector('small')?.textContent || '';
+      if(!rank) return Promise.reject(`rank.ng [${row}][${col}]`);
+      const leader = doc.querySelector('strong')?.textContent || '';
+      const shortenRank = rank.replace('[?G???[?g]','e').replace('[?x????]????','?x').replace('????','-').replace(/(???|\[|\]|\||\s)/g,'');
+      const teamname = doc.querySelector('table').rows[1]?.cells[2].textContent;
+
+      const cell = elm.cloneNode();
+      if (currentViewMode === 'detail') {
+        const p = [document.createElement('p'), document.createElement('p')];
+        p[0].textContent = shortenRank;
+        p[1].textContent = leader;
+        p[0].style.margin = '0';
+        p[1].style.margin = '0';
+        cell.style.width = '100px';
+        cell.style.height = '60px';
+        cell.style.borderWidth = '3px';
+        cell.append(p[0],p[1]);
+      } else {
+        const p = document.createElement('p');
+        p.style.height = '28px';
+        p.style.width = '28px';
+        p.style.margin = '0';
+        p.style.display = 'flex';
+        p.style.alignItems = 'center';
+        p.style.lineHeight = '1';
+        p.style.justifyContent = 'center';
+        const str = shortenRank.replace(/\w+-|????/g,'');
+        p.textContent = str;
+        if (str.length === 3) p.style.fontSize = '14px';
+        if (str.length === 4) p.style.fontSize = '13px';
+        cell.append(p);
+      }
+      cell.style.zIndex = '100';
+      cell.style.pointerEvents = 'auto';
+      cell.style.position = 'relative';
+      cell.style.overflow = 'hidden';
+      cell.dataset.rank = shortenRank;
+      cell.dataset.leader = leader;
+      cell.dataset.team = teamname;
+
+      if ('customColors' in settings && teamname in settings.customColors) {
+        cell.style.backgroundColor = '#' + settings.customColors[teamname];
+      }
+      const rgb = cell.style.backgroundColor.match(/\d+/g);
+      const brightness = 0.2126 * rgb[0] + 0.7152 * rgb[1] + 0.0722 * rgb[2];
+      cell.style.color = brightness > 128 ? '#000' : '#fff';
+
+      cell.addEventListener('click', ()=>{
+        handleCellClick(cell);
+      });
+      elm.replaceWith(cell);
+    } catch(e) {
+      console.error(e);
+    }
+  }
+
+  function addCustomColor() {
+    const teamTable = document.querySelector('table');
+    const rows = [...teamTable.rows];
+    rows.shift();
+    const button = document.createElement('button');
+    button.style.padding = '4px';
+    button.style.lineHeight = '1';
+    button.style.marginLeft = '2px';
+
+    const editButton = button.cloneNode();
+    editButton.textContent = '??';
+    editButton.addEventListener('click', ()=>{
+      editButton.style.display = 'none';
+      editEndButton.style.display = '';
+
+      rows.forEach(row => {
+        const cell = row.cells[0];
+        const cellColor = cell.textContent;
+        const input = document.createElement('input');
+        input.type = 'text';
+        input.value = cellColor;
+        input.style.width = '6em';
+        input.addEventListener('change',()=>{
+          if (input.value === '') {
+            if (settings.customColors) {
+              const teamname = row.cells[1].textContent;
+              delete settings.customColors[teamname];
+              localStorage.setItem('aat_settings', JSON.stringify(settings));
+            }
+            return;
+          }
+
+          const isValidColor = /^[0-9A-Fa-f]{6}$/.test(input.value);
+          if (!isValidColor) {
+            input.value = cellColor;
+            return;
+          } else {
+            const teamname = row.cells[1].textContent;
+            if (!settings.customColors) settings.customColors = {};
+            settings.customColors[teamname] = input.value;
+            localStorage.setItem('aat_settings', JSON.stringify(settings));
+            cell.style.background = '#' + input.value;
+            row.cells[0].style.fontStyle = 'italic';
+          }
+        })
+        cell.textContent = '';
+        cell.append(input);
+      })
+    })
+    const editEndButton = button.cloneNode();
+    editEndButton.textContent = '?';
+    editEndButton.style.display = 'none';
+    editEndButton.addEventListener('click', ()=>{
+      editButton.style.display = '';
+      editEndButton.style.display = 'none';
+
+      rows.forEach(row => {
+        const cell = row.cells[0];
+        const input = cell.querySelector('input');
+        cell.textContent = input.value;
+        input.remove();
+      })
+    })
+
+    const helpButton = button.cloneNode();
+    helpButton.textContent = '?H';
+    helpButton.addEventListener('click', ()=>{
+      helpDialog.innerHTML = '';
+      const div = document.createElement('div');
+      div.style.lineHeight = '150%';
+      div.innerText = `?E[??]????????F???W???????B??W????x[?G???A????擾]?????s????????????B
+      ?E??X?????`?[????Z????[?G???A???X?V]????K???擾?????????????B
+      *?X?V????????? ????????????A??????X????????? ???????B
+      ?E???F??`?[?????????????????A???????F???X???邱?????F??h??????????\????B(?J?X?^???J???[??????????Z???????????????????)
+      ?E??W?????F??????????????????S?????????????????????????B
+
+      ?d?l (????????)?F
+      [?G???A????擾]??S?G???A??A?N?Z?X???????擾?????????A[?G???A???X?V]??F???X?V?????Z???????擾?????????????B
+      ??????A???F??A??B??`?[??????????? ?z????B
+      ?EB??F?????W???????AA?????????Z????B???l????????A??W?O??F?? ???????Z??????擾???s??????B
+      ?EA??B??o?????W?????????AA?????????Z??????F?? X?V????????????擾??????B
+      ?v?????A???F?????S??F?????????????????????B???F??????????????????OK.
+      `;
+      const resetButton = button.cloneNode();
+      resetButton.textContent = '?F???????';
+      resetButton.addEventListener('click', ()=>{
+        delete settings.customColors;
+        localStorage.setItem('aat_settings', JSON.stringify(settings));
+        alert('?F???????????????????i?v?G???A?X?V?j');
+      })
+      helpDialog.append(resetButton, div);
+      helpDialog.show();
+    })
+    teamTable.rows[0].cells[0].append(editButton, editEndButton, helpButton);
+
+    function setCustomColors(rows) {
+      if (!settings.customColors) return;
+      rows.forEach(row => {
+        const teamname = row.cells[1].textContent;
+        if ('customColors' in settings && teamname in settings.customColors){
+          const color = settings.customColors[teamname];
+          row.cells[0].textContent = color;
+          row.cells[0].style.background = '#' + color;
+          row.cells[0].style.fontStyle = 'italic';
+        }
+        const rgb = row.cells[0].style.backgroundColor.match(/\d+/g);
+        const brightness = 0.2126 * rgb[0] + 0.7152 * rgb[1] + 0.0722 * rgb[2];
+        row.cells[0].style.color = brightness > 128 ? '#000' : '#fff';
+      })
+    }
+    setCustomColors(rows);
+  }
+  addCustomColor();
+
+  const observer = new MutationObserver(() => {
+    if (grid && grid.parentNode) {
+      scaleContentsToFit(grid.parentNode, grid);
+    }
+  });
+
+  if (grid) {
+    observer.observe(grid, { attributes: true, childList: true, subtree: true });
+  }
+
+  (()=>{
+    [...document.querySelectorAll('.cell')].forEach(elm => {
+      const cell = elm.cloneNode();
+      elm.replaceWith(cell);
+      cell.addEventListener('click', ()=>{
+        handleCellClick(cell);
+      })
+    })
+  })();
+
+  async function fetchArenaTable(row, col){
+    const url = `https://donguri.5ch.net/teambattle?r=${row}&c=${col}&`+MODE;
+    try {
+      const res = await fetch(url);
+      if(!res.ok) throw new Error('res.ng');
+      const text = await res.text();
+      const doc = new DOMParser().parseFromString(text,'text/html');
+      const headerText = doc?.querySelector('header')?.textContent || '';
+      if(!headerText.includes('?? ?`?[????')) return Promise.reject(`title.ng`);
+      const table = doc.querySelector('table');
+      if(!table) throw new Error('table.ng');
+      showArenaTable(table);
+    } catch (e) {
+      console.error(e);
+    }
+
+    function showArenaTable (table){
+      const tableRow = table.querySelector('tbody > tr');
+      if(!tableRow) return;
+      const coordinate = tableRow.cells[0].textContent.replace('?A???[?i','').trim();
+      const holderName = tableRow.cells[1].querySelector('strong');
+      const equipCond = tableRow.cells[1].querySelector('small');
+      const teamName = tableRow.cells[2].textContent;
+      const statistics = tableRow.cells[3].textContent.match(/\d+/g);
+      const modCounts = tableRow.cells[4].textContent.match(/\d+/g);
+      const modders = tableRow.cells[5].textContent;
+
+      const newTable = document.createElement('table');
+      const tbody = document.createElement('tbody');
+      const tr = tbody.insertRow(0);
+
+      const cell = document.createElement('td');
+      cell.style.textAlign = 'center';
+      const cells = [];
+      for(let i=0; i<4; i++){
+        cells.push(cell.cloneNode());
+        tr.append(cells[i]);
+      }
+      const hr = document.createElement('hr');
+      hr.style.margin = '10px 0';
+
+      cells[0].append(coordinate, hr, equipCond);
+      cells[1].append(holderName, document.createElement('br'), `${teamName}`);
+      cells[2].innerText = `??:${statistics[0]}\n??:${statistics[1]}\n??:${statistics[2]}`;
+      cells[3].innerText = `????:${modCounts[0]}\n???:${modCounts[1]}\n${modders}?l`;
+      cells[3].style.whiteSpace = 'nowrap';
+
+      const [dataRow, dataCol] = coordinate.match(/\d+/g);
+      newTable.dataset.row = dataRow;
+      newTable.dataset.col = dataCol;
+      newTable.dataset.rank = equipCond.textContent;
+      newTable.style.background = '#fff';
+      newTable.style.color = '#000';
+      newTable.style.margin = '0';
+      newTable.append(tbody);
+      arenaField.querySelector('table').replaceWith(newTable);
+      arenaField.show();
+    }
+  }
+
+  async function handleCellClick (cell){
+    if (cellSelectorActivate) {
+      if (cell.classList.contains('selected')) {
+        cell.style.borderColor = '#ccc';
+        cell.classList.remove('selected');
+      } else {
+        cell.style.borderColor = '#f64';
+        cell.classList.add('selected');
+      }
+    } else if (shouldSkipAreaInfo) {
+      const { row, col, rank } = cell.dataset;
+      if (arenaField.open) fetchArenaTable(row, col);
+      await autoEquipAndChallenge (row, col, rank);
+    } else {
+      const { row, col } = cell.dataset;
+      fetchArenaTable(row, col);
+    }
+  }
+
+  const autoEquipDialog = document.createElement('dialog');
+  autoEquipDialog.style.padding = '0';
+  autoEquipDialog.style.background = '#fff';
+  document.body.append(autoEquipDialog);
+  async function autoEquipAndChallenge (row, col, rank) {
+    if (shouldSkipAutoEquip) {
+      arenaChallenge(row, col);
+      return;
+    }
+    rank = rank
+      .replace('?G???[?g','e')
+      .replace(/.+????|\w+-|???|????|?x????|?x|\s|\[|\]|\|/g,'');
+    const autoEquipItems = JSON.parse(localStorage.getItem('autoEquipItems')) || {};
+    if (autoEquipItems[rank] && !autoEquipItems[rank]?.includes(currentEquipName)) {
+      if (autoEquipItems[rank].length === 0) {
+        arenaChallenge(row, col);
+        return;
+      } else if (autoEquipItems[rank].length === 1) {
+        await setPresetItems(autoEquipItems[rank][0]);
+        arenaChallenge(row, col);
+        return;
+      } else if (settings.autoEquipRandomly) {
+        const index = Math.floor(Math.random() * autoEquipItems[rank].length);
+        await setPresetItems(autoEquipItems[rank][index]);
+        arenaChallenge(row, col);
+      } else {
+        while (autoEquipDialog.firstChild) {
+          autoEquipDialog.firstChild.remove();
+        }
+        const ul = document.createElement('ul');
+        ul.style.background = '#fff';
+        ul.style.listStyle = 'none';
+        ul.style.padding = '2px';
+        ul.style.textAlign = 'left';
+        ul.style.margin = '0';
+        const liTemplate = document.createElement('li');
+        liTemplate.style.borderBottom = 'solid 1px #000';
+        liTemplate.style.color = '#428bca';
+        liTemplate.style.cursor = 'pointer';
+
+        autoEquipItems[rank].forEach(v => {
+          const li = liTemplate.cloneNode();
+          li.textContent = v;
+          li.addEventListener('click', async()=>{
+            autoEquipDialog.close();
+            await setPresetItems(v);
+            arenaChallenge(row, col);
+          })
+          ul.append(li);
+        })
+        autoEquipDialog.append(ul);
+        autoEquipDialog.showModal();
+      }
+    } else {
+      arenaChallenge(row, col);
+    }
+  }
+
+  async function arenaChallenge (row, col){
+    const options = {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded'
+      },
+      body: `row=${row}&col=${col}`
+    };
+    try {
+      const response = await fetch('/teamchallenge?'+MODE, options);
+      if(!response.ok){
+        throw new Error('/teamchallenge res.ng');
+      }
+      const text = await response.text();
+      arenaResult.innerText = text;
+
+      const lastLine = text.trim().split('\n').pop();
+      if(text.includes('\n')) {
+        lastLine + '\n' + text;
+        const p = document.createElement('p');
+        p.textContent = lastLine;
+        p.style.fontWeight = 'bold';
+        p.style.padding = '0';
+        p.style.margin = '0';
+        arenaResult.prepend(p);
+      }
+
+      arenaResult.show();
+      // arenaResult.show();??????setTimeout???g?p????????u???????
+      setTimeout(() => {
+        if (settings.arenaResultScrollPosition === 'bottom') {
+          arenaResult.scrollTop = arenaResult.scrollHeight;
+        } else {
+          arenaResult.scrollTop = 0;
+        }
+      }, 0);
+      arenaResult.style.display = '';
+
+      if (lastLine === '???[?_?[??????' || lastLine.includes('??V?????A???[?i???[?_?[????B')) {
+        if (!settings.teamColor) return;
+        const cell = document.querySelector(`div[data-row="${row}"][data-col="${col}"]`);
+        cell.style.background = '#' + settings.teamColor;
+        fetchSingleArenaInfo(cell);
+      }
+    } catch (e) {
+      arenaResult.innerText = e;
+      arenaResult.show();
+    }
+  }
+
+  let rangeAttackQueue = [];
+  async function rangeAttack () {
+    if(rangeAttackQueue.length === 0) {
+      rangeAttackQueue = [...document.querySelectorAll('.cell.selected')];
+    }
+
+    if(rangeAttackQueue.length === 0) {
+      alert('?Z????I?????????????');
+      return;
+    }
+
+    const pTemplate = document.createElement('p');
+    pTemplate.style.padding = '0';
+    pTemplate.style.margin = '0';
+
+    let errorOccurred = false;
+    arenaResult.textContent = '';
+    arenaResult.show();
+
+    console.log(rangeAttackQueue);
+    //for(const cell of rangeAttackQueue) {
+    while(rangeAttackQueue.length > 0) {
+      if(!rangeAttackProcessing) return;
+
+      const cell = rangeAttackQueue[0];
+      // ?U???O??I????????????
+      if(!cell.classList.contains('selected')) {
+        rangeAttackQueue.shift();
+        continue;
+      }
+      const { row, col } = cell.dataset;
+
+      const options = {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded'
+        },
+        body: `row=${row}&col=${col}`
+      };
+      cell.style.borderColor = '#4f6';
+
+      try {
+        const response = await fetch('/teamchallenge?'+MODE, options);
+        const text = await response.text();
+        let lastLine = text.trim().split('\n').pop();
+        if(
+          lastLine.length > 100 ||
+          lastLine === '?? 肪????????????????B'
+        ) {
+          throw new Error('?? 肪????????????????B');
+        }
+        if(
+          lastLine === '???????`?[??????????g?????????????B????炭??????????????B' ||
+          lastLine === 'ng<>too fast' ||
+          lastLine === '?????h?? ???????????????B' ||
+          lastLine === '?????`?[????Q??????K?v?????????B'
+        ) {
+          throw new Error(lastLine);
+        }
+
+        const p = pTemplate.cloneNode();
+        p.textContent = `(${row}, ${col}) ${lastLine}`;
+        arenaResult.prepend(p);
+        rangeAttackQueue.shift();
+      } catch (e) {
+        const p = pTemplate.cloneNode();
+        p.textContent = `(${row}, ${col}) [???f] ${e}`;
+        arenaResult.prepend(p);
+        errorOccurred = true;
+        break;
+      }
+      if (rangeAttackQueue.length > 0) {
+        await new Promise(resolve => setTimeout(resolve, 1500));
+      }
+      cell.style.borderColor = cell.classList.contains('selected') ? '#f64' : '#ccc';
+    }
+    if(!errorOccurred) {
+      const p = pTemplate.cloneNode();
+      p.textContent = `????`;
+      arenaResult.prepend(p);
+      return true;
+    } else {
+      return false;
+    }
+  }
+
+  let currentViewMode = 'detail';
+  function toggleCellViewMode () {
+    const grid = document.querySelector('.grid') || document.querySelector('#gridWrap');
+    if (!grid) return;
+    const cells = grid.querySelectorAll('.cell');
+    const count = Math.sqrt(cells.length);
+
+    if(currentViewMode === 'detail') {
+      currentViewMode = 'compact';
+
+      grid.style.gridTemplateRows = `repeat(${count}, 35px)`;
+      grid.style.gridTemplateColumns = `repeat(${count}, 35px)`;
+
+      for (const cell of cells) {
+        cell.style.width = '30px';
+        cell.style.height = '30px';
+        cell.style.borderWidth = '1px';
+        while (cell.firstChild) {
+          cell.firstChild.remove();
+        }
+        const p = document.createElement('p');
+        p.style.height = '28px';
+        p.style.width = '28px';
+        p.style.margin = '0';
+        p.style.display = 'flex';
+        p.style.alignItems = 'center';
+        p.style.lineHeight = '1';
+        p.style.justifyContent = 'center';
+        const rank = cell.dataset.rank.replace(/\w+-|????/g,'');
+        p.textContent = rank;
+        if (rank.length === 3) p.style.fontSize = '14px';
+        if (rank.length === 4) p.style.fontSize = '13px';
+        cell.append(p);
+      }
+    } else {
+      currentViewMode = 'detail';
+
+      grid.style.gridTemplateRows = `repeat(${count}, 65px)`;
+      grid.style.gridTemplateColumns = `repeat(${count}, 105px)`;
+
+      for (const cell of cells) {
+        while (cell.firstChild) {
+          cell.firstChild.remove();
+        }
+        const {rank, leader } = cell.dataset;
+        const p = [document.createElement('p'), document.createElement('p')];
+        p[0].textContent = rank;
+        p[1].textContent = leader;
+        p[0].style.margin = '0';
+        p[1].style.margin = '0';
+        cell.style.width = '100px';
+        cell.style.height = '60px';
+        cell.style.borderWidth = '3px';
+        cell.append(p[0],p[1]);
+      }
+    }
+  }
+
+  let autoJoinIntervalId;
+  let isAutoJoinRunning = false;
+  const sleep = s => new Promise(r=>setTimeout(r,s));
+  // =================== ?????????J? [?e?B???e?B ===================
+
+  function getModeQS() {
+    const u = new URL(location.href);
+    const m = u.searchParams.get('m');
+    return m ? `&m=${encodeURIComponent(m)}` : '';
+  }
+
+  function parseFowFromHtml(html) {
+    const m = html.match(/window\.__FOW\s*=\s*(\{.*?\})\s*;/s);
+    if (!m) return null;
+    try { return JSON.parse(m[1]); } catch { return null; }
+  }
+
+  async function fetchCurrentHtml() {
+    const res = await fetch(location.href, { cache: 'no-store' });
+    return await res.text();
+  }
+
+  function toKey(r,c){ return `${r}-${c}`; }
+
+  function buildSetsFromFow(fow) {
+    const explored = new Set();
+    const add = (arr) => {
+      if (!Array.isArray(arr)) return;
+      for (const rc of arr) {
+        if (Array.isArray(rc) && rc.length >= 2)
+        explored.add(toKey(rc[0], rc[1]));
+      }
+    };
+    add(fow?.explored);
+    add(fow?.visible);
+    return explored;
+  }
+
+  function neighbors4(r,c){
+    return [[r-1,c],[r+1,c],[r,c-1],[r,c+1]];
+  }
+
+  function buildFrontier(exploredSet, rows, cols) {
+    const frontier = [];
+    for (const key of exploredSet) {
+      const [r,c] = key.split('-').map(Number);
+      for (const [nr,nc] of neighbors4(r,c)) {
+        if (nr < 0 || nc < 0 || nr >= rows || nc >= cols) continue;
+        const nk = toKey(nr,nc);
+        if (!exploredSet.has(nk)) frontier.push([nr,nc]);
+      }
+    }
+    const uniq = new Map();
+    for (const [r,c] of frontier) uniq.set(toKey(r,c), [r,c]);
+    return [...uniq.values()];
+  }
+
+  function pickRandom(arr) {
+    return arr[Math.floor(Math.random() * arr.length)];
+  }
+
+  function goToRC(r, c) {
+    const base = `https://donguri.5ch.net/teambattle?r=${r}&c=${c}`;
+    location.href = base + getModeQS();
+  }
+
+   // =================== ???S????????\?z?iFOW+?n?`+?G?????j ===================
+
+   const __autoExploreHistory = (() => {
+     const key = 'rb_autoexplore_hist_v2';
+     const load = () => { try { return JSON.parse(localStorage.getItem(key)) || []; } catch { return []; } };
+     const save = (arr) => localStorage.setItem(key, JSON.stringify(arr.slice(-60)));
+     return {
+       push(k){ const arr = load(); arr.push({k, t: Date.now()}); save(arr); },
+       penalty(k){
+         const arr = load();
+         let p = 0;
+         for (let i = arr.length - 1, cnt = 0; i >= 0 && cnt < 24; i--, cnt++) {
+           if (arr[i].k === k) p += (24 - cnt); // ??????d??
+         }
+         return p;
+       }
+     };
+   })();
+
+   function manhattan(r1,c1,r2,c2){ return Math.abs(r1-r2)+Math.abs(c1-c2); }
+
+   function parseMapMetaFromHtml(html) {
+     // teambattle?y?[?W???? script ???? GRID_SIZE / terrainsPayload / capitalMap ?????
+     const doc = new DOMParser().parseFromString(html, 'text/html');
+     const allScripts = Array.from(doc.querySelectorAll('script')).map(s => s.textContent || '').join('\n');
+
+     const gridSizeMatch = allScripts.match(/const GRID_SIZE\s*=\s*(\d+)\s*;/);
+     const rows = gridSizeMatch ? Number(gridSizeMatch[1]) : 16;
+     const cols = rows;
+ 
+     const waterSet = new Set();
+     const terrainMatch = allScripts.match(/const terrainsPayload\s*=\s*({.+?});/s);
+     if (terrainMatch) {
+       try {
+         const payload = JSON.parse(terrainMatch[1]);
+         if (payload && Array.isArray(payload.terrains)) {
+           for (const item of payload.terrains) {
+             // ?????? getRegions() ????????[???Ft==='w' ? ???????
+             if (item && item.t === 'w') waterSet.add(`${item.x}-${item.y}`);
+           }
+         }
+       } catch (e) { console.error('terrainsPayload parse error', e); }
+     }
+
+     const capMatch = allScripts.match(/const (?:capitalMap|capitalList)\s*=\s*(\[.*?\]);/s);
+     const capitalMap = capMatch ? (()=>{ try { return JSON.parse(capMatch[1]); } catch { return []; } })() : [];
+
+     return { rows, cols, waterSet, capitalMap };
+   }
+
+   function pickEnemyCapitalAuto(exploredSet, capitalMap, rows, cols) {
+     // ????????F???j???d?S????u?????????s?v??G????????i??s??2??????O??j
+     if (!Array.isArray(capitalMap) || capitalMap.length === 0) return null;
+     let sr = 0, sc = 0, n = 0;
+     for (const k of exploredSet) {
+       const [r,c] = k.split('-').map(Number);
+       if (!Number.isFinite(r) || !Number.isFinite(c)) continue;
+       sr += r; sc += c; n++;
+     }
+     const cr = n ? (sr / n) : Math.floor(rows/2);
+     const cc = n ? (sc / n) : Math.floor(cols/2);
+
+     let best = null;
+     let bestD = -1;
+     for (const rc of capitalMap) {
+       if (!Array.isArray(rc) || rc.length < 2) continue;
+       const [r,c] = rc;
+       const d = manhattan(r,c,cr,cc);
+       if (d > bestD) { bestD = d; best = { r, c }; }
+     }
+     return best;
+   }
+ 
+   function scoreFrontier(r, c, exploredSet, waterSet, rows, cols, enemy) {
+     const key = `${r}-${c}`;
+     if (waterSet && waterSet.has(key)) return -1e9; // ????????????
+
+     const er = enemy?.r ?? Math.floor(rows/2);
+     const ec = enemy?.c ?? Math.floor(cols/2);
+
+     // ?G?????????X?R?A
+     const towardEnemy = (rows + cols) - manhattan(r,c,er,ec);
+
+     // ?L?т???i??????????????????O?????L?т?j
+     let extend = 0;
+     for (const [nr,nc] of neighbors4(r,c)) {
+       if (nr < 0 || nc < 0 || nr >= rows || nc >= cols) continue;
+       const nk = `${nr}-${nc}`;
+       if (!exploredSet.has(nk) && !(waterSet && waterSet.has(nk))) extend++;
+     }
+
+     // ??????i???j??????????????????????j
+     let support = 0;
+     for (const [nr,nc] of neighbors4(r,c)) {
+       if (nr < 0 || nc < 0 || nr >= rows || nc >= cols) continue;
+       if (exploredSet.has(`${nr}-${nc}`)) support++;
+     }
+
+     const loopPenalty = __autoExploreHistory.penalty(key) * 6;
+
+     // frontier??????????????D??A????G?????{?L???D??
+     // ?i??яo?????? frontierCount ?????? ?gthin?h ??n????????????A???????d???z???j
+     return towardEnemy * 6 + extend * 10 + support * 4 - loopPenalty;
+   }
+
+   async function autoExploreFrontline({ rows = 16, cols = 16, enemy = null } = {}) {
+     const html = await fetchCurrentHtml();
+     const fow = parseFowFromHtml(html);
+     if (!fow) return false;
+
+     // rows/cols/water/capitals ???y?[?W???玩???擾?i???16??E?p?j
+     const meta = parseMapMetaFromHtml(html);
+     rows = meta?.rows ?? rows;
+     cols = meta?.cols ?? cols;
+     const waterSet = meta?.waterSet ?? new Set();
+     const capitalMap = meta?.capitalMap ?? [];
+
+     const explored = buildSetsFromFow(fow); // explored+visible ??a?i??????????????j
+
+     // enemyCapital ??????????isettings????????j
+     if (!enemy) enemy = pickEnemyCapitalAuto(explored, capitalMap, rows, cols);
+
+     // frontier ?????A???????O
+     const rawFrontier = buildFrontier(explored, rows, cols);
+     const frontier = rawFrontier.filter(([r,c]) => !waterSet.has(`${r}-${c}`));
+     if (!frontier.length) return false;
+
+     // ?X?R?A???i???_??????_???j
+     let bestScore = -Infinity;
+     let best = [];
+     for (const [r,c] of frontier) {
+       const s = scoreFrontier(r,c,explored,waterSet,rows,cols,enemy);
+       if (s > bestScore) { bestScore = s; best = [[r,c]]; }
+       else if (s === bestScore) best.push([r,c]);
+     }
+
+     const [r,c] = pickRandom(best);
+
+     await sleep(800 + Math.floor(Math.random()*1100)); // 800-1900ms?i???S???j
+     __autoExploreHistory.push(`${r}-${c}`);
+     goToRC(r,c);
+     return true;
+   }
+
+   // =================================================================
+
+// ===============================================================
+  async function autoJoin() {
+    const dialog = document.querySelector('.auto-join');
+
+    const logArea = dialog.querySelector('.auto-join-log');
+    const headers = { 'Content-Type': 'application/x-www-form-urlencoded' };
+    let teamColor = settings.teamColor;
+    let teamName = settings.teamName;
+// ===== ?????????J??t?F?[?Y =====
+        if (settings && settings.autoExploreEnabled) {
+          const didExplore = await autoExploreUnexplored({
+            steps: settings.autoExploreSteps || 1,
+            rows: settings.rows || 16,
+            cols: settings.cols || 16
+          });
+          if (didExplore) return; // ?J???????????I??
+        }
+
+    function logMessage(region, message, next) {
+      const date = new Date();
+      const ymd = date.toLocaleDateString('sv-SE').slice(2);
+      const time = date.toLocaleTimeString('sv-SE');
+      const timestamp = document.createElement('div');
+      timestamp.innerText = `${ymd}\n${time}`;
+      timestamp.style.fontSize = '90%';
+      timestamp.style.color = '#666';
+      timestamp.style.borderRight = 'solid 0.5px #888';
+      timestamp.style.whiteSpace = 'nowrap';
+
+      const regionDiv = document.createElement('div');
+      const progress = `${currentPeriod}?? ${currentProgress}%`;
+      if (region) regionDiv.innerText = `${progress}\ntarget: ${region}\n${next}`;
+      else regionDiv.innerText = next;
+      regionDiv.style.fontSize = '90%';
+      regionDiv.style.color = '#444';
+      regionDiv.style.borderRight = 'dotted 0.5px #888';
+      regionDiv.style.whiteSpace = 'nowrap';
+
+      const messageDiv = document.createElement('div');
+      messageDiv.textContent = message;
+
+      const div = document.createElement('div');
+      div.style.display = 'flex';
+      div.style.gap = '4px';
+      div.style.alignItems = 'center';
+      div.style.marginBottom = '-0.5px';
+      div.style.marginTop = '-0.5px';
+      div.style.border = 'solid 0.5px #888';
+
+      div.append(timestamp, regionDiv, messageDiv);
+      logArea.prepend(div);
+    }
+
+    const messageTypes = {
+      breaktime: [
+        '?`?[????Q?????????E????????????????A????o?g?????n??????????????????B',
+        '??????x?o?g????Q??????O??A???????????????B',
+        'ng: ?????????????'
+      ],
+      toofast: [
+        'ng<>too fast'
+      ],
+      retry: [
+        '???????`?[??????????g?????????????B????炭??????????????B'
+      ],
+      reset: [
+        '????^?C????U??????????B???O????B'
+      ],
+      quit: [
+        '?????`?[????Q??????K?v?????????B',
+        '?? 肪????????????????B',
+        '???????? 肪?????????????????B',
+        '???x????????????B'
+      ],
+      guardError: [
+        '[?x????]????'
+      ],
+      equipError: [
+        '?????h?? ???????????????B',
+        '???????????h????????s??????B',
+        '???????????h???????????????',
+        '??????????????????????????????B????????????????????????????????',
+        '?Q????????A????????????h???A?C?e??ID'
+      ],
+      nonAdjacent: [
+        '????^?C????U??????????B???????`?[??????s????????A????s?????????^?C?????????邱??????????B',
+        '???????`?[?????s????????????????A????`?[?????s??U??????????B'
+      ],
+      teamAdjacent: [
+        '????^?C????U??????????B???????`?[????????y????????????????????B',
+        '????^?C????U??????????B??s??D??????A???^?C????????????3??x?z???????K?v?????????B',
+        '????^?C????U??????????B??s??D??????A???^?C????????????2??x?z???????K?v?????????B',
+        '????^?C????U??????????B??s??D??????A???^?C????????????1??x?z???????K?v?????????B',
+        '????^?C????U??????????B???????s??U??????????B',
+        '?????s??U??????????B???????^?C?????????????'
+      ],
+      capitalAdjacent: [
+        '????^?C????U??????????B???G?????}?b?v???A??????????m??1????s????????????????????B'
+      ],
+      mapEdge: [
+        '????^?C????U??????????B???G?????}?b?v???A????????}?b?v??[?????????????B'
+      ]
+    }
+
+    function getMessageType (text) {
+      const result = Object.keys(messageTypes)
+        .find(key => messageTypes[key]
+          .some(v => text.includes(v))
+        )
+      return result;
+    }
+
+
+    let nextProgress;
+    async function attackRegion () {
+      await drawProgressBar();
+      if (isAutoJoinRunning || Math.abs(nextProgress - currentProgress) >= 3) {
+        return;
+      }
+
+    if (location.href.includes('/teambattle?m=rb')) {
+        try {
+          const res = await fetch(`/teambattle?m=rb&t=${Date.now()}`, { cache: 'no-store' });
+          if (res.ok) {
+            const text = await res.text();
+            const doc = new DOMParser().parseFromString(text, 'text/html');
+            const target = Array.from(doc.querySelectorAll('header span')).find(s => s.textContent.includes('?`?[??:'));
+            if (target) {
+              const raw = target.textContent;
+              if (raw.includes('???b?h')) {
+                teamName = '???b?h';
+                teamColor = 'd32f2f';
+              } else if (raw.includes('?u???[')) {
+                teamName = '?u???[';
+                teamColor = '1976d2';
+              }
+            }
+          }
+        } catch (e) { console.error(e); }
+      }
+
+      let regions = await getRegions();
+      const excludeSet = new Set();
+
+      // ===== AutoFill tracking (per period) =====
+      const autoFillKey = `rb_autofill_attacked_${MODE}_${currentPeriod}`;
+      const attackedArr = (()=>{ try { return JSON.parse(localStorage.getItem(autoFillKey) || '[]'); } catch(e){ return []; } })();
+      const attackedSet = new Set(attackedArr);
+      const markAttacked = (region) => {
+        if (!settings.autoFillEnabled) return;
+        if (!Array.isArray(region) || region.length < 2) return;
+        attackedSet.add(region.join(','));
+        localStorage.setItem(autoFillKey, JSON.stringify([...attackedSet]));
+      };
+
+      let cellType;
+      if (settings.autoFillEnabled) {
+        // Prefer frontier expansion, then sweep all remaining tiles
+        if (regions.frontier && regions.frontier.length > 0) {
+          cellType = 'frontier';
+        } else {
+          cellType = 'all';
+        }
+      } else {
+        if (regions.nonAdjacent.length > 0) {
+          cellType = 'nonAdjacent';
+        } else if (regions.teamAdjacent.length > 0) {
+          cellType = 'teamAdjacent';
+        } else if (regions.capitalAdjacent.length > 0) {
+          cellType = 'capitalAdjacent';
+        } else {
+          cellType = 'mapEdge';
+        }
+      }
+
+      while(dialog.open) {
+        let success = false;
+        isAutoJoinRunning = true;
+
+        regions[cellType] = regions[cellType]
+          .filter(e => !excludeSet.has(e.join(',')) && (!settings.autoFillEnabled || !attackedSet.has(e.join(','))));
+        for (const region of regions[cellType]) {
+          let errorCount = 0;
+          let next;
+          try {
+            const [cellRank, equipChangeStat] = await equipChange(region);
+            if (equipChangeStat === 'noEquip') {
+              excludeSet.add(region.join(','));
+              continue;
+            }
+
+            const [ text, lastLine ] = await challenge(region);
+            const messageType = getMessageType(lastLine);
+            let message = lastLine;
+            let processType;
+            let sleepTime = 2;
+
+            if (text.startsWith('?A???[?i?`???????W?J?n')||text.startsWith('???[?_?[??????')) {
+              success = true;
+              markAttacked(region);
+              message = '[????] ' + lastLine;
+              processType = 'return';
+            } else if (messageType === 'breaktime') {
+              success = true;
+              markAttacked(region);
+              message = lastLine;
+              processType = 'return';
+            } else if (messageType === 'toofast') {
+              sleepTime = 3;
+              processType = 'continue';
+            } else if (messageType === 'retry') {
+              sleepTime = 20;
+              processType = 'continue';
+            } else if (messageType === 'guardError') {
+              message = lastLine;
+              processType = 'continue';
+            } else if (messageType === 'equipError') {
+              message += ` (${cellRank}, ${currentEquipName})`;
+              processType = 'continue';
+            } else if (lastLine.length > 100) {
+              message = '?? ?V?X?e??';
+              processType = 'continue';
+            } else if (messageType === 'quit') {
+              message = '[??~] ' + lastLine;
+              processType = 'return';
+              clearInterval(autoJoinIntervalId);
+            } else if (messageType === 'reset') {
+              processType = 'break';
+            } else if (messageType in regions) {
+              excludeSet.add(region.join(','));
+              if (messageType === cellType) {
+                processType = 'continue';
+              } else if (messageType === 'nonAdjacent') {
+                cellType = 'nonAdjacent';
+                processType = 'break';
+              } else if (messageType === 'teamAdjacent') {
+                cellType = 'teamAdjacent';
+                processType = 'break';
+              } else if (messageType === 'capitalAdjacent') {
+                cellType = 'capitalAdjacent';
+                processType = 'break';
+              } else if (messageType === 'mapEdge') {
+                cellType = 'mapEdge';
+                processType = 'break';
+              }
+            }
+
+            if (success) {
+              if (currentProgress < 7) {
+                nextProgress = 20;
+               } else if (currentProgress < 24) {
+                nextProgress = 37;
+               } else if (currentProgress < 41) {
+                nextProgress = 53;
+               } else if (currentProgress < 57) {
+                nextProgress = 70;
+               } else if (currentProgress < 74) {
+                nextProgress = 86;
+               } else {
+                nextProgress = 3;
+               }
+              next = `?? ${nextProgress}?}2%`;
+              isAutoJoinRunning = false;
+            } else if (processType === 'return') {
+              next = '';
+              isAutoJoinRunning = false;
+            } else {
+              next = `?? ${sleepTime}s`;
+            }
+
+            logMessage(region, message, next);
+            await sleep(sleepTime * 1000);
+
+            if (processType === 'break') {
+              regions = await getRegions();
+              break;
+            } else if (processType === 'return') {
+              return;
+            }
+          } catch (e){
+            let message = '';
+            switch (e) {
+              case 403:
+                message = `[403] Forbidden`;
+                break;
+              case 404:
+                message = `[404] Not Found`;
+                break;
+              case 500:
+                message = `[500] Internal Server Error`;
+                break;
+              case 502:
+                message = `[502] Bad Gateway`;
+                break;
+              default:
+                message = e;
+                break;
+            }
+            if (e.message === '????O?C?????????????') {
+              logMessage(region, '[??~] ?? 肪???????????????', '');
+              isAutoJoinRunning = false;
+              clearInterval(autoJoinIntervalId);
+              return;
+            } else if (e === 403) {
+              logMessage(region, message, '');
+              isAutoJoinRunning = false;
+              clearInterval(autoJoinIntervalId);
+              return;
+            } else if ([404,500,502].includes(e)) {
+              errorCount++;
+              let sleepTime = 20 * errorCount;
+              if(sleepTime > 600) sleepTime = 600;
+              logMessage(region, message, `?? ${sleepTime}s`);
+              await sleep(sleepTime * 1000);
+            } else {
+              let sleepTime = 20;
+              logMessage(region, e, `?? ${sleepTime}s`);
+              await sleep(sleepTime * 1000);
+            }
+          }
+        }
+        if (!success && regions[cellType].length === 0) {
+          if (settings.autoFillEnabled) {
+            // frontier exhausted -> switch to sweep mode
+            if (cellType === 'frontier') {
+              regions = await getRegions();
+              cellType = 'all';
+              continue;
+            }
+            // all exhausted -> done for this period (or nothing interactable)
+            if (currentProgress < 7) {
+              nextProgress = 20;
+            } else if (currentProgress < 24) {
+              nextProgress = 37;
+            } else if (currentProgress < 41) {
+              nextProgress = 53;
+            } else if (currentProgress < 57) {
+              nextProgress = 70;
+            } else if (currentProgress < 74) {
+              nextProgress = 86;
+            } else {
+              nextProgress = 3;
+            }
+            const next = `→ ${nextProgress}±2%`;
+            isAutoJoinRunning = false;
+            logMessage(null, 'AutoFill: 攻撃可能なタイルが見つかりませんでした（全埋め完了 or 未踏で選択不可）', next);
+            return;
+          } else {
+            if (currentProgress < 7) {
+              nextProgress = 20;
+            } else if (currentProgress < 24) {
+              nextProgress = 37;
+            } else if (currentProgress < 41) {
+              nextProgress = 53;
+            } else if (currentProgress < 57) {
+              nextProgress = 70;
+            } else if (currentProgress < 74) {
+              nextProgress = 86;
+            } else {
+              nextProgress = 3;
+            }
+            const next = `→ ${nextProgress}±2%`;
+            isAutoJoinRunning = false;
+            logMessage(null, '攻撃可能なタイルが見つかりませんでした。', next);
+            return;
+          }
+        }
+      }
+    }
+
+  async function getRegions () {
+      try {
+        const res = await fetch('');
+        if (!res.ok) throw new Error(`[${res.status}] /teambattle`);
+        const text = await res.text();
+        const doc = new DOMParser().parseFromString(text, 'text/html');
+        const headerText = doc?.querySelector('header')?.textContent || '';
+        if (!headerText.includes('?? ?`?[????')) throw new Error('title.ng info');
+
+        const scriptContent = text; // ?? HTML?S????琳?K?\???????
+
+        let cellColors, capitalMap, rows, cols;
+        const waterSet = new Set();
+        const cellColorsMatch = scriptContent.match(/const cellColors = ({.+?});/s);
+        const validJsonStr = cellColorsMatch[1].replace(/'/g, '"').replace(/,\s*}/, '}');
+        cellColors = JSON.parse(validJsonStr);
+
+        const capitalListMatch = scriptContent.match(/const capitalList = (\[.*?\]);/s);
+        capitalMap = JSON.parse(capitalListMatch[1]);
+
+        const gridSizeMatch = scriptContent.match(/const GRID_SIZE = (\d+);/);
+        rows = cols = Number(gridSizeMatch[1]);
+
+        const terrainMatch = scriptContent.match(/const terrainsPayload = ({.+?});/s);
+        if (terrainMatch) {
+          const payload = JSON.parse(terrainMatch[1]);
+          payload.terrains.forEach(item => {
+            if (item.t === 'w') waterSet.add(`${item.x}-${item.y}`);
+          });
+        }
+
+        // ===== NEW: Fog of War (???j/?????Z???????????????) =====
+        const interactableSet = new Set(); // `${r}-${c}`
+
+        const fowMatch = scriptContent.match(/window\.__FOW\s*=\s*(\{.*?\})\s*;/s);
+        if (fowMatch) {
+          try {
+            const fow = JSON.parse(fowMatch[1]);
+            const addRC = (arr) => {
+              if (!Array.isArray(arr)) return;
+              for (const rc of arr) {
+                if (Array.isArray(rc) && rc.length >= 2) {
+                  interactableSet.add(`${rc[0]}-${rc[1]}`);
+                }
+              }
+            };
+            addRC(fow.explored);
+            addRC(fow.visible);
+
+            // hasCapital ?? true ??????A???????? explored/visible ?????????z?????A
+            // ?O????? empty ??????????????????i??t?H?[???o?b?N????
+          } catch (e) {
+            console.error(e, 'FOW parse error');
+          }
+        }
+
+        const cells = [];
+        const useFow = interactableSet && interactableSet.size > 0;
+
+        for (let r = 0; r < rows; r++) {
+          for (let c = 0; c < cols; c++) {
+            const key = `${r}-${c}`;
+            if (useFow && !interactableSet.has(key)) continue; // ?????????????
+            cells.push([r, c]);
+          }
+        }
+
+        const directions = [[-1, 0], [1, 0], [0, -1], [0, 1]];
+
+        const adjacentSet = new Set();
+        for (const [cr, cc] of capitalMap) {
+          for (const [dr, dc] of directions) {
+            const nr = cr + dr;
+            const nc = cc + dc;
+            if (nr >= 0 && nr < rows && nc >= 0 && nc < cols) {
+              adjacentSet.add(`${nr}-${nc}`);
+            }
+          }
+        }
+
+        const capitalSet = new Set(capitalMap.map(([r, c]) => `${r}-${c}`));
+
+        const nonAdjacentCells = cells.filter(([r, c]) => {
+          const key = `${r}-${c}`;
+          return !capitalSet.has(key) && !adjacentSet.has(key) && !waterSet.has(key);
+        });
+
+        const capitalAdjacentCells = cells.filter(([r, c]) => {
+          const key = `${r}-${c}`;
+          return adjacentSet.has(key) && !waterSet.has(key);
+        });
+
+        const teamColorSet = new Set();
+        for(const [key, value] of Object.entries(cellColors)) {
+          if (teamColor === value.replace('#','')) {
+            teamColorSet.add(key);
+          }
+        }
+
+        const teamAdjacentSet = new Set();
+        for (const key of [...teamColorSet]) {
+          const [tr, tc] = key.split('-');
+          for (const [dr, dc] of directions) {
+            const nr = Number(tr) + dr;
+            const nc = Number(tc) + dc;
+            if (nr >= 0 && nr < rows && nc >= 0 && nc < cols) {
+              teamAdjacentSet.add(`${nr}-${nc}`);
+            }
+          }
+        }
+
+        const teamAdjacentCells = cells.filter(([r, c]) => {
+          const key = `${r}-${c}`;
+          return (teamColorSet.has(key) || teamAdjacentSet.has(key)) && !waterSet.has(key);
+        })
+
+        const mapEdgeSet = new Set();
+        for (let i=0; i<rows; i++) {
+          mapEdgeSet.add(`${i}-0`);
+          mapEdgeSet.add(`${i}-${cols-1}`);
+        }
+        for (let i=0; i<cols; i++) {
+          mapEdgeSet.add(`0-${i}`);
+          mapEdgeSet.add(`${rows-1}-${i}`);
+        }
+
+        const mapEdgeCells = cells.filter(([r, c]) => {
+          const key = `${r}-${c}`;
+          return mapEdgeSet.has(key) && !capitalSet.has(key) && !waterSet.has(key);
+        })
+
+        function shuffle(arr) {
+          for (let i = arr.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [arr[i], arr[j]] = [arr[j], arr[i]];
+          }
+          return arr;
+        }
+
+        // ===== AutoFill support =====
+        const allCells = cells.filter(([r, c]) => !waterSet.has(`${r}-${c}`));
+
+        const frontierCells = [];
+        if (useFow) {
+          for (const [r, c] of allCells) {
+            const key = `${r}-${c}`;
+            // frontier = any interactable cell adjacent to an unknown (non-interactable) tile
+            for (const [dr, dc] of directions) {
+              const nr = r + dr;
+              const nc = c + dc;
+              if (nr < 0 || nr >= rows || nc < 0 || nc >= cols) continue;
+              const nkey = `${nr}-${nc}`;
+              if (!interactableSet.has(nkey)) {
+                frontierCells.push([r, c]);
+                break;
+              }
+            }
+          }
+        }
+
+
+        const regions = {
+          nonAdjacent: shuffle(nonAdjacentCells),
+          capitalAdjacent: shuffle(capitalAdjacentCells),
+          teamAdjacent: shuffle(teamAdjacentCells),
+          mapEdge: shuffle(mapEdgeCells),
+          all: shuffle(allCells),
+          frontier: shuffle(frontierCells)
+        };
+        return regions;
+      } catch (e) {
+        console.error(e);
+        return;
+      }
+    }
+
+    async function challenge (region) {
+      const [ row, col ] = region;
+      const body = `row=${row}&col=${col}`;
+      try {
+        const res = await fetch('/teamchallenge?'+MODE, {
+          method: 'POST',
+          body: body,
+          headers: headers
+        })
+
+        if(!res.ok) throw new Error(res.status);
+        const text = await res.text();
+        const lastLine = text.trim().split('\n').pop();
+        return [ text, lastLine ];
+      } catch (e) {
+        console.error(e);
+        throw e;
+      }
+
+    }
+    async function equipChange (region) {
+      const [ row, col ] = region;
+      const url = `https://donguri.5ch.net/teambattle?r=${row}&c=${col}&`+MODE;
+      try {
+        const res = await fetch(url);
+        if(!res.ok) throw new Error(`[${res.status}] /teambattle?r=${row}&c=${col}`);
+        const text = await res.text();
+        const doc = new DOMParser().parseFromString(text,'text/html');
+        const headerText = doc?.querySelector('header')?.textContent || '';
+        if(!headerText.includes('?? ?`?[????')) return Promise.reject(`title.ng`);
+        const table = doc.querySelector('table');
+        if(!table) throw new Error('table.ng');
+        const equipCond = table.querySelector('td small').textContent;
+        const rank = equipCond
+          .replace('?G???[?g','e')
+          .replace(/.+????|\w+-|???|????|?x????|?x|\s|\[|\]|\|/g,'');
+        const autoEquipItems = JSON.parse(localStorage.getItem('autoEquipItems')) || {};
+        const autoEquipItemsAutojoin = JSON.parse(localStorage.getItem('autoEquipItemsAutojoin')) || {};
+
+        if (autoEquipItemsAutojoin[rank]?.length > 0) {
+          const index = Math.floor(Math.random() * autoEquipItemsAutojoin[rank].length);
+          await setPresetItems(autoEquipItemsAutojoin[rank][index]);
+          return [rank, 'success'];
+        } else if (autoEquipItems[rank]?.length > 0) {
+          const index = Math.floor(Math.random() * autoEquipItems[rank].length);
+          await setPresetItems(autoEquipItems[rank][index]);
+          return [rank, 'success'];
+        } else {
+          return [rank, 'noEquip'];
+        }
+      } catch (e) {
+        console.error(e);
+        throw e;
+      }
+    }
+
+    if (!isAutoJoinRunning) {
+      attackRegion();
+    }
+    autoJoinIntervalId = setInterval(attackRegion,60000);
+  };
+
+  async function drawProgressBar(){
+    try {
+      const res = await fetch('https://donguri.5ch.net/');
+      if (!res.ok) throw new Error(res.status);
+      const text = await res.text();
+      const doc = new DOMParser().parseFromString(text, 'text/html');
+      const container = doc.querySelector('div.stat-block:nth-child(2)>div:nth-child(5)').cloneNode(true);
+      currentPeriod = Number(container.firstChild.textContent.match(/\d+/)[0]);
+      currentProgress = parseInt(container.lastElementChild.textContent);
+      let str,min,totalSec,sec,margin;
+
+      if (currentProgress === 0 || currentProgress === 50 || (location.href.includes('/teambattle?m=rb') && (currentProgress === 16 || currentProgress === 33 || currentProgress === 66 || currentProgress === 83))) {
+        str = '?i?}?b?v?X?V?j';
+      } else {
+        if (currentProgress === 100) {
+          min = 0;
+          sec = 20;
+          margin = 10;
+        } else {
+          if (location.href.includes('/teambattle?m=rb')) {
+             if (currentProgress <= 7) {
+               totalSec = (7 - currentProgress) * 600 / 16.6;
+             } else if (currentProgress <= 24) {
+               totalSec = (24 - currentProgress) * 600 / 16.6;
+             } else if (currentProgress <= 41) {
+               totalSec = (41 - currentProgress) * 600 / 16.6;
+             } else if (currentProgress <= 57) {
+               totalSec = (57 - currentProgress) * 600 / 16.6;
+             } else if (currentProgress <= 74) {
+               totalSec = (74 - currentProgress) * 600 / 16.6;
+             } else if (currentProgress <= 100) {
+               totalSec = (100 - currentProgress) * 600 / 16.6;
+             }
+          } else {
+          totalSec = (currentProgress < 50) ? (50 - currentProgress) * 36 : (100 - currentProgress) * 36 + 10;
+          }
+          totalSec = Math.floor(totalSec);
+          min = Math.trunc(totalSec / 60);
+          sec = totalSec % 60;
+          margin = 20;
+        }
+        str = '?i?c??' + min + '??' + sec + '?b \xb1' + margin + '?b?j';
+      }
+      progressBarBody.textContent = currentProgress + '%';
+      progressBarBody.style.width = currentProgress + '%';
+      progressBarInfo.textContent = `${MODENAME}??${currentPeriod}??${str}`;
+
+      const statBlock = doc.querySelector('.stat-block');
+      wood = statBlock.textContent.match(/?????: (\d+)/)[1];
+      steel = statBlock.textContent.match(/?S???: (\d+)/)[1];
+    } catch (e) {
+      console.error(e+' drawProgressBar()')
+    }
+  }
+
+  drawProgressBar();
+  function startAutoJoin() {
+    clearInterval(progressBarIntervalId);
+    progressBarIntervalId = null;
+    autoJoin();
+  }
+  let progressBarIntervalId = setInterval(drawProgressBar, 18000);
+  (()=>{ // autoJoin??progressBar??interval???
+    function stopAutoJoin() {
+      if (autoJoinIntervalId) {
+        clearInterval(autoJoinIntervalId);
+        autoJoinIntervalId = null;
+      }
+      isAutoJoinRunning = false;
+    }
+    const dialog = document.querySelector('.auto-join');
+    const observer = new MutationObserver(() => {
+      if (!dialog.open) {
+        stopAutoJoin();
+        drawProgressBar();
+        if (!progressBarIntervalId) {
+          progressBarIntervalId = setInterval(drawProgressBar, 18000);
+        }
+      }
+    });
+
+    observer.observe(dialog, {
+      attributes: true,
+      attributeFilter: ['open']
+    });
+  })();
+})();
