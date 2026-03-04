@@ -19,15 +19,15 @@
       currentEquip[index] = equipId;
       localStorage.setItem('current_equip', JSON.stringify(currentEquip));
     }
-       const tableIds = ['weaponTable', 'armorTable', 'necklaceTable'];
-       tableIds.forEach((elm, index)=>{
-         const equipLinks = document.querySelectorAll(`#${elm} a[href^="https://donguri.5ch.net/equip/"]`);
-         [...equipLinks].forEach(link => {
-           link.addEventListener('click', ()=>{
-             saveCurrentEquip(link.href, index);
-           })
-         })
-       })
+    const tableIds = ['weaponTable', 'armorTable', 'necklaceTable'];
+    tableIds.forEach((elm, index)=>{
+      const equipLinks = document.querySelectorAll(`#${elm} a[href^="https://donguri.5ch.net/equip/"]`);
+      [...equipLinks].forEach(link => {
+        link.addEventListener('click', ()=>{
+          saveCurrentEquip(link.href, index);
+        })
+      })
+    })
     return;
   }
 
@@ -48,53 +48,42 @@
   const settings = JSON.parse(localStorage.getItem('aat_settings')) || {};
 
   const header = document.querySelector('header');
-   const toolbarHost = header || document.body; // header無い場合の退避先
-   if (!header) {
-     console.warn('[AAT] <header> not found. Fallback to document.body.');
-   } else {
-     header.style.marginTop = '100px';
-   }
- 
-   const toolbar = document.createElement('div');
-   toolbar.style.position = 'fixed';
-   toolbar.style.top = '0';
-   toolbar.style.zIndex = '1';
-   toolbar.style.background = '#fff';
-   toolbar.style.border = 'solid 1px #000';
+  header.style.marginTop = '100px';
+  const toolbar = document.createElement('div');
+  toolbar.style.position = 'fixed';
+  toolbar.style.top = '0';
+  toolbar.style.zIndex = '1';
+  toolbar.style.background = '#fff';
+  toolbar.style.border = 'solid 1px #000';
+  (()=>{ // settings.toolbarPosition
+    const position = settings.toolbarPosition || 'left';
+    let distance = settings.toolbarPositionLength || '0px';
 
-   (()=>{ // settings.toolbarPosition
-     const position = settings.toolbarPosition || 'left';
-     let distance = settings.toolbarPositionLength || '0px';
- 
-     const match = distance.match(/^(\d+)(px|%|vw)?$/);
-     let value = match ? parseFloat(match[1]) : 0;
-     let unit = match ? match[2] || 'px' : 'px';
- 
-     const maxPx = vw / 3;
-     const maxPercent = 33;
-     const maxVw = 33;
-     if (unit === 'px') value = Math.min(value, maxPx);
-     else if (unit === '%') value = Math.min(value, maxPercent);
-     else if (unit === 'vw') value = Math.min(value, maxVw);
- 
-     distance = `${value}${unit}`;
- 
-     if (position === 'left') {
-       toolbar.style.left = distance;
-     } else if (position === 'right') {
-       toolbar.style.right = distance;
-     } else if (position === 'center') {
-       toolbar.style.left = distance;
-       toolbar.style.right = distance;
-     }
-   })();
- 
-   if (header) {
-     const h4 = header.querySelector('h4');
-     if (h4) h4.style.display = 'none';
-   }
-   // headerが無くても必ず表示されるように host へ付与
-   toolbarHost.append(toolbar);
+    const match = distance.match(/^(\d+)(px|%|vw)?$/);
+    let value = match ? parseFloat(match[1]) : 0;
+    let unit = match ? match[2] || 'px' : 'px';
+
+    const maxPx = vw / 3;
+    const maxPercent = 33;
+    const maxVw = 33;
+    if (unit === 'px') value = Math.min(value, maxPx);
+    else if (unit === '%') value = Math.min(value, maxPercent);
+    else if (unit === 'vw') value = Math.min(value, maxVw);
+
+    distance = `${value}${unit}`;
+
+    if (position === 'left') {
+      toolbar.style.left = distance;
+    } else if (position === 'right') {
+      toolbar.style.right = distance;
+    } else if (position === 'center') {
+      toolbar.style.left = distance;
+      toolbar.style.right = distance;
+    }
+  })();
+  const h4 = header.querySelector('h4');
+  if (h4) h4.style.display = 'none';
+  header.append(toolbar);
   const progressBarContainer = document.createElement('div');
   const progressBar = document.createElement('div');
   const progressBarBody = document.createElement('div');
@@ -327,31 +316,7 @@
             localStorage.setItem('aat_settings',JSON.stringify(settings));
           })
         }
-          // ===== AutoFill toggle (attack/fill continuously) =====
-         {
-            const label_ = label.cloneNode();
-            const span_ = span.cloneNode();
-            const span2_ = span2.cloneNode();
-            const cb = document.createElement('input');
-            cb.type = 'checkbox';
-            cb.checked = !!settings.autoFillEnabled;
-            span_.textContent = 'AutoFill (continuous)';
-            span2_.append(cb);
-            label_.append(span_, span2_);
-            div.append(label_);
 
-            cb.addEventListener('change', () => {
-              settings.autoFillEnabled = cb.checked;
-              localStorage.setItem('aat_settings', JSON.stringify(settings));
-            });
-
-            const note = document.createElement('p');
-            note.style.margin = '6px 0 0';
-            note.style.fontSize = '85%';
-            note.textContent = 'ON: success後に「%待ち」へ入らず、短い待機(秒)で連続攻撃します。';
-            div.append(note);
-          }
-          // ===== /AutoFill toggle =====
         const description = document.createElement('p');
         description.style.fontSize = '90%';
         description.innerText = 'チームカラーは小文字/大文字も正確に入力してください。（自陣の隣接タイル取得に必要）\nあらかじめ装備パネルからエリートも含め各ランクの装備を登録してください。（所持していない場合は除く）\n※装備を登録していないと成功率が低下します。'
@@ -2017,6 +1982,11 @@
       const tables = document.querySelectorAll('table');
       const newTables = doc.querySelectorAll('table');
       newTables.forEach((table, i) => { if (tables[i]) tables[i].replaceWith(table); });
+      //gridLegendを非表示化
+      const legend = document.getElementById('gridLegend');
+      if (legend) {
+        legend.style.display = 'none';
+      }
 
       addCustomColor();
       return refreshedCells;
@@ -2038,7 +2008,7 @@
       grid.parentNode.style.height = null;
       grid.parentNode.style.padding = '20px 0';
       grid.parentNode.style.maxWidth = '100%';
-      grid.parentNode.style.overflowX = 'auto';
+      //grid.parentNode.style.overflowX = 'auto';
     }
 
     const cells = grid ? grid.querySelectorAll('.cell') : [];
@@ -2060,9 +2030,9 @@
       const text = await res.text();
       const doc = new DOMParser().parseFromString(text, 'text/html');
       const headerText = doc?.querySelector('header')?.textContent || '';
-      if(!headerText.includes('どんぐりチーム戦い')) throw new Error(`title.ng [${row}][${col}]`);
+      if(!headerText.includes('どんぐりチーム戦い')) return;
       const rank = doc.querySelector('small')?.textContent || '';
-      if(!rank) return Promise.reject(`rank.ng [${row}][${col}]`);
+      if(!rank) return;
       const leader = doc.querySelector('strong')?.textContent || '';
       const shortenRank = rank.replace('[エリート]','e').replace('[警備員]だけ','警').replace('から','-').replace(/(まで|\[|\]|\||\s)/g,'');
       const teamname = doc.querySelector('table').rows[1]?.cells[2].textContent;
@@ -2538,6 +2508,8 @@
       grid.style.gridTemplateColumns = `repeat(${count}, 35px)`;
 
       for (const cell of cells) {
+        if (!cell.dataset.rank) continue;
+
         cell.style.width = '30px';
         cell.style.height = '30px';
         cell.style.borderWidth = '1px';
@@ -2565,6 +2537,8 @@
       grid.style.gridTemplateColumns = `repeat(${count}, 105px)`;
 
       for (const cell of cells) {
+        if (!cell.dataset.rank) continue;
+
         while (cell.firstChild) {
           cell.firstChild.remove();
         }
@@ -2585,328 +2559,13 @@
   let autoJoinIntervalId;
   let isAutoJoinRunning = false;
   const sleep = s => new Promise(r=>setTimeout(r,s));
-// =================== 全マス埋め（AutoFill）司令塔 ===================
+  async function autoJoin() {
+    const dialog = document.querySelector('.auto-join');
 
-  const __autoFill = (() => {
-    const KEY = 'rb_autofill_v1';
-    const load = () => { try { return JSON.parse(localStorage.getItem(KEY)) || {}; } catch { return {}; } };
-    const save = (obj) => localStorage.setItem(KEY, JSON.stringify(obj));
-
-    return {
-      markAttacked(r,c) {
-        const obj = load();
-        obj[`${r}-${c}`] = 1;
-        save(obj);
-      },
-      isAttacked(r,c) {
-        const obj = load();
-        return !!obj[`${r}-${c}`];
-      },
-      count() {
-        const obj = load();
-        return Object.keys(obj).length;
-      },
-      reset() {
-        localStorage.removeItem(KEY);
-      }
-    };
-  })();
-
-  function buildAllCells(rows, cols, waterSet) {
-    const all = [];
-    for (let r = 0; r < rows; r++) {
-      for (let c = 0; c < cols; c++) {
-        const k = `${r}-${c}`;
-        if (waterSet && waterSet.has(k)) continue;
-        all.push([r,c]);
-      }
-    }
-    return all;
-  }
-
-function pickNextUnexplored(allCells, exploredSet) {
-  for (const [r,c] of allCells) {
-    if (!exploredSet.has(`${r}-${c}`)) return [r,c];
-  }
-  return null;
-  }
-
-  function pickNextUnattacked(allCells) {
-    for (const [r,c] of allCells) {
-      if (!__autoFill.isAttacked(r,c)) return [r,c];
-    }
-    return null;
-  }
-
-  async function autoFillDirector({ rows = 16, cols = 16, waterSet = new Set() } = {}) {
-    const html = await fetchCurrentHtml();
-    const fow = parseFowFromHtml(html);
-    if (!fow) return { acted: false, reason: 'no_fow' };
-
-    const exploredSet = buildSetsFromFow(fow); // explored+visible の Set（既存関数）
-
-    const allCells = buildAllCells(rows, cols, waterSet);
-
-    // 1) 未踏が残っているなら開拓（遷移して踏破を増やす）
-    const nextUnexplored = pickNextUnexplored(allCells, exploredSet);
-    if (nextUnexplored) {
-      const [r,c] = nextUnexplored;
-      await sleep(800 + Math.floor(Math.random()*1000));
-      goToRC(r,c);
-      return { acted: true, mode: 'explore', target: [r,c] };
-    }
-
-    // 2) 未踏が無ければ未攻撃を潰す（遷移先で既存攻撃ロジックに撃たせる）
-    const nextUnattacked = pickNextUnattacked(allCells);
-    if (nextUnattacked) {
-      const [r,c] = nextUnattacked;
-      await sleep(800 + Math.floor(Math.random()*1000));
-      goToRC(r,c);
-      return { acted: true, mode: 'attack', target: [r,c] };
-    }
-
-    // 3) 完了
-    return { acted: false, done: true, attacked: __autoFill.count(), total: allCells.length };
-  }
-  // ===============================================================
-
-  // =================== 未踏自動開拓ユーティリティ ===================
-
-  function getModeQS() {
-    const u = new URL(location.href);
-    const m = u.searchParams.get('m');
-    return m ? `&m=${encodeURIComponent(m)}` : '';
-  }
-
-  function parseFowFromHtml(html) {
-    const m = html.match(/window\.__FOW\s*=\s*(\{.*?\})\s*;/s);
-    if (!m) return null;
-    try { return JSON.parse(m[1]); } catch { return null; }
-  }
-
-  async function fetchCurrentHtml() {
-    const res = await fetch(location.href, { cache: 'no-store' });
-    return await res.text();
-  }
-
-  function toKey(r,c){ return `${r}-${c}`; }
-
-  function buildSetsFromFow(fow) {
-    const explored = new Set();
-    const add = (arr) => {
-      if (!Array.isArray(arr)) return;
-      for (const rc of arr) {
-        if (Array.isArray(rc) && rc.length >= 2)
-        explored.add(toKey(rc[0], rc[1]));
-      }
-    };
-    add(fow?.explored);
-    add(fow?.visible);
-    return explored;
-  }
-
-  function neighbors4(r,c){
-    return [[r-1,c],[r+1,c],[r,c-1],[r,c+1]];
-  }
-
-  function buildFrontier(exploredSet, rows, cols) {
-    const frontier = [];
-    for (const key of exploredSet) {
-      const [r,c] = key.split('-').map(Number);
-      for (const [nr,nc] of neighbors4(r,c)) {
-        if (nr < 0 || nc < 0 || nr >= rows || nc >= cols) continue;
-        const nk = toKey(nr,nc);
-        if (!exploredSet.has(nk)) frontier.push([nr,nc]);
-      }
-    }
-    const uniq = new Map();
-    for (const [r,c] of frontier) uniq.set(toKey(r,c), [r,c]);
-    return [...uniq.values()];
-  }
-
-  function pickRandom(arr) {
-    return arr[Math.floor(Math.random() * arr.length)];
-  }
-
-  function goToRC(r, c) {
-    const base = `https://donguri.5ch.net/teambattle?r=${r}&c=${c}`;
-    location.href = base + getModeQS();
-  }
-
-   // =================== 完全自動戦線構築（FOW+地形+敵方向） ===================
-
-   const __autoExploreHistory = (() => {
-     const key = 'rb_autoexplore_hist_v2';
-     const load = () => { try { return JSON.parse(localStorage.getItem(key)) || []; } catch { return []; } };
-     const save = (arr) => localStorage.setItem(key, JSON.stringify(arr.slice(-60)));
-     return {
-       push(k){ const arr = load(); arr.push({k, t: Date.now()}); save(arr); },
-       penalty(k){
-         const arr = load();
-         let p = 0;
-         for (let i = arr.length - 1, cnt = 0; i >= 0 && cnt < 24; i--, cnt++) {
-           if (arr[i].k === k) p += (24 - cnt); // 直近ほど重い
-         }
-         return p;
-       }
-     };
-   })();
-
-   function manhattan(r1,c1,r2,c2){ return Math.abs(r1-r2)+Math.abs(c1-c2); }
-
-   function parseMapMetaFromHtml(html) {
-     // teambattleページ内の script から GRID_SIZE / terrainsPayload / capitalMap を回収
-     const doc = new DOMParser().parseFromString(html, 'text/html');
-     const allScripts = Array.from(doc.querySelectorAll('script')).map(s => s.textContent || '').join('\n');
-
-     const gridSizeMatch = allScripts.match(/const GRID_SIZE\s*=\s*(\d+)\s*;/);
-     const rows = gridSizeMatch ? Number(gridSizeMatch[1]) : 16;
-     const cols = rows;
- 
-     const waterSet = new Set();
-     const terrainMatch = allScripts.match(/const terrainsPayload\s*=\s*({.+?});/s);
-     if (terrainMatch) {
-       try {
-         const payload = JSON.parse(terrainMatch[1]);
-         if (payload && Array.isArray(payload.terrains)) {
-           for (const item of payload.terrains) {
-             // 既存の getRegions() と同じルール：t==='w' を水として扱う
-             if (item && item.t === 'w') waterSet.add(`${item.x}-${item.y}`);
-           }
-         }
-       } catch (e) { console.error('terrainsPayload parse error', e); }
-     }
-
-     const capMatch = allScripts.match(/const (?:capitalMap|capitalList)\s*=\s*(\[.*?\]);/s);
-     const capitalMap = capMatch ? (()=>{ try { return JSON.parse(capMatch[1]); } catch { return []; } })() : [];
-
-     return { rows, cols, waterSet, capitalMap };
-   }
-
-   function pickEnemyCapitalAuto(exploredSet, capitalMap, rows, cols) {
-     // 自動推定：踏破済の重心から「最も遠い首都」を敵として仮定（首都が2つ以上ある前提）
-     if (!Array.isArray(capitalMap) || capitalMap.length === 0) return null;
-     let sr = 0, sc = 0, n = 0;
-     for (const k of exploredSet) {
-       const [r,c] = k.split('-').map(Number);
-       if (!Number.isFinite(r) || !Number.isFinite(c)) continue;
-       sr += r; sc += c; n++;
-     }
-     const cr = n ? (sr / n) : Math.floor(rows/2);
-     const cc = n ? (sc / n) : Math.floor(cols/2);
-
-     let best = null;
-     let bestD = -1;
-     for (const rc of capitalMap) {
-       if (!Array.isArray(rc) || rc.length < 2) continue;
-       const [r,c] = rc;
-       const d = manhattan(r,c,cr,cc);
-       if (d > bestD) { bestD = d; best = { r, c }; }
-     }
-     return best;
-   }
- 
-   function scoreFrontier(r, c, exploredSet, waterSet, rows, cols, enemy) {
-     const key = `${r}-${c}`;
-     if (waterSet && waterSet.has(key)) return -1e9; // 水は絶対に踏まない
-
-     const er = enemy?.r ?? Math.floor(rows/2);
-     const ec = enemy?.c ?? Math.floor(cols/2);
-
-     // 敵に近いほど高スコア
-     const towardEnemy = (rows + cols) - manhattan(r,c,er,ec);
-
-     // 伸びしろ（この先に未踏が多いほど前線が伸びる）
-     let extend = 0;
-     for (const [nr,nc] of neighbors4(r,c)) {
-       if (nr < 0 || nc < 0 || nr >= rows || nc >= cols) continue;
-       const nk = `${nr}-${nc}`;
-       if (!exploredSet.has(nk) && !(waterSet && waterSet.has(nk))) extend++;
-     }
-
-     // 幅維持（踏破済隣接が多い＝横に厚みを作る）
-     let support = 0;
-     for (const [nr,nc] of neighbors4(r,c)) {
-       if (nr < 0 || nc < 0 || nr >= rows || nc >= cols) continue;
-       if (exploredSet.has(`${nr}-${nc}`)) support++;
-     }
-
-     const loopPenalty = __autoExploreHistory.penalty(key) * 6;
-
-     // frontierが細りすぎたら厚み優先、通常は敵方向＋伸長優先
-     // （呼び出し側で frontierCount を見て “thin” を渡してもいいが、ここでは重みで吸収）
-     return towardEnemy * 6 + extend * 10 + support * 4 - loopPenalty;
-   }
-
-   async function autoExploreFrontline({ rows = 16, cols = 16, enemy = null } = {}) {
-     const html = await fetchCurrentHtml();
-     const fow = parseFowFromHtml(html);
-     if (!fow) return false;
-
-     // rows/cols/water/capitals をページから自動取得（固定16を脱却）
-     const meta = parseMapMetaFromHtml(html);
-     rows = meta?.rows ?? rows;
-     cols = meta?.cols ?? cols;
-     const waterSet = meta?.waterSet ?? new Set();
-     const capitalMap = meta?.capitalMap ?? [];
-
-     const explored = buildSetsFromFow(fow); // explored+visible の和（あなたの既存関数）
-
-     // enemyCapital を自動推定（settingsに無ければ）
-     if (!enemy) enemy = pickEnemyCapitalAuto(explored, capitalMap, rows, cols);
-
-     // frontier を作り、水を除外
-     const rawFrontier = buildFrontier(explored, rows, cols);
-     const frontier = rawFrontier.filter(([r,c]) => !waterSet.has(`${r}-${c}`));
-     if (!frontier.length) return false;
-
-     // スコア最大（同点はランダム）
-     let bestScore = -Infinity;
-     let best = [];
-     for (const [r,c] of frontier) {
-       const s = scoreFrontier(r,c,explored,waterSet,rows,cols,enemy);
-       if (s > bestScore) { bestScore = s; best = [[r,c]]; }
-       else if (s === bestScore) best.push([r,c]);
-     }
-
-     const [r,c] = pickRandom(best);
-
-     await sleep(800 + Math.floor(Math.random()*1100)); // 800-1900ms（安全寄り）
-     __autoExploreHistory.push(`${r}-${c}`);
-     goToRC(r,c);
-     return true;
-   }
-
-   // =================================================================
-
-  // ===============================================================
-    async function autoJoin() {
-      const dialog = document.querySelector('.auto-join');
-      const logArea = dialog.querySelector('.auto-join-log');
-      const headers = { 'Content-Type': 'application/x-www-form-urlencoded' };
-      let teamColor = settings.teamColor;
-      let teamName = settings.teamName;
-  // ===== AutoFill（全マス埋め）最優先 =====
-    if (settings && settings.autoFillEnabled) {
-      const rows = settings.rows || 16;
-      const cols = settings.cols || 16;
-
-    // waterSet をまだ取れてない版：ひとまず空（＝水も踏む可能性あり）
-    // ※後で parseMapMetaFromHtml に差し替えると完成度が上がる
-      const waterSet = new Set();
-
-      const res = await autoFillDirector({ rows, cols, waterSet });
-      if (res && res.acted) return; // 遷移したらこのターン終了
-    }
-  // ===== 未踏自動開拓フェーズ =====
-        if (settings && settings.autoExploreEnabled) {
-          const didExplore = await autoExploreUnexplored({
-            steps: settings.autoExploreSteps || 1,
-            rows: settings.rows || 16,
-            cols: settings.cols || 16
-          });
-          if (didExplore) return; // 遷移したらここで終了
-        }
+    const logArea = dialog.querySelector('.auto-join-log');
+    const headers = { 'Content-Type': 'application/x-www-form-urlencoded' };
+    let teamColor = settings.teamColor;
+    let teamName = settings.teamName;
 
     function logMessage(region, message, next) {
       const date = new Date();
@@ -2922,7 +2581,7 @@ function pickNextUnexplored(allCells, exploredSet) {
       const regionDiv = document.createElement('div');
       const progress = `${currentPeriod}期 ${currentProgress}%`;
       if (region) regionDiv.innerText = `${progress}\ntarget: ${region}\n${next}`;
-      else regionDiv.innerText = next;
+      else regionDiv.innerText = `${progress}\n${region ? `target: ${region}\n` : ''}${next}`;
       regionDiv.style.fontSize = '90%';
       regionDiv.style.color = '#444';
       regionDiv.style.borderRight = 'dotted 0.5px #888';
@@ -3005,11 +2664,10 @@ function pickNextUnexplored(allCells, exploredSet) {
 
     let nextProgress;
     async function attackRegion () {
-       await drawProgressBar();
-       const autoFill = !!(settings && settings.autoFillEnabled);
-       if (isAutoJoinRunning) return;
-       if (!autoFill && Math.abs(nextProgress - currentProgress) >= 3) return;
-
+      await drawProgressBar();
+      if (isAutoJoinRunning || Math.abs(nextProgress - currentProgress) >= 3) {
+        return;
+      }
 
     if (location.href.includes('/teambattle?m=rb')) {
         try {
@@ -3033,25 +2691,22 @@ function pickNextUnexplored(allCells, exploredSet) {
       }
 
       let regions = await getRegions();
-       const excludeSet = new Set();
+      const excludeSet = new Set();
 
-       const pickCellType = (rgn) => {
-         if (rgn.nonAdjacent.length > 0) return 'nonAdjacent';
-         if (rgn.teamAdjacent.length > 0) return 'teamAdjacent';
-         if (rgn.capitalAdjacent.length > 0) return 'capitalAdjacent';
-         return 'mapEdge';
-       };
+      let cellType;
+      if (regions.nonAdjacent.length > 0) {
+        cellType = 'nonAdjacent';
+      } else if (regions.teamAdjacent.length > 0) {
+        cellType = 'teamAdjacent';
+      } else if (regions.capitalAdjacent.length > 0) {
+        cellType = 'capitalAdjacent';
+      } else {
+        cellType = 'mapEdge';
+      }
 
-       while(dialog.open) {
-         let cellType = pickCellType(regions);
-
-         let success = false;
-         isAutoJoinRunning = true;
-
-         // ※ cellType は毎周回 pickCellType(regions) で更新される
-
-
-
+      while(dialog.open) {
+        let success = false;
+        isAutoJoinRunning = true;
 
         regions[cellType] = regions[cellType]
           .filter(e => !excludeSet.has(e.join(',')));
@@ -3074,13 +2729,11 @@ function pickNextUnexplored(allCells, exploredSet) {
             if (text.startsWith('アリーナチャレンジ開始')||text.startsWith('リーダーになった')) {
               success = true;
               message = '[成功] ' + lastLine;
-              if (settings && settings.autoFillEnabled) sleepTime = 3;
-              processType = (settings && settings.autoFillEnabled) ? 'break' : 'return';
+              processType = 'return';
             } else if (messageType === 'breaktime') {
               success = true;
               message = lastLine;
-              if (settings && settings.autoFillEnabled) sleepTime = 3;
-              processType = (settings && settings.autoFillEnabled) ? 'break' : 'return';
+              processType = 'return';
             } else if (messageType === 'toofast') {
               sleepTime = 3;
               processType = 'continue';
@@ -3122,38 +2775,27 @@ function pickNextUnexplored(allCells, exploredSet) {
             }
 
             if (success) {
-              if (settings && settings.autoFillEnabled) {
-                const u = new URL(location.href);
-                const r = Number(u.searchParams.get('r'));
-                const c = Number(u.searchParams.get('c'));
-                if (Number.isFinite(r) && Number.isFinite(c)) __autoFill.markAttacked(r, c);
-
-                 // AutoFill中は「次の%待ち」に入らない
-                 nextProgress = currentProgress;
-                 next = `→ ${sleepTime}s`;
+              if (currentProgress < 16) {
+                nextProgress = 26;
+               } else if (currentProgress < 33) {
+                nextProgress = 43;
+               } else if (currentProgress < 50) {
+                nextProgress = 60;
+               } else if (currentProgress < 66) {
+                nextProgress = 76;
+               } else if (currentProgress < 83) {
+                nextProgress = 93;
                } else {
-                 if (currentProgress < 7) {
-                   nextProgress = 20;
-                 } else if (currentProgress < 24) {
-                   nextProgress = 37;
-                 } else if (currentProgress < 41) {
-                   nextProgress = 53;
-                 } else if (currentProgress < 57) {
-                   nextProgress = 70;
-                 } else if (currentProgress < 74) {
-                   nextProgress = 86;
-                 } else {
-                   nextProgress = 3;
-                 }
-                 next = `→ ${nextProgress}±2%`;
-                 isAutoJoinRunning = false;
+                nextProgress = 10;
                }
-             } else if (processType === 'return') {
-               next = '';
-               isAutoJoinRunning = false;
-             } else {
-               next = `→ ${sleepTime}s`;
-             }
+              next = `→ ${nextProgress}±2%`;
+              isAutoJoinRunning = false;
+            } else if (processType === 'return') {
+              next = '';
+              isAutoJoinRunning = false;
+            } else {
+              next = `→ ${sleepTime}s`;
+            }
 
             logMessage(region, message, next);
             await sleep(sleepTime * 1000);
@@ -3206,39 +2848,29 @@ function pickNextUnexplored(allCells, exploredSet) {
             }
           }
         }
-        if (!success) {
-           const allEmpty = ['nonAdjacent','teamAdjacent','capitalAdjacent','mapEdge']
-             .every(k => (regions[k] || []).length === 0);
-
-           if (!allEmpty) {
-             // 他カテゴリに候補がある：次周回で cellType を更新して続行
-             continue;
-           }
-
-           // 全カテゴリ空：ここで初めて「次の%待ち」で停止
-           if (currentProgress < 7) {
-             nextProgress = 20;
-           } else if (currentProgress < 24) {
-             nextProgress = 37;
-           } else if (currentProgress < 41) {
-             nextProgress = 53;
-           } else if (currentProgress < 57) {
-             nextProgress = 70;
-           } else if (currentProgress < 74) {
-             nextProgress = 86;
-           } else {
-             nextProgress = 3;
-           }
-           const next = `→ ${nextProgress}±2%`;
-           isAutoJoinRunning = false;
-           logMessage(null, '攻撃可能なタイルが見つかりませんでした。', next);
-           return;
-         }
+        if (!success && regions[cellType].length === 0) {
+              if (currentProgress < 7) {
+                nextProgress = 20;
+               } else if (currentProgress < 24) {
+                nextProgress = 37;
+               } else if (currentProgress < 41) {
+                nextProgress = 53;
+               } else if (currentProgress < 57) {
+                nextProgress = 70;
+               } else if (currentProgress < 74) {
+                nextProgress = 86;
+               } else {
+                nextProgress = 3;
+               }
+          const next = `→ ${nextProgress}±2%`;
+          isAutoJoinRunning = false;
+          logMessage(null, '攻撃可能なタイルが見つかりませんでした。', next);
+          return;
         }
       }
     }
 
-  async function getRegions () {
+    async function getRegions () {
       try {
         const res = await fetch('');
         if (!res.ok) throw new Error(`[${res.status}] /teambattle`);
@@ -3247,65 +2879,56 @@ function pickNextUnexplored(allCells, exploredSet) {
         const headerText = doc?.querySelector('header')?.textContent || '';
         if (!headerText.includes('どんぐりチーム戦い')) throw new Error('title.ng info');
 
-        const scriptContent = text; // ← HTML全体から正規表現で抜く
+        const scripts = doc.querySelectorAll('.gridCanvasOuter script');
+        const scriptContent = Array.from(scripts).map(s => s.textContent).join('\n');
 
         let cellColors, capitalMap, rows, cols;
         const waterSet = new Set();
-        const cellColorsMatch = scriptContent.match(/const cellColors = ({.+?});/s);
+
+        const cellColorsMatch = scriptContent.match(/const\s+cellColors\s*=\s*({[\s\S]+?});/);
         const validJsonStr = cellColorsMatch[1].replace(/'/g, '"').replace(/,\s*}/, '}');
         cellColors = JSON.parse(validJsonStr);
 
-        const capitalListMatch = scriptContent.match(/const capitalList = (\[.*?\]);/s);
+        const capitalListMatch = scriptContent.match(/const\s+capitalList\s*=\s*(\[[\s\S]*?\]);/);
         capitalMap = JSON.parse(capitalListMatch[1]);
 
-        const gridSizeMatch = scriptContent.match(/const GRID_SIZE = (\d+);/);
+        const gridSizeMatch = scriptContent.match(/const\s+GRID_SIZE\s*=\s*(\d+);/);
         rows = cols = Number(gridSizeMatch[1]);
 
-        const terrainMatch = scriptContent.match(/const terrainsPayload = ({.+?});/s);
-        if (terrainMatch) {
+        const terrainMatch = scriptContent.match(/const\s+terrainsPayload\s*=\s*({[\s\S]+?});/);
+        if (terrainMatch && terrainMatch[1]) {
           const payload = JSON.parse(terrainMatch[1]);
-          payload.terrains.forEach(item => {
-            if (item.t === 'w') waterSet.add(`${item.x}-${item.y}`);
-          });
+          if (payload.terrains) {
+            payload.terrains.forEach(item => {
+              const r = item.r ?? item.row ?? item.x;
+              const c = item.c ?? item.col ?? item.y;
+              if (item.t === 'w') waterSet.add(`${r}-${c}`);
+            });
+          }
         }
-
-        // ===== NEW: Fog of War (踏破/可視のセルだけを候補にする) =====
-        const interactableSet = new Set(); // `${r}-${c}`
-
-        const fowMatch = scriptContent.match(/window\.__FOW\s*=\s*(\{.*?\})\s*;/s);
-        if (fowMatch) {
-          try {
-            const fow = JSON.parse(fowMatch[1]);
-            const addRC = (arr) => {
-              if (!Array.isArray(arr)) return;
-              for (const rc of arr) {
-                if (Array.isArray(rc) && rc.length >= 2) {
-                  interactableSet.add(`${rc[0]}-${rc[1]}`);
-                }
-              }
-            };
-            addRC(fow.explored);
-            addRC(fow.visible);
-
-            // hasCapital が true のときは、少なくとも explored/visible が存在する想定だが、
-            // 念のため empty のままでも落ちないように後段でフォールバックする
-          } catch (e) {
-            console.error(e, 'FOW parse error');
+        
+        const exploredSet = new Set();
+        const fowMatch = scriptContent.match(/window\.__FOW\s*=\s*({[\s\S]+?});/);
+        if (fowMatch && fowMatch[1]) {
+          const fowData = JSON.parse(fowMatch[1]);
+          if (fowData.explored) {
+            fowData.explored.forEach(([r, c]) => exploredSet.add(`${r}-${c}`));
           }
         }
 
         const cells = [];
-        const useFow = interactableSet && interactableSet.size > 0;
-
         for (let r = 0; r < rows; r++) {
           for (let c = 0; c < cols; c++) {
-            const key = `${r}-${c}`;
-            if (useFow && !interactableSet.has(key)) continue; // 未踏は候補にしない
             cells.push([r, c]);
           }
         }
 
-        const directions = [[-1, 0], [1, 0], [0, -1], [0, 1]];
+        const directions = [
+          [-1, 0],
+          [1, 0],
+          [0, -1],
+          [0, 1]
+        ];
 
         const adjacentSet = new Set();
         for (const [cr, cc] of capitalMap) {
@@ -3377,16 +3000,20 @@ function pickNextUnexplored(allCells, exploredSet) {
           return arr;
         }
 
+        //霧セル除外
+        const filterFog = (list) => list.filter(([r, c]) => exploredSet.has(`${r}-${c}`));
+
         const regions = {
-          nonAdjacent: shuffle(nonAdjacentCells),
-          capitalAdjacent: shuffle(capitalAdjacentCells),
-          teamAdjacent: shuffle(teamAdjacentCells),
-          mapEdge: shuffle(mapEdgeCells)
+          nonAdjacent: shuffle(filterFog(nonAdjacentCells)),
+          capitalAdjacent: shuffle(filterFog(capitalAdjacentCells)),
+          teamAdjacent: shuffle(filterFog(teamAdjacentCells)),
+          mapEdge: shuffle(filterFog(mapEdgeCells))
         };
+
         return regions;
       } catch (e) {
         console.error(e);
-        return;
+        throw e;
       }
     }
 
