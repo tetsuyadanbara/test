@@ -81,7 +81,8 @@
       toolbar.style.right = distance;
     }
   })();
-  header.querySelector('h4').style.display = 'none';
+  const h4 = header.querySelector('h4');
+  if (h4) h4.style.display = 'none';
   header.append(toolbar);
   const progressBarContainer = document.createElement('div');
   const progressBar = document.createElement('div');
@@ -1872,8 +1873,8 @@
 
       const text = await res.text();
       const doc = new DOMParser().parseFromString(text, 'text/html');
-      const h1 = doc?.querySelector('h1')?.textContent;
-      if (h1 !== 'どんぐりチーム戦い') throw new Error('title.ng info');
+      const headerText = doc?.querySelector('header')?.textContent || '';
+      if (!headerText.includes('どんぐりチーム戦い')) throw new Error('title.ng info');
 
       const currentCells = grid.querySelectorAll('.cell');
       const scriptContent = doc.querySelector('.grid > script').textContent;
@@ -2000,10 +2001,10 @@
       if(!res.ok) throw new Error(res.status + ' res.ng');
       const text = await res.text();
       const doc = new DOMParser().parseFromString(text, 'text/html');
-      const h1 = doc?.querySelector('h1')?.textContent;
-      if(h1 !== 'どんぐりチーム戦い') throw new Error(`title.ng [${row}][${col}][${h1}]`);
+      const headerText = doc?.querySelector('header')?.textContent || '';
+      if(!headerText.includes('どんぐりチーム戦い')) throw new Error(`title.ng [${row}][${col}]`);
       const rank = doc.querySelector('small')?.textContent || '';
-      if(!rank) return Promise.reject(`rank.ng [${row}][${col}][${h1}]`);
+      if(!rank) return Promise.reject(`rank.ng [${row}][${col}]`);
       const leader = doc.querySelector('strong')?.textContent || '';
       const shortenRank = rank.replace('[エリート]','e').replace('[警備員]だけ','警').replace('から','-').replace(/(まで|\[|\]|\||\s)/g,'');
       const teamname = doc.querySelector('table').rows[1]?.cells[2].textContent;
@@ -2192,8 +2193,8 @@
       if(!res.ok) throw new Error('res.ng');
       const text = await res.text();
       const doc = new DOMParser().parseFromString(text,'text/html');
-      const h1 = doc?.querySelector('h1')?.textContent;
-      if(h1 !== 'どんぐりチーム戦い') return Promise.reject(`title.ng`);
+      const headerText = doc?.querySelector('header')?.textContent || '';
+      if(!headerText.includes('どんぐりチーム戦い')) return Promise.reject(`title.ng`);
       const table = doc.querySelector('table');
       if(!table) throw new Error('table.ng');
       showArenaTable(table);
@@ -2570,9 +2571,11 @@
         'もう一度バトルに参加する前に、待たなければなりません。',
         'ng: ちょっとゆっくり'
       ],
-      retry: [
-        'あなたのチームは動きを使い果たしました。しばらくお待ちください。',
+      toofast: [
         'ng<>too fast'
+      ],
+      retry: [
+        'あなたのチームは動きを使い果たしました。しばらくお待ちください。'
       ],
       reset: [
         'このタイルは攻撃できません。範囲外です。'
@@ -2583,13 +2586,15 @@
         'あなたのどんぐりが理解できませんでした。',
         'レベルが低すぎます。'
       ],
+      guardError: [
+        '[警備員]だけ'
+      ],
       equipError: [
         '武器と防具を装備しなければなりません。',
         '装備している防具と武器が力不足です。',
         '装備している防具と武器が強すぎます',
         '装備しているものは改造が多すぎます。改造の少ない他のものをお試しください',
-        '参加するには、装備中の武器と防具のアイテムID',
-        '[警備員]だけ'
+        '参加するには、装備中の武器と防具のアイテムID'
       ],
       nonAdjacent: [
         'このタイルは攻撃できません。あなたのチームが首都を持つまで、どの首都にも隣接するタイルを主張することはできません。',
@@ -2688,30 +2693,31 @@
             let sleepTime = 2;
 
             if (messageType === 'capitalAttack') {
-              if (loop < 4){
+              if (loop < 7){
                 loop += 1;
-                message = '[ﾘﾄﾗｲ] '+ lastLine;
+                message = '[ﾘﾄﾗｲ] ' + lastLine;
                 processType = 'continue';
               } else {
-                success = true;
                 loop += 1;
+                success = true;
                 message = '[成功] ' + lastLine;
                 processType = 'return';
                 i++;
               }
             } else if (text.startsWith('リーダーになった')) {
-              if (loop < 4){
+              if (loop < 7){
                 loop += 1;
                 message = '[ﾘﾄﾗｲ] ' + lastLine;
                 processType = 'continue';
               } else {
-                success = true;
                 loop += 1;
+                success = true;
                 message = '[成功] ' + lastLine;
                 processType = 'return';
               }
               i++;
             } else if (text.startsWith('アリーナチャレンジ開始')) {
+              loop += 1;
               success = true;
               message = '[成功] ' + lastLine;
               processType = 'return';
@@ -2721,13 +2727,19 @@
               message = lastLine;
               processType = 'return';
               i++;
+            } else if (messageType === 'toofast') {
+              sleepTime = 3;
+              processType = 'continue';
             } else if (messageType === 'retry') {
               sleepTime = 20;
               processType = 'continue';
-              i++;
-            } else if (messageType === 'equipError'){
+            } else if (messageType === 'guardError') {
+              message = lastLine;
               processType = 'continue';
+              i++;
+            } else if (messageType === 'equipError') {
               message += ` (${cellRank}, ${currentEquipName})`;
+              processType = 'continue';
               i++;
             } else if (lastLine.length > 100) {
               message = 'どんぐりシステム';
@@ -2888,8 +2900,8 @@
         if (!res.ok) throw new Error(`[${res.status}] /teambattle`);
         const text = await res.text();
         const doc = new DOMParser().parseFromString(text, 'text/html');
-        const h1 = doc?.querySelector('h1')?.textContent;
-        if (h1 !== 'どんぐりチーム戦い') throw new Error('title.ng info');
+        const headerText = doc?.querySelector('header')?.textContent || '';
+        if (!headerText.includes('どんぐりチーム戦い')) throw new Error('title.ng info');
 
         const scriptContent = doc.querySelector('.grid > script').textContent;
         const cellColorsString = scriptContent.match(/const cellColors = ({.+?})/s)[1];
@@ -3025,11 +3037,11 @@
       const url = `https://donguri.5ch.net/teambattle?r=${row}&c=${col}&`+MODE;
       try {
         const res = await fetch(url);
-        if(!res.ok) throw new Error(`[${res.status}] /teambattle?r=${row}&c=${col}}`);
+        if(!res.ok) throw new Error(`[${res.status}] /teambattle?r=${row}&c=${col}`);
         const text = await res.text();
         const doc = new DOMParser().parseFromString(text,'text/html');
-        const h1 = doc?.querySelector('h1')?.textContent;
-        if(h1 !== 'どんぐりチーム戦い') return Promise.reject(`title.ng`);
+        const headerText = doc?.querySelector('header')?.textContent || '';
+        if(!headerText.includes('どんぐりチーム戦い')) return Promise.reject(`title.ng`);
         const table = doc.querySelector('table');
         if(!table) throw new Error('table.ng');
         const equipCond = table.querySelector('td small').textContent;
