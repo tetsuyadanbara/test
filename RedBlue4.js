@@ -1920,7 +1920,7 @@
       grid.style.gridTemplateRows = `repeat(${rows}, 35px)`;
       grid.style.gridTemplateColumns = `repeat(${cols}, 35px)`;
       grid.style.gap = '2px';
-      grid.style.justifyContent = 'center';
+      grid.style.justifyContent = 'start';
       grid.style.position = 'relative';
 
       grid.style.maxWidth = '100%';
