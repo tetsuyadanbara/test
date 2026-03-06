@@ -1,20 +1,18 @@
 // ==UserScript==
 // @name         Donguri Bag Enhancer
-// @namespace    https://donguri.5ch.net/
-// @version      8.18.6.3
+// @namespace    https://donguri.5ch.io/
+// @version      10.0.0.0
 // @description  5ちゃんねる「どんぐりシステム」の「アイテムバッグ」ページ機能改良スクリプト。
 // @author       福呼び草
 // @assistant    ChatGPT (OpenAI)
 // @contributor  "ID:YTtKPa4Z0"
 // @license      BSD-3-Clause license
-// @updateURL    https://github.com/Fukuyobisou/Donguri_Bag_Enhancer/raw/main/Donguri_Bag_Enhancer.user.js
-// @downloadURL  https://github.com/Fukuyobisou/Donguri_Bag_Enhancer/raw/main/Donguri_Bag_Enhancer.user.js
-// @match        https://donguri.5ch.net/
-// @match        https://donguri.5ch.net
-// @match        https://donguri.5ch.net/bag
-// @match        https://donguri.5ch.net/chest
-// @match        https://donguri.5ch.net/battlechest
-// @match        https://donguri.5ch.net/itemwatch
+// @match        https://donguri.5ch.io/
+// @match        https://donguri.5ch.io
+// @match        https://donguri.5ch.io/bag
+// @match        https://donguri.5ch.io/chest
+// @match        https://donguri.5ch.io/battlechest
+// @match        https://donguri.5ch.io/itemwatch
 // @run-at       document-end
 // @grant        none
 // ==/UserScript==
@@ -25,8 +23,13 @@
   // ============================================================
   // スクリプト自身のバージョン（About 表示用）
   // ============================================================
-  const DBE_VERSION    = '8.18.6.3';
+  const DBE_VERSION    = '10.0.0.0';
 
+  // ============================================================
+  // 現在のどんぐりドメイン
+  // - 固定ドメイン文字列に依存しないよう、実行中オリジンを使う
+  // ============================================================
+  const DBE_ORIGIN = location.origin;
   // ============================================================
   // 多重起動ガード（同一ページで DBE が複数注入される事故を防ぐ）
   // - 既に同等以上のバージョンが動いている場合、このインスタンスは停止
@@ -108,7 +111,7 @@
       const host = ensureNameBadgeHost(nameCell);
       if (!host) return;
       const CLS   = {unknown:'dbe-badge-unknown', new:'dbe-badge-new', lock:'dbe-badge-lock'};
-      const TXT   = {unknown:'❓',                new:'🔰',            lock:'🔒'};
+      const TXT   = {unknown:'?',                new:'??',            lock:'??'};
       const ORDER = {unknown:'1',                 new:'2',             lock:'3'};
       const cls = CLS[type]; if (!cls) return;
       let el = host.querySelector('.'+cls);
@@ -138,7 +141,7 @@
   chestDiag('BOOT: script loaded, DBE_VERSION=', DBE_VERSION, 'pathname=', location.pathname);
 
   // ============================================================
-  // トップページ（https://donguri.5ch.net/）での「どんぐりネーム / どんぐりID」取得・記憶
+  // トップページ（https://donguri.5ch.io/）での「どんぐりネーム / どんぐりID」取得・記憶
   // - 左ペイン（.stats.header の最初の <div>）から抽出
   // - どんぐりネーム：<div style="font-size:2em;">...</div> の textContent
   // - どんぐりID：『ID: 』に続く半角英数字
@@ -226,7 +229,7 @@
   const HIDE_KEY       = 'donguriHideRecycleBtn';
   const SHOW_DELTA_KEY = 'donguriShowDeltaColumn';
 
-  // 新しい安定ID ↔ 既存キー のエイリアス）
+  // 新しい安定ID ? 既存キー のエイリアス）
   const DBE_KEYS = {
     unlockedColor: { id:'dbe-prm-panel0-setcol.ll-unlocked',        legacy:'unlockedColor',            def:'#ff6600'              },
     lockedColor:   { id:'dbe-prm-panel0-setcolor-cell-locked',      legacy:'lockedColor',              def:'#ffffff'              },
@@ -508,7 +511,7 @@
   // ============================================================
   /**
   * @param {HTMLElement} th - ヘッダー th
-  * @param {'⬆'|'⬇'} arrow - 矢印
+  * @param {'?'|'?'} arrow - 矢印
   * @param {'left'|'right'} position - インジケーター位置
   * @param {string=} label - インジケータ内に表示するテキスト（例: 'Rarity','限定','カナ'）
   */
@@ -542,7 +545,7 @@
     span.style.fontWeight = 'bold';
 
     // インジケーター本体
-    const svg = ARROW_SVG[ arrow === '⬇' ? 'down' : 'up' ];
+    const svg = ARROW_SVG[ arrow === '?' ? 'down' : 'up' ];
     if (label) {
       // (SVG) テキスト の形で表示（ブラケット無し）、テキストは 0.8em
       span.innerHTML = `${svg}<span class="sort-label">${label}</span>`;
@@ -567,8 +570,8 @@
     // th に付いている class のうち、columnIds のいずれかを見つける
     const colClass = Array.from(th.classList).find(c => allColumnClasses.includes(c)) || null;
     lastSortedColumn  = colClass;
-    // '⬇' を正順、'⬆' を逆順とみなす
-    lastSortAscending = (arrow === '⬇');
+    // '?' を正順、'?' を逆順とみなす
+    lastSortAscending = (arrow === '?');
   }
 
   // --- 最後に使用したソート関数を記憶するマップ（先に初期化） ---
@@ -641,7 +644,7 @@
 
   // --- 最後にソートされた列と方向を記憶 ---
   let lastSortedColumn  = null;  // 最後にソートされた列の class 名 (columnIds のいずれか)
-  let lastSortAscending = null;  // true=正順(⬇), false=逆順(⬆)
+  let lastSortAscending = null;  // true=正順(?), false=逆順(?)
 
   // --- 状態管理変数 ---
   let lastClickedCellId = null;
@@ -663,7 +666,7 @@
   }
 
   // ============================================================
-  // アイテムウォッチ（https://donguri.5ch.net/itemwatch）
+  // アイテムウォッチ（https://donguri.5ch.io/itemwatch）
   // - header 直下の <p style="text-align:center;margin:0 auto;"></p> の「前」に
   //   チェックボックス「自分だけ抽出」を挿入
   // - ON のとき、表の「アイテム保持者の名前」列が localStorage['donguri-name'] と完全一致する行だけ表示
@@ -905,7 +908,7 @@
       }
 
       /* --- ページ上の「全て分解する」ボタンにのみ適用 --- */
-      form[action="https://donguri.5ch.net/recycleunlocked"] > button {
+      form[action$="/recycleunlocked"] > button {
         display: block;
         margin: 8px auto;
         font-size: 1em;
@@ -1274,7 +1277,7 @@
         width: 100%;            /* ← 横幅を持たせて中央寄せを効かせる */
       }
       /* パラメータ見出し《…》だけを小さくする */
-      .fc-param-head{
+      .fc-param-head {
         font-size: 0.9em;
       }
       /* section separator: 外枠色で1px、幅7割、中央寄せ */
@@ -1308,7 +1311,11 @@
       /* 《マリモ》行のテキストボックス専用クラス（どのブラウザでも効く） */
       .mrm-input{ width: 10em !important; }
 
-      /* ===== Filter Card builder: tighten control-to-label spacing ===== */
+      /* ===== フィルタカード設定ウインドウ ===== */
+      #dbe-W-Rules {
+      min-width: 720px;
+      }
+      /* Filter Card builder: tighten control-to-label spacing */
       #dbe-W-Rules .dbe-filter-card-builder label {
         display: inline-flex;
         align-items: center;
@@ -1365,6 +1372,8 @@
       }
       /* #dbe-W-Backup の段の間の余白指定 */
     #dbe-W-Backup { --dbe-backup-row-gap: 24px; }
+      /* 左列《…》の改行禁止 */
+      .fc-left {white-space: nowrap;}
 
       /* === △ここまで△ フィルタカード新規フォーム 共通 === */
 
@@ -1535,8 +1544,8 @@
       const ul = document.createElement('ul');
       ul.id = 'treasurebox';
       ul.innerHTML = `
-        <li><a href="https://donguri.5ch.net/chest">宝箱</a></li>
-        <li><a href="https://donguri.5ch.net/battlechest">バトル宝箱</a></li>
+        <li><a href="${DBE_ORIGIN}/chest">宝箱</a></li>
+        <li><a href="${DBE_ORIGIN}/battlechest">バトル宝箱</a></li>
       `;
       const firstH3 = anchors[0].parentNode;
       firstH3.parentNode.insertBefore(ul, firstH3);
@@ -2076,7 +2085,7 @@
     rowItemId.append(cbItemId, document.createTextNode('名称列と装備列の間にアイテムIDを表示する'));
     secSettings.appendChild(rowItemId);
 
-    // -- 解析失敗の見える化（❓付与） ---
+    // -- 解析失敗の見える化（?付与） ---
     const cbElemUnknown = document.createElement('input');
     cbElemUnknown.type = 'checkbox';
     cbElemUnknown.id   = 'dbe-prm-elem-unknown-include';
@@ -2090,7 +2099,7 @@
     rowElemUnknown.style.display = 'flex';
     rowElemUnknown.style.gap = '8px';
     rowElemUnknown.style.alignItems = 'center';
-    rowElemUnknown.append(cbElemUnknown, document.createTextNode('解析失敗した装備に❓を付与する'));
+    rowElemUnknown.append(cbElemUnknown, document.createTextNode('解析失敗した装備に?を付与する'));
 
     secSettings.appendChild(rowElemUnknown);
 
@@ -2130,7 +2139,7 @@
 
     // --- 「全て分解する」ボタン（アラート枠の内側へ） ---
     const allForm=document.createElement('form');
-    allForm.action='https://donguri.5ch.net/recycleunlocked'; allForm.method='POST';
+    allForm.action=`${DBE_ORIGIN}/recycleunlocked`; allForm.method='POST';
     const allBtn=document.createElement('button');
     allBtn.type='submit';
     allBtn.textContent='ロックされていないアイテムを全て分解する';
@@ -2320,7 +2329,13 @@
     // Rarity/Grade カラー（文字色に適用）
     const RAR_COLOR = { UR:'#F45D01', SSR:'#A633D6', SR:'#1E88E5', R:'#2E7D32', N:'#9E9E9E' };
     const GRD_COLOR = { Pt:'#F45D01', Au:'#A633D6', Ag:'#1E88E5', CuSn:'#2E7D32', Cu:'#9E9E9E' };
-    const TYPE_LABEL = { normal:'標準の宝箱', large:'大型の宝箱', battle:'バトル宝箱' };
+    const TYPE_LABEL = {
+      normal:'武器と防具：標準サイズ',
+      large :'武器と防具：大型サイズ',
+      battle:'ネックレス：バトル標準サイズ',       // 互換（旧battle）
+      battle_normal:'ネックレス：バトル標準サイズ',
+      battle_large :'ネックレス：バトル大型サイズ'
+    };
 
     function dbeEnsureChestProgressUI(){
       const wnd = ensureWindowShell('dbe-W-ChestProgress');
@@ -2496,7 +2511,7 @@
     function dbeChestOpenStep(){
       try{
         const DBE_CHEST = (window.DBE_CHEST = window.DBE_CHEST || {});
-        return (DBE_CHEST.type === 'large') ? 10 : 1;
+        return (DBE_CHEST.type === 'large' || DBE_CHEST.type === 'battle_large') ? 10 : 1;
       }catch(_){ return 1; }
     }
     function dbeChestBumpProcessed(step, src, url){
@@ -3076,7 +3091,7 @@
             DBE_CHEST._serverError  = false;
             // 自動実行フラグ ON（この間だけカウント対象）
             DBE_CHEST._autoRunning  = true;
-            // (4) onHold / onlyNew / 🔰 を開始時にクリア
+            // (4) onHold / onlyNew / ?? を開始時にクリア
             try{
               // onHold クラス除去
               document.querySelectorAll('tr.dbe-prm-Chest--onhold').forEach(tr=>tr.classList.remove('dbe-prm-Chest--onhold'));
@@ -3085,7 +3100,7 @@
                 tr.classList.remove('dbe-prm-Chest--onlynew');
                 if (tr.dataset) delete tr.dataset.dbeOnlynew;
               });
-              // 🔰（newbie）除去：name-badge API が存在すれば利用
+              // ??（newbie）除去：name-badge API が存在すれば利用
               if (typeof window.DBE_setNameBadge === 'object' && window.DBE_setNameBadge){
                 ['#weaponTable','#armorTable','#necklaceTable'].forEach(sel=>{
                   const tb = document.querySelector(sel);
@@ -3789,11 +3804,11 @@
         DBE_CHEST.qRecycle = [];
         DBE_CHEST.qUnlock = [];
       }catch(_){}
-      // 3) onHold を全て消去し、onlyNew マーキング済みの行に🔰を付与（要件(7-a)）
+      // 3) onHold を全て消去し、onlyNew マーキング済みの行に??を付与（要件(7-a)）
       try{
         // onHold 解除
         document.querySelectorAll('tr.dbe-prm-Chest--onhold').forEach(tr=>tr.classList.remove('dbe-prm-Chest--onhold'));
-        // onlyNew の行を検出（クラスまたは data 属性）→ 🔰 付与
+        // onlyNew の行を検出（クラスまたは data 属性）→ ?? 付与
         const onlyNewRows = document.querySelectorAll('tr.dbe-prm-Chest--onlynew,[data-dbe-onlynew="1"]');
         if (typeof window.DBE_setNameBadge === 'object' && window.DBE_setNameBadge){
           onlyNewRows.forEach(tr=>{
@@ -3801,7 +3816,7 @@
             if (nameTd) try{ window.DBE_setNameBadge.newbie(nameTd, true); }catch(_){}
           });
         }
-        // onlyNew マーキング自体は残す（🔰可視のため）。必要ならここで消す:
+        // onlyNew マーキング自体は残す（??可視のため）。必要ならここで消す:
         // onlyNewRows.forEach(tr=>{ tr.classList.remove('dbe-prm-Chest--onlynew'); if (tr.dataset) delete tr.dataset.dbeOnlynew; });
       }catch(_){}
       // 4) 進行UIの操作状態を「停止」見た目に強制変更（中断=無効 / 閉じる=有効）＋オーバーレイ解除
@@ -4253,10 +4268,10 @@
     if (!bNavi || !bChest || !bRecycle || !bSettings) {
       // 既存の子を一度クリア（壊れている可能性もあるため）
       while (dock.firstChild) dock.firstChild.remove();
-      bNavi     = makeBtn('dbe-MenuBar-navi',     '↕️');
-      bChest    = makeBtn('dbe-MenuBar-chest',    '🎁');
-      bRecycle  = makeBtn('dbe-MenuBar-recycle',  '♻️');
-      bSettings = makeBtn('dbe-MenuBar-settings', '⚙️');
+      bNavi     = makeBtn('dbe-MenuBar-navi',     '??');
+      bChest    = makeBtn('dbe-MenuBar-chest',    '??');
+      bRecycle  = makeBtn('dbe-MenuBar-recycle',  '??');
+      bSettings = makeBtn('dbe-MenuBar-settings', '??');
       dock.append(bNavi, bChest, bRecycle, bSettings);
     }
     // ラッパ（#dbe-MenuBar）を用意して dbe-Menu を格納
@@ -4524,7 +4539,7 @@
       };
     }
 
-    // エクスポート（JSON; 順序含め完全復元可能）— OSの保存ダイアログ使用（標準名のみ・記憶しない）
+    // エクスポート（JSON; 順序含め完全復元可能）? OSの保存ダイアログ使用（標準名のみ・記憶しない）
     async function dbeExportFilterCards(){
       try{
         const payload = {
@@ -4681,7 +4696,7 @@
       grp2.id = 'filtercard';
       Object.assign(grp2.style,{
         border:'1px solid #CCC',
-        borderRadius:'8px',
+        borderRadius:'10px',
         padding:'8px',
         display:'grid',
         gap:'8px'
@@ -4709,7 +4724,7 @@
       const btnRules = document.createElement('button');
       btnRules.type = 'button'; // ← フォーム送信によるページ遷移を抑止
       btnRules.textContent = 'フィルタカードを設定';
-      Object.assign(btnRules.style,{ fontSize:'0.9em', margin:'0.5em', padding:'8px 12px' });
+      Object.assign(btnRules.style,{ borderRadius:'10px', fontSize:'0.9em', margin:'0.5em', padding:'12px 8px' });
       btnRules.addEventListener('click', (ev) => {
         try {
           if (ev && typeof ev.preventDefault === 'function') ev.preventDefault();
@@ -4723,7 +4738,7 @@
       const btnBackup = document.createElement('button');
       btnBackup.type = 'button';
       btnBackup.textContent = 'バックアップと復元';
-      Object.assign(btnBackup.style,{ fontSize:'0.9em', margin:'0.5em', padding:'8px 12px' });
+      Object.assign(btnBackup.style,{ borderRadius:'10px', fontSize:'0.9em', margin:'0.5em', padding:'12px 8px' });
       btnBackup.addEventListener('click', (ev) => {
         ev?.preventDefault?.();
         ev?.stopPropagation?.();
@@ -4754,7 +4769,7 @@
 
       // ◇3段目：テキスト＋宝箱3ボタン（枠内）
       const grp3 = document.createElement('div');
-      Object.assign(grp3.style,{border:'1px solid #CCC', borderRadius:'8px', padding:'8px', display:'grid', gap:'8px'});
+      Object.assign(grp3.style,{border:'1px solid #CCC', borderRadius:'10px', padding:'8px', display:'grid', gap:'6px'});
       // 1行目：テキスト
       const row3a = document.createElement('div');
       const desc = document.createElement('div');
@@ -4762,28 +4777,42 @@
       Object.assign(desc.style,{fontSize:'1.1em'});
       row3a.appendChild(desc);
 
-      // 2行目：3ボタン（標準／大型／バトル）
+      // 2行目：4ボタン（武器防具：標準/大型、ネックレス：バトル標準/大型）
       const row3b = document.createElement('div');
       const btns = document.createElement('div');
       Object.assign(btns.style,{margin:'0.5em',display:'flex',gap:'20px',flexWrap:'wrap',justifyContent:'center',alignItems:'center',width:'100%'});
-      const btnNormal = document.createElement('button'); btnNormal.id = 'dbe-btn-Chest--normal'; btnNormal.innerHTML='標準の宝箱<br>（武器と防具）';
-      const btnLarge  = document.createElement('button'); btnLarge.id  = 'dbe-btn-Chest--large';  btnLarge.innerHTML='大型の宝箱<br>（武器と防具）';
-      const btnBattle = document.createElement('button'); btnBattle.id = 'dbe-btn-Chest--battle'; btnBattle.innerHTML='バトル宝箱<br>（ネックレス）';
-      [btnBattle, btnLarge, btnNormal].forEach(b=>Object.assign(b.style,{padding:'6px 10px'}));
-      btns.append(btnBattle, btnLarge, btnNormal);
+
+      const btnNormal = document.createElement('button');
+      btnNormal.id = 'dbe-btn-Chest--normal';
+      btnNormal.innerHTML='宝箱<br>(武器と防具)<br>標準<br>10 鉄キー';
+
+      const btnLarge  = document.createElement('button');
+      btnLarge.id  = 'dbe-btn-Chest--large';
+      btnLarge.innerHTML='宝箱<br>(武器と防具)<br>大型<br>100 鉄キー';
+
+      const btnBattleNormal = document.createElement('button');
+      btnBattleNormal.id = 'dbe-btn-Chest--battle-normal';
+      btnBattleNormal.innerHTML='バトル宝箱<br>(ネックレス)<br>標準<br>10 トークン';
+
+      const btnBattleLarge = document.createElement('button');
+      btnBattleLarge.id = 'dbe-btn-Chest--battle-large';
+      btnBattleLarge.innerHTML='バトル宝箱<br>(ネックレス)<br>大型<br>100 トークン';
+
+      [btnNormal, btnLarge, btnBattleNormal, btnBattleLarge].forEach(b=>Object.assign(b.style,{ borderRadius:'10px', fontSize:'0.8em', padding:'12px 8px' }));
+      btns.append(btnNormal, btnLarge, btnBattleNormal, btnBattleLarge);
       row3b.append(btns);
       grp3.append(row3a, row3b);
 
       // 「新規装備のみを選別の対象にする」チェックボックス
       const rowOnlyNew = document.createElement('div');
-      Object.assign(rowOnlyNew.style,{margin:'0.2em',display:'flex',gap:'12px',flexWrap:'wrap',justifyContent:'center',alignItems:'center',width:'100%'});
+      Object.assign(rowOnlyNew.style,{ margin:'0.3em',display:'flex',gap:'12px',flexWrap:'wrap',justifyContent:'center',alignItems:'center',width:'100%',fontSize:'0.9em',lineHeight:'1.2em' });
       const cbOnlyNew = document.createElement('input');
       cbOnlyNew.type='checkbox';
       cbOnlyNew.id='dbe-check-Chest--onlynew';
       cbOnlyNew.checked = true;
       const lbOnlyNew = document.createElement('label');
       lbOnlyNew.htmlFor = cbOnlyNew.id;
-      lbOnlyNew.textContent = '新規装備のみを選別の対象にする';
+      lbOnlyNew.innerHTML = '新しく獲得した装備だけをフィルタカードで選別する<br>（ OFF にすると手持ちの未施錠装備も対象に含める）';
       rowOnlyNew.append(cbOnlyNew, lbOnlyNew);
       grp3.appendChild(rowOnlyNew);
       wrap.appendChild(grp3);
@@ -4808,7 +4837,8 @@
       }
       btnNormal.addEventListener('click', ()=>{ __DBE_prepProgressUI('normal'); const fn = (window.startChestProcess || __DBE_local_startChestProcess); if (typeof fn==='function') return fn('normal'); });
       btnLarge .addEventListener('click', ()=>{ __DBE_prepProgressUI('large');  const fn = (window.startChestProcess || __DBE_local_startChestProcess); if (typeof fn==='function') return fn('large');  });
-      btnBattle.addEventListener('click', ()=>{ __DBE_prepProgressUI('battle'); const fn = (window.startChestProcess || __DBE_local_startChestProcess); if (typeof fn==='function') return fn('battle'); });
+      btnBattleNormal.addEventListener('click', ()=>{ __DBE_prepProgressUI('battle_normal'); const fn = (window.startChestProcess || __DBE_local_startChestProcess); if (typeof fn==='function') return fn('battle_normal'); });
+      btnBattleLarge .addEventListener('click', ()=>{ __DBE_prepProgressUI('battle_large');  const fn = (window.startChestProcess || __DBE_local_startChestProcess); if (typeof fn==='function') return fn('battle_large');  });
 
       // ◇4段目：回数指定/無制限 ラジオ
       const row4 = document.createElement('div');
@@ -4851,12 +4881,12 @@
       busy:false,
       iframe:null,
       pre:{wep:new Set(), amr:new Set()},   // 既存ID（新規判定用）
-      lastNew:{wep:new Set(), amr:new Set(), nec:new Set()}, // 直近の🔰保持（付替え用）
+      lastNew:{wep:new Set(), amr:new Set(), nec:new Set()}, // 直近の??保持（付替え用）
       qLock:[],                              // ロック用キュー [{table:'wep'|'amr', id:'123'}]
       qRecycle:[],                           // 分解用キュー（DOM の a[href*="/recycle/"] を順次 click）
       qUnlock:[],                            // 最終解除用キュー
       stage:'idle',
-      type:null,                             // 'normal' | 'large' | 'battle'
+      type:null,                             // 'normal' | 'large' | 'battle_normal' | 'battle_large'（battle は互換）
       onlyNew:true,                          // 「新規のみ」フラグ
       onHoldIds:new Set(),                   // メインページで onhold 済ID
       delay:()=>300,                        // 待機ms（間隔±揺らぎ）
@@ -5019,9 +5049,13 @@
       // 背景iframeを起動
       const fr = ensureBgFrame();
       DBE_CHEST.stage = 'load_chest';
-      fr.src = (kind==='battle')
-        ? 'https://donguri.5ch.net/battlechest'
-        : 'https://donguri.5ch.net/chest';
+      const isBattleKind = (k)=>{
+        const s = String(k || '');
+        return (s === 'battle' || s === 'battle_normal' || s === 'battle_large');
+      };
+      fr.src = isBattleKind(kind)
+        ? `${DBE_ORIGIN}/battlechest`
+        : `${DBE_ORIGIN}/chest`;
     }
 
     function ensureBgFrame(){
@@ -5189,7 +5223,7 @@
     function updateNewbieBadgesAfterChest(kind, doc){
       // kind: 'normal'|'large'|'battle'
       if (kind==='battle'){
-        // ネックレスのみ：前の🔰を全消し → 今回の新規だけ付ける
+        // ネックレスのみ：前の??を全消し → 今回の新規だけ付ける
         clearNewbieBadgesInTable('necklaceTable');
         const currentIds = collectRowIdsFromTable('necklaceTable', document);
         // 直前の chest 前と比較して「増えた分」を新規とみなす
@@ -5253,14 +5287,21 @@
           // 種別ごとの候補（正規表現／文字列の両方で吸収）
           const matcher = (el)=>{
             const v = val(el.value);
-            if (type==='battle')   return /バトル?宝箱を開(く|ける)/.test(v);
-            if (type==='normal')   return /標準サイズの宝箱を開ける/.test(v);
-            /* large */            return /大型サイズの宝箱を開ける/.test(v);
+            if (type==='battle')        return /標準サイズのバトル宝箱を開く/.test(v); // 互換：旧battleは標準扱い
+            if (type==='battle_normal') return /標準サイズのバトル宝箱を開く/.test(v);
+            if (type==='battle_large')  return /大型サイズのバトル宝箱を開く/.test(v);
+            if (type==='normal')        return /標準サイズの宝箱を開ける/.test(v);
+            /* large */                 return /大型サイズの宝箱を開ける/.test(v);
           };
           // まず input[type=submit] を走査、見つからなければ form[action*="battlechest"] 直下の submit を拾う
           let btn = Array.from(doc.querySelectorAll('input[type="submit"]')).find(matcher);
-          if (!btn && type==='battle'){
-            btn = doc.querySelector('form[action*="battlechest"] input[type="submit"], form[action*="openbattlechest"] input[type="submit"]');
+          const isBattleType = (t)=> (t==='battle' || t==='battle_normal' || t==='battle_large');
+          if (!btn && isBattleType(type)){
+            // フォールバック：hidden chestsize から form を特定して submit を拾う（標準=A65 / 大型=B70）
+            const want = (type==='battle_large') ? 'B70' : 'A65';
+            const hidden = doc.querySelector(`form[action*="openbattlechest"] input[name="chestsize"][value="${want}"], form[action*="battlechest"] input[name="chestsize"][value="${want}"]`);
+            const form = hidden ? hidden.closest('form') : null;
+            btn = form ? (form.querySelector('input[type="submit"], button[type="submit"]')) : null;
           }
           if (!btn){
             // 送信ボタンが見つからない場合のみサーバーエラー推定を実施
@@ -5298,7 +5339,7 @@
               if (DBE_CHEST.liveDom){ patchBagFromDoc(doc); } // 書き込み
               // ② onhold ロック＋ ルールでロック／分解対象をキュー化（可視DOMを基準に組み立て）
               buildLockQueuesAfterOpen(targetDoc);            // 読み→一部書きがあっても同一フレームで完結
-              // ③ 🔰（新規）バッジの付替えと ❓（解析失敗）の再評価
+              // ③ ??（新規）バッジの付替えと ?（解析失敗）の再評価
               try{ updateNewbieBadgesAfterChest(DBE_CHEST.type, targetDoc); }catch(_){}
               try{ refreshUnknownBadges(); }catch(_){}
               // ④ 以降の分岐決定も同フレーム内で行う
@@ -5376,24 +5417,24 @@
       const orig = window.onBgFrameLoad; // 直前に定義された“本体”を確実に捕まえる
       function findOpenBtn(doc, type){
         const root = doc || document;
-        const queries = [];
-        if (type === 'battle'){
-          // バトル宝箱向けセレクタ
-          queries.push(
-            'form[action*="openbattlechest"] button[type="submit"]',
-            'form[action*="openbattlechest"] input[type="submit"]',
-            'form[action*="battlechest"] button[type="submit"]',
-            'form[action*="battlechest"] input[type="submit"]'
-          );
-        } else {
-          // 通常宝箱セレクタ
-          queries.push(
-            'form[action*="openchest"] button[type="submit"]',
-            'form[action*="openchest"] input[type="submit"]',
-            'form[action*="chest"] button[type="submit"]',
-            'form[action*="chest"] input[type="submit"]'
-          );
+        const isBattleType = (t)=> (t==='battle' || t==='battle_normal' || t==='battle_large');
+        if (isBattleType(type)){
+          // バトル宝箱：標準=A65 / 大型=B70 を hidden chestsize から確実に拾う
+          const want = (type==='battle_large') ? 'B70' : 'A65';
+          const hidden = root.querySelector(`form[action*="openbattlechest"] input[name="chestsize"][value="${want}"], form[action*="battlechest"] input[name="chestsize"][value="${want}"]`);
+          const form = hidden ? hidden.closest('form') : null;
+          const btn = form ? (form.querySelector('input[type="submit"], button[type="submit"]')) : null;
+          if (btn) return btn;
+          // フォールバック（最悪でもsubmitを拾う）
+          return root.querySelector('form[action*="openbattlechest"] input[type="submit"], form[action*="battlechest"] input[type="submit"]');
         }
+        // 通常宝箱（従来どおり）
+        const queries = [
+          'form[action*="openchest"] button[type="submit"]',
+          'form[action*="openchest"] input[type="submit"]',
+          'form[action*="chest"] button[type="submit"]',
+          'form[action*="chest"] input[type="submit"]'
+        ];
         for (const sel of queries){
           const el = root.querySelector(sel);
           if (el) return el;
@@ -5408,9 +5449,10 @@
           // サーバーエラー検知（エラー時は以降の処理を完全停止）
           const err = extractServerErrorText(doc);
           if (err) return handleServerErrorAndStopFlow(doc, err);
-          if (type === 'battle' && doc){
+          const isBattleType = (t)=> (t==='battle' || t==='battle_normal' || t==='battle_large');
+          if (isBattleType(type) && doc){
             // バトル宝箱：まず「開ける」要素を見つけてクリック（ラベル不一致でも action で拾う）
-            const openEl = findOpenBtn(doc, 'battle');
+            const openEl = findOpenBtn(doc, type);
             if (openEl){
               if (window.DBE_CHEST && window.DBE_CHEST._userAbort){
                 chestDiag('userAbort: stop before next open (battle patch)');
@@ -5605,12 +5647,12 @@
             });
           }
         }
-        // unknown があれば名称列に❓バッジを付与（重複付与防止）
+        // unknown があれば名称列に?バッジを付与（重複付与防止）
         if (unknownCnt>0 && iName>=0) {
           const nameCell = tr.cells[iName];
           if (nameCell && !nameCell.querySelector('.dbe-unk-badge')){
             const sp = document.createElement('span');
-            sp.textContent = '❓';
+            sp.textContent = '?';
             sp.className = 'dbe-unk-badge';
             Object.assign(sp.style,{ marginLeft:'0.3em', fontWeight:'bold' });
             nameCell.appendChild(sp);
@@ -6371,8 +6413,8 @@
         DBE_CHEST.qLock = [];
         DBE_CHEST.stage = 'load_chest';
         DBE_CHEST.iframe.src = (DBE_CHEST.type==='battle')
-          ? 'https://donguri.5ch.net/battlechest'
-          : 'https://donguri.5ch.net/chest';
+          ? `${DBE_ORIGIN}/battlechest`
+          : `${DBE_ORIGIN}/chest`;
         try{ tickProgressHud(); }catch(_){}
       }else{
         // 最終：onhold 解除フェーズは廃止 → 直接終了
@@ -6895,7 +6937,7 @@
     bodyEl.append(areaTop, areaForm);
 
     // ─────────────────────────────────────────────
-    // グリッド内に区切り線を挿入（《動作モード》〜《マリモ》の5か所の「間」）
+    // グリッド内に区切り線を挿入（《動作モード》?《マリモ》の5か所の「間」）
     // ─────────────────────────────────────────────
     function __mkSepRow(card){
       var d = document.createElement('div');
@@ -7121,7 +7163,7 @@
         // range: {min, max}
         var hasMin = Number.isFinite(raw.min);
         var hasMax = Number.isFinite(raw.max);
-        if (hasMin && hasMax) return head() + (raw.min + '〜' + raw.max);
+        if (hasMin && hasMax) return head() + (raw.min + '?' + raw.max);
         if (hasMin)           return head() + (raw.min + '以上');
         if (hasMax)           return head() + (raw.max + '以下');
         // ここまで該当なし → すべて
@@ -7302,7 +7344,7 @@
         }
         const hasMin = Number.isFinite(raw.min);
         const hasMax = Number.isFinite(raw.max);
-        if (hasMin && hasMax) return `${label}（${raw.min}〜${raw.max}）`;
+        if (hasMin && hasMax) return `${label}（${raw.min}?${raw.max}）`;
         if (hasMin)            return `${label}（${raw.min}以上）`;
         if (hasMax)            return `${label}（${raw.max}以下）`;
       }
@@ -7427,7 +7469,7 @@
           // 既存保存データの全角括弧（ ）は表示時に撤去
           rest = rest.replace(/[（）]/g, '');
           // 《グレード》の値と値の間に含まれる「／」だけを撤去（他セクションの区切りは保持）
-          // 先頭の《グレード》〜次の「／」までの区間を取り出して、その中の「／」を空にする
+          // 先頭の《グレード》?次の「／」までの区間を取り出して、その中の「／」を空にする
           rest = rest.replace(/(《グレード》)([^／]*?)(?=／|$)/, (_m, head, body)=> head + body.replace(/／/g,''));
           // 《ネックレス》：グレード（プラチナ/金/銀/青銅/銅）をRarityと同じ配色で着色
           const GR_MAP = { 'プラチナ':'UR', '金':'SSR', '銀':'SR', '青銅':'R', '銅':'N' };
@@ -8248,7 +8290,7 @@
           addRow(leftCol,rightCol);
         })();
 
-        // 3) プロパティ数（項目数）0〜7・以上/未満　※ Buff + DeBuff の合計
+        // 3) プロパティ数（項目数）0?7・以上/未満　※ Buff + DeBuff の合計
         const propState = { all:false, num:'', op:'以上' }; let propInput, propSel, propWrap;
         (function(){
           // 左側は「《プロパティ数》」と「不問」を縦に2段表示（ユーザー要望）
@@ -8294,7 +8336,7 @@
           addRow(leftCol,rightCol);
         })();
 
-        // 4) DeBuff（項目数）0〜7・以上/未満
+        // 4) DeBuff（項目数）0?7・以上/未満
         const debuffState = { all:false, num:'', op:'以上' }; let debuffInput, debuffSel, debuffWrap;
         (function(){
           const leftCol = mkLeft('《DeBuff》');
@@ -8709,7 +8751,7 @@
 
           // ② 保存健全性チェック（保存領域の存在保証＆例外安全化）
           //    - _rulesData 本体／各配列が欠けていてもここで初期化
-          //    - 保存〜再描画は try/catch/finally で囲ってUXを担保
+          //    - 保存?再描画は try/catch/finally で囲ってUXを担保
           try{
             if (!_rulesData || typeof _rulesData !== 'object'){
               window._rulesData = { nec:[], wep:[], amr:[] };
@@ -8749,7 +8791,7 @@
               });
               if (picks.length>0) grade = { list:picks };
             }
-            // prop count（0〜7 / 以上・未満）※ Buff + DeBuff の合計
+            // prop count（0?7 / 以上・未満）※ Buff + DeBuff の合計
             let prop = null;
             {
               const ckAll = card.querySelector(`#fc-${kind}-prop-all`);
@@ -8763,7 +8805,7 @@
                 if (Number.isFinite(num) && op){ prop = { num, op }; }
               }
             }
-            // debuff count（0〜7 / 以上・未満）
+            // debuff count（0?7 / 以上・未満）
             let debuff = null;
             {
               const ckAll = card.querySelector(`#fc-${kind}-debuff-all`);
@@ -9247,7 +9289,7 @@
     // 対象ボタンの一括適用ヘルパ（ページ上の本物だけを対象にする）
     function applyHideAllBtnToPage(on){
       // Recycle ウィンドウ内ではなく、ページ上のフォームボタンを厳密に特定
-      document.querySelectorAll('form[action="https://donguri.5ch.net/recycleunlocked"] > button')
+      document.querySelectorAll('form[action$="/recycleunlocked"] > button')
         .forEach(btn=>{
           // rSec（Recycle ウィンドウ）外の「ページ本体」のボタンのみ隠す
           if (!rSec.contains(btn)) btn.style.display = on ? 'none' : '';
@@ -9331,7 +9373,7 @@
     }catch(_){ return -1; }
   }
 
-  // --- 名称欄バッジ（❓🔰🔒）基盤：右寄せで整列するホストを用意し、個別バッジを管理 ---
+  // --- 名称欄バッジ（?????）基盤：右寄せで整列するホストを用意し、個別バッジを管理 ---
   function ensureNameBadgeHost(nameCell){
     if (!nameCell) return null;
     nameCell.style.position = nameCell.style.position || 'relative';
@@ -9362,12 +9404,12 @@
       lock:    'dbe-badge-lock',
     };
     const TXT = {
-      unknown: '❓',
-      new:     '🔰',
-      lock:    '🔒',
+      unknown: '?',
+      new:     '??',
+      lock:    '??',
     };
     const ORDER = {
-      // 並び順：❓ → 🔰 → 🔒
+      // 並び順：? → ?? → ??
       unknown: '1',
       new:     '2',
       lock:    '3',
@@ -9397,7 +9439,7 @@
     lock   : (td, on)=> setBadge(td,'lock',!!on),
   };
 
-  // ---- ❓（解析失敗）自動付与：属性列を見て unknown を検出・反映 ----
+  // ---- ?（解析失敗）自動付与：属性列を見て unknown を検出・反映 ----
   const KNOWN_ELEMS = ['火','氷','雷','風','地','水','光','闇','無','なし','None','NONE','none','-'];
 
   function findHeaderIndexByText(table, candidates){
@@ -9516,7 +9558,7 @@
     ['weaponTable','armorTable','necklaceTable'].forEach(refreshUnknownBadgesForTable);
   }
 
-  // --- 名称セル（1列目）に🔒を右寄せ表示／削除（「解錠」行のみ対象） ---
+  // --- 名称セル（1列目）に??を右寄せ表示／削除（「解錠」行のみ対象） ---
   function applyPadlockMarkers(show){
     const BADGE = dbeEnsureNameBadgeApi();
     ['necklaceTable','weaponTable','armorTable'].forEach(id=>{
@@ -10261,7 +10303,7 @@
 
   // --- 一括分解送信の保留＆確認機能 ---
   function initBulkRecycle(){
-    const forms = document.querySelectorAll('form[action="https://donguri.5ch.net/recycleunlocked"][method="POST"]');
+    const forms = document.querySelectorAll('form[action$="/recycleunlocked"][method="POST"]');
     forms.forEach(form=>{
       form.addEventListener('submit', async e=>{
         e.preventDefault();
@@ -10695,7 +10737,7 @@
         rows.forEach(r => table.tBodies[0].appendChild(r));
 
         // インジケーターは右固定
-        updateSortIndicator(th, desc ? '⬆' : '⬇', 'right');
+        updateSortIndicator(th, desc ? '?' : '?', 'right');
       };
 
       th.addEventListener('click', () => {
@@ -10773,7 +10815,7 @@
       // 〓〓〓〓〓 ソート（△はプラス、▼はマイナス）＋ インジケーター表示 〓〓〓〓〓
       // ascNum=true：逆順（tot 大→小）、ascNum=false：正順（tot 小→大）
       let ascNum = true;
-      // ネックレス「増減」列の最後のソート方向を記憶（true=逆順(⬆), false=正順(⬇)）
+      // ネックレス「増減」列の最後のソート方向を記憶（true=逆順(?), false=正順(?)）
       let necklaceLastSortDirection = null;
       const sortByDelta = (useAsc) => {
         const rows = Array.from(table.tBodies[0].rows);
@@ -10789,7 +10831,7 @@
         rows.forEach(r => table.tBodies[0].appendChild(r));
         // インジケーター更新（このヘッダー行内の既存を除去してから付与）
         (headerRow.closest('tr')||headerRow).querySelectorAll('.sort-indicator, .sort-indicator-left').forEach(el => el.remove());
-        updateSortIndicator(dTh, useAsc ? '⬆' : '⬇', 'right');
+        updateSortIndicator(dTh, useAsc ? '?' : '?', 'right');
         scrollToAnchorCell();
       };
 
@@ -11051,7 +11093,7 @@
               parseInt(b.cells[atkIdx].textContent.split('~')[0]) - parseInt(a.cells[atkIdx].textContent.split('~')[0]) ||
               parseInt(b.cells[mrimIdx].textContent) - parseInt(a.cells[mrimIdx].textContent)
             );
-            updateSortIndicator(atkTh, '⬆', 'right');
+            updateSortIndicator(atkTh, '?', 'right');
             break;
           // (2) 最高ATK値による正順
           case 1:
@@ -11060,7 +11102,7 @@
               parseInt(a.cells[atkIdx].textContent.split('~')[0]) - parseInt(b.cells[atkIdx].textContent.split('~')[0]) ||
               parseInt(a.cells[mrimIdx].textContent) - parseInt(b.cells[mrimIdx].textContent)
             );
-            updateSortIndicator(atkTh, '⬇', 'right');
+            updateSortIndicator(atkTh, '?', 'right');
             break;
           // (3) 最低ATK値による逆順
           case 2:
@@ -11069,7 +11111,7 @@
               parseInt(b.cells[atkIdx].textContent.split('~')[1]) - parseInt(a.cells[atkIdx].textContent.split('~')[1]) ||
               parseInt(b.cells[mrimIdx].textContent) - parseInt(a.cells[mrimIdx].textContent)
             );
-            updateSortIndicator(atkTh, '⬆', 'left');
+            updateSortIndicator(atkTh, '?', 'left');
             break;
           // (4) 最低ATK値による正順
           case 3:
@@ -11078,7 +11120,7 @@
               parseInt(a.cells[atkIdx].textContent.split('~')[1]) - parseInt(b.cells[atkIdx].textContent.split('~')[1]) ||
               parseInt(a.cells[mrimIdx].textContent) - parseInt(b.cells[mrimIdx].textContent)
             );
-            updateSortIndicator(atkTh, '⬇', 'left');
+            updateSortIndicator(atkTh, '?', 'left');
             break;
         }
         rows.forEach(r => table.tBodies[0].appendChild(r));
@@ -11113,7 +11155,7 @@
           return desc ? (bSpd - aSpd) : (aSpd - bSpd);
         });
         rows.forEach(r => table.tBodies[0].appendChild(r));
-        updateSortIndicator(spdTh, desc ? '⬆' : '⬇', 'right');
+        updateSortIndicator(spdTh, desc ? '?' : '?', 'right');
       };
 
       spdTh.addEventListener('click', () => {
@@ -11150,7 +11192,7 @@
           return desc ? (bCrit - aCrit) : (aCrit - bCrit);
         });
         rows.forEach(r => table.tBodies[0].appendChild(r));
-        updateSortIndicator(critTh, desc ? '⬆' : '⬇', 'right');
+        updateSortIndicator(critTh, desc ? '?' : '?', 'right');
       };
 
       critTh.addEventListener('click', () => {
@@ -11187,7 +11229,7 @@
           return desc ? (bMod - aMod) : (aMod - bMod);
         });
         rows.forEach(r => table.tBodies[0].appendChild(r));
-        updateSortIndicator(modTh, desc ? '⬆' : '⬇', 'right');
+        updateSortIndicator(modTh, desc ? '?' : '?', 'right');
       };
 
       modTh.addEventListener('click', () => {
@@ -11225,8 +11267,8 @@
           return desc ? bVal - aVal : aVal - bVal;
         });
         rows.forEach(r => table.tBodies[0].appendChild(r));
-        // 矢印表示：右隣に⬆／⬇
-        updateSortIndicator(rrimTh, desc ? '⬆' : '⬇', 'right');
+        // 矢印表示：右隣に?／?
+        updateSortIndicator(rrimTh, desc ? '?' : '?', 'right');
       };
 
       rrimTh.addEventListener('click', () => {
@@ -11261,7 +11303,7 @@
               parseInt(b.cells[defIdx].textContent.split('~')[0]) - parseInt(a.cells[defIdx].textContent.split('~')[0]) ||
               parseInt(b.cells[mrimIdx].textContent) - parseInt(a.cells[mrimIdx].textContent)
             );
-            updateSortIndicator(defTh, '⬆', 'right');
+            updateSortIndicator(defTh, '?', 'right');
             break;
           // (2) 最高DEF値による正順
           case 1:
@@ -11270,7 +11312,7 @@
               parseInt(a.cells[defIdx].textContent.split('~')[0]) - parseInt(b.cells[defIdx].textContent.split('~')[0]) ||
               parseInt(a.cells[mrimIdx].textContent) - parseInt(b.cells[mrimIdx].textContent)
             );
-            updateSortIndicator(defTh, '⬇', 'right');
+            updateSortIndicator(defTh, '?', 'right');
             break;
           // (3) 最低DEF値による逆順
           case 2:
@@ -11279,7 +11321,7 @@
               parseInt(b.cells[defIdx].textContent.split('~')[1]) - parseInt(a.cells[defIdx].textContent.split('~')[1]) ||
               parseInt(b.cells[mrimIdx].textContent) - parseInt(a.cells[mrimIdx].textContent)
             );
-            updateSortIndicator(defTh, '⬆', 'left');
+            updateSortIndicator(defTh, '?', 'left');
             break;
           // (4) 最低DEF値による正順
           case 3:
@@ -11288,7 +11330,7 @@
               parseInt(a.cells[defIdx].textContent.split('~')[1]) - parseInt(b.cells[defIdx].textContent.split('~')[1]) ||
               parseInt(a.cells[mrimIdx].textContent) - parseInt(b.cells[mrimIdx].textContent)
             );
-            updateSortIndicator(defTh, '⬇', 'left');
+            updateSortIndicator(defTh, '?', 'left');
             break;
         }
         rows.forEach(r => table.tBodies[0].appendChild(r));
@@ -11323,7 +11365,7 @@
           return desc ? (bW - aW) : (aW - bW);
         });
         rows.forEach(r => table.tBodies[0].appendChild(r));
-        updateSortIndicator(wgtTh, desc ? '⬆' : '⬇', 'right');
+        updateSortIndicator(wgtTh, desc ? '?' : '?', 'right');
       };
 
       wgtTh.addEventListener('click', () => {
@@ -11360,7 +11402,7 @@
           return desc ? (bCrit - aCrit) : (aCrit - bCrit);
         });
         rows.forEach(r => table.tBodies[0].appendChild(r));
-        updateSortIndicator(critTh, desc ? '⬆' : '⬇', 'right');
+        updateSortIndicator(critTh, desc ? '?' : '?', 'right');
       };
 
       critTh.addEventListener('click', () => {
@@ -11397,7 +11439,7 @@
           return desc ? (bMod - aMod) : (aMod - bMod);
         });
         rows.forEach(r => table.tBodies[0].appendChild(r));
-        updateSortIndicator(modTh, desc ? '⬆' : '⬇', 'right');
+        updateSortIndicator(modTh, desc ? '?' : '?', 'right');
       };
 
       modTh.addEventListener('click', () => {
@@ -11433,7 +11475,7 @@
           return desc ? bVal - aVal : aVal - bVal;
         });
         rows.forEach(r => table.tBodies[0].appendChild(r));
-        updateSortIndicator(mrimTh, desc ? '⬆' : '⬇', 'right');
+        updateSortIndicator(mrimTh, desc ? '?' : '?', 'right');
       };
 
       mrimTh.addEventListener('click', () => {
@@ -11772,12 +11814,12 @@
         const appliedState = elemState;
         sortByElemHeader(appliedState === 0);
         // インジケーター更新
-        updateSortIndicator(hdrs[elemCol], appliedState === 0 ? '⬆' : '⬇', 'right');
+        updateSortIndicator(hdrs[elemCol], appliedState === 0 ? '?' : '?', 'right');
         // ソート状態を保存
         const lastState = appliedState;
         dbeRememberSort(id, () => {
           sortByElemHeader(lastState === 0);
-          updateSortIndicator(hdrs[elemCol], lastState === 0 ? '⬆' : '⬇', 'right');
+          updateSortIndicator(hdrs[elemCol], lastState === 0 ? '?' : '?', 'right');
           applyColor(); scrollToAnchorCell();
         }, 'ELEM');
         elemState = elemState === 0 ? 1 : 0;
@@ -11803,7 +11845,7 @@
         });
       });
 
-      // 〓〓〓〓〓〓 4 段階サイクル（①〜④）【リニューアル版】 〓〓〓〓〓〓
+      // 〓〓〓〓〓〓 4 段階サイクル（①?④）【リニューアル版】 〓〓〓〓〓〓
       // 対象：weaponTable の wepClm-Name / armorTable の amrClm-Name
       // 名称・Rarity・Marimo・限定（未知/既知）・カナを用いた多段ソート
 
@@ -11979,7 +12021,7 @@
         rows.sort((ra,rb)=>{
           const a = getMeta(ra), b = getMeta(rb);
           switch(phase){
-            // ①【⬆限定】：未知限定→既知限定→非限定 → （各内：フリガナ正順。ただし未知限定は同名連結） → rarity 正順 → marimo 逆順
+            // ①【?限定】：未知限定→既知限定→非限定 → （各内：フリガナ正順。ただし未知限定は同名連結） → rarity 正順 → marimo 逆順
             case 0: {
               const c = a.catLimitedAsc - b.catLimitedAsc;
               if (c) return c;
@@ -11992,7 +12034,7 @@
               }
               return cmpRarity(a,b,true) || cmpMarimo(a,b,true) || cmpName(a,b,true);
             }
-            // ②【⬇限定】：カテゴリ順は据え置き（未知→既知→非）/ 各内の並びを逆（未知は同名 desc、他はフリガナ逆）→ rarity 逆順 → marimo 正順
+            // ②【?限定】：カテゴリ順は据え置き（未知→既知→非）/ 各内の並びを逆（未知は同名 desc、他はフリガナ逆）→ rarity 逆順 → marimo 正順
             case 1: {
               const c = a.catLimitedAsc - b.catLimitedAsc;
               if (c) return c;
@@ -12005,7 +12047,7 @@
               }
               return cmpRarity(a,b,false) || cmpMarimo(a,b,false) || cmpName(a,b,true);
             }
-            // ③【⬆カナ】
+            // ③【?カナ】
             //   rarity 正順 → フリガナ正順 → （同名のみ）マリモ降順 → 名前
             case 2: {
               const r = cmpRarity(a,b,true);
@@ -12018,7 +12060,7 @@
               }
               return cmpName(a,b,true);
             }
-            // ④【⬇カナ】
+            // ④【?カナ】
             //   rarity 逆順 → フリガナ逆順 → （同名のみ）マリモ昇順 → 名前
             case 3: {
               const r = cmpRarity(a,b,false);
@@ -12036,14 +12078,14 @@
         });
         rows.forEach(r => body.appendChild(r));
 
-        // ヘッダー右側にインジケーター（【⬆限定】等）
+        // ヘッダー右側にインジケーター（【?限定】等）
         const headerRowNow = getHeaderRowNow();
         if (headerRowNow) headerRowNow.querySelectorAll('.sort-indicator, .sort-indicator-left').forEach(el => el.remove());
         const labels = [
-          ['⬆','限定'],
-          ['⬇','限定'],
-          ['⬆','カナ'],
-          ['⬇','カナ'],
+          ['?','限定'],
+          ['?','限定'],
+          ['?','カナ'],
+          ['?','カナ'],
         ];
         const [arrow,label] = labels[phase];
         // 付与先のズレを回避：初期 clone 済みの nameTh を常にターゲットにする
@@ -12053,7 +12095,7 @@
         table.dataset.nameSortPhase = String(phase);
         table.dataset.nameSortLastApplied = `name:${phase}`;
         lastSortedColumn  = columnIds[id][nameTitle];
-        lastSortAscending = (phase % 2 === 0); // 0,2=⬆（正順）, 1,3=⬇
+        lastSortAscending = (phase % 2 === 0); // 0,2=?（正順）, 1,3=?
       }
 
       // クリックで ①→②→③→④→… をループ（dataset リセット耐性）
