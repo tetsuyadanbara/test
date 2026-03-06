@@ -3,9 +3,9 @@
 // @version      1.2c改
 // @description  Automated box opening and recycling
 // @author       7234e634
-// @match        https://donguri.5ch.net/bag
-// @match        https://donguri.5ch.net/chest
-// @match        https://donguri.5ch.net/battlechest
+// @match        https://donguri.5ch.io/bag
+// @match        https://donguri.5ch.io/chest
+// @match        https://donguri.5ch.io/battlechest
 // ==/UserScript==
 
 (()=>{
@@ -21,7 +21,7 @@
   fieldset.style.border = 'none';
   fieldset.style.padding = '0';
 
-  const isBattleChestPage = location.href.startsWith('https://donguri.5ch.net/battlechest');
+  const isBattleChestPage = location.href.startsWith('https://donguri.5ch.io/battlechest');
 
   // switch chest
   const switchChestField = fieldset.cloneNode();
@@ -325,7 +325,7 @@
       const startTime = Date.now();
       let stat = 'initial';
       try {
-        const response = await fetch('https://donguri.5ch.net/open', {
+        const response = await fetch('https://donguri.5ch.io/open', {
           method: 'POST',
           body: 'chestsize=B70', /* 小: A65, 大: B70 */
           headers: {
@@ -367,7 +367,7 @@
           }
 
           if(h1.textContent.includes('アイテムバッグ')){
-            const itemLockLinks = doc.querySelectorAll('a[href^="https://donguri.5ch.net/lock/"]');
+            const itemLockLinks = doc.querySelectorAll('a[href^="https://donguri.5ch.io/lock/"]');
 
             for(const elm of itemLockLinks){
               const itemName = elm.closest('tr').firstChild.textContent;
@@ -394,7 +394,7 @@
 
               // 残りを分解
               try {
-                const response = await fetch('https://donguri.5ch.net/recycleunlocked', {method: 'POST'});
+                const response = await fetch('https://donguri.5ch.io/recycleunlocked', {method: 'POST'});
                 if (!response.ok) {
                   throw new Error('Failed to recycle unlocked item');
                 }
@@ -435,7 +435,7 @@
   })
 
   async function itemLocking(doc) {
-    const itemLockLinks = doc.querySelectorAll('a[href^="https://donguri.5ch.net/lock/"]');
+    const itemLockLinks = doc.querySelectorAll('a[href^="https://donguri.5ch.io/lock/"]');
     const checkedRanks = Array.from(document.querySelectorAll('.keep-item:checked')).map(elm => elm.value);
 
     const itemInputs = document.querySelectorAll('.wishlist');
@@ -542,7 +542,7 @@
       const startTime = Date.now();
       let stat = 'initial';
       try {
-        const response = await fetch('https://donguri.5ch.net/openbattlechest', {
+        const response = await fetch('https://donguri.5ch.io/openbattlechest', {
           method: 'POST',
           body: 'chestsize=B70',
           headers:{
@@ -636,7 +636,7 @@
 
             if(!shouldNotRecycle.checked){
                 try {
-                    await fetch('https://donguri.5ch.net/recycleunlocked', {method: 'POST'});
+                    await fetch('https://donguri.5ch.io/recycleunlocked', {method: 'POST'});
                 } catch (error) {
                     forceStop(error);
                     break;
