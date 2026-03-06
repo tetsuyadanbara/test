@@ -15,7 +15,7 @@
   details.classList.add('chest-opener');
   details.style.background = '#ddd';
   const summary = document.createElement('summary');
-  summary.textContent = 'Chest Opener v1.2c改 ATK&DEF最大値Ver.';
+  summary.textContent = 'Chest Opener v1.2c改';
 
   const fieldset = document.createElement('fieldset');
   fieldset.style.border = 'none';
@@ -65,12 +65,12 @@
     const div = document.createElement('div');
     const label = document.createElement('label');
     label.style.fontSize = '16px';
-  
+
     label.append(shouldNotRecycle, 'ロック・分解しないモード');
     div.append(label);
     details.append(div);
   })();
-  
+
   const form = document.createElement('form');
   const equipChestField = fieldset.cloneNode();
   if(isBattleChestPage) equipChestField.style.display = 'none';
@@ -90,7 +90,7 @@
     const p = document.createElement('p');
     p.textContent = '== 残すアイテム([錠]) ==';
     div.append(p);
-  
+
     const ranks = ['[UR]','[SSR]','[SR]','[R]','[N]'];
     const span = document.createElement('span');
     span.style.width = '64px';
@@ -131,7 +131,7 @@
     };
 
     const description = document.createElement('p');
-    description.innerHTML = 'さらなる条件を追加したプロ仕様 - ATK&DEF最大値Ver.<br>F5アタック:15 → ATK最大値15以上対象<br>F5アタック::25 → SPD25以上対象<br>F5アタック[火]:15 → 火属性でATK最大値15以上対象<br>F5アタック[火]:15:25 → 火属性でATK最大値15以上かつSPD25以上対象<br><br>硬化木の鎧:13 → DEF最大値13以上対象<br>硬化木の鎧::8 → WT8以上対象<br>硬化木の鎧[水]:13 → 水属性でDEF最大値13以上対象<br>硬化木の鎧[水]:13:8 → 水属性でDEF最大値13以上かつWT8以上対象';
+    description.innerHTML = '残しておきたいレアリティにチェック。<br>&quot;,&quot;区切りでアイテム名の指定が可能。アイテム名[属性]で対象の属性も指定。<br>例: どんぐり大砲[火風], どんぐりかたびら<br>属性なしは[無]か[な]。詳細は<a href="https://donguri-k.github.io/tools/chest-opener" target="_blank">こちら</a>を参照';
     description.style.fontSize = '14px';
     div.append(description);
     equipChestField.append(div);
@@ -148,7 +148,7 @@
     div.append(p);
     loopNum.type = 'number';
     loopNum.style.width = '5em';
-  
+
     const loopConds = [
       {value:'max',item:'無制限',checked:true},
       {value:'num',item:loopNum,checked:false},
@@ -437,30 +437,23 @@
   async function itemLocking(doc) {
     const itemLockLinks = doc.querySelectorAll('a[href^="https://donguri.5ch.net/lock/"]');
     const checkedRanks = Array.from(document.querySelectorAll('.keep-item:checked')).map(elm => elm.value);
+
     const itemInputs = document.querySelectorAll('.wishlist');
     const results = [];
 
     itemInputs.forEach(input => {
       const rank = input.dataset.rank;
-      const rawValue = input.value.trim();
+      const value = input.value.trim();
 
-      if (!checkedRanks.includes(rank)) return;
-
-      const patterns = rawValue
-        ? rawValue.split(',').map(item => {
-            const parts = item.split(':').map(v => v.trim());
-            const namePart = parts[0] ?? '';
-            const minRangeSum = parts[1] !== undefined && parts[1] !== '' ? Number(parts[1]) : undefined;
-            const minValue = parts[2] !== undefined && parts[2] !== '' ? Number(parts[2]) : undefined;
-
-            const match = namePart.match(/^([^[]*)(?:\[(.+)\])?/);
+      // 入力値がない場合はそのrankの全てを対象
+      const patterns = value
+        ? value.split(',').map(item => {
+            const match = item.match(/^([^[]*)(?:\[(.+)\])?/);
             return {
               name: match[1].trim(),
               elems: match[2]
                 ? match[2].replace('無', 'な').split('')
                 : null,
-              minRangeSum,
-              minValue
             };
           })
         : null;
@@ -468,54 +461,29 @@
       itemLockLinks.forEach(link => {
         const row = link.closest('tr');
         const cells = row.querySelectorAll('td');
-
         const itemName = cells[0].textContent;
-        const rangeText = cells[3].textContent;
-        const valueText = cells[4].textContent;
         const itemElem = cells[6].textContent;
 
+        if (!checkedRanks.includes(rank)) return;
         if (!itemName.includes(rank)) return;
 
-        // 入力なし → rank一致のみでロック
+        // 入力値がない場合
         if (!patterns) {
           results.push(link);
           return;
         }
 
         for (const pattern of patterns) {
-          // 名前
           if (!itemName.includes(pattern.name)) continue;
-
-          // 属性
-          if (pattern.elems && !pattern.elems.some(e => itemElem.includes(e))) continue;
-
-          // 4番目（範囲合計）
-          if (pattern.minRangeSum !== undefined) {
-            const m = rangeText.match(/^(\d+)\s*~\s*(\d+)$/);
-            if (m) {
-              const sum = Number(m[2]);
-              if (sum < pattern.minRangeSum) continue;
-            }
-            // 数値~数値でない場合はロック側に倒す（何もしない）
-          }
-
-          // 5番目（数値以上）
-          if (pattern.minValue !== undefined) {
-            const v = Number(valueText);
-            if (!Number.isNaN(v)) {
-              if (v < pattern.minValue) continue;
-            }
-            // 数値でない場合はロック側に倒す
-          }
-
+          if (pattern.elems && !pattern.elems.some(e=>itemElem.includes(e))) continue;
           results.push(link);
           break;
         }
       });
     });
 
-    const promises = results.map(async link => {
-      const response = await fetch(link.href, { method: 'GET' });
+    const promises = results.map(async (link) => {
+      const response = await fetch(link.href,{method:'GET'});
       if (!response.ok) {
         throw new Error('Failed to lock item');
       }
@@ -523,7 +491,6 @@
 
     await Promise.all(promises);
   }
-
 
   battleChestButton.addEventListener('click',async function () {
     switchChestField.disabled = true;
@@ -570,13 +537,14 @@
 
     const buffs = ['増幅された','強化された','加速した','高まった','力を増した','クリアになった','増幅された','固くなった','尖らせた'];
     const debuffs = ['静まった','薄まった','弱まった','減速した','減少した','砕けた','ぼやけた','制限された','緩んだ','鈍らせた','侵食された'];
-  
+
     while (loopCond === 'max' || chestCount < maxCount){
       const startTime = Date.now();
       let stat = 'initial';
       try {
         const response = await fetch('https://donguri.5ch.net/openbattlechest', {
           method: 'POST',
+          body: 'chestsize=B70',
           headers:{
             'Content-Type': 'application/x-www-form-urlencoded'
           }
@@ -606,74 +574,78 @@
           }
           const parser = new DOMParser();
           const doc = parser.parseFromString(res, 'text/html');
-  
+
           const h1 = doc.querySelector('h1');
-  
+
           if (!h1.textContent.includes('アイテムバッグ')) {
             throw new Error('不明なエラー1');
           }
-  
+
           if(h1.textContent.includes('アイテムバッグ')){
             const necklaceTable = doc.querySelector('#necklaceTable');
-            const lastItem = necklaceTable.rows.item(necklaceTable.rows.length - 1);
-            const itemName = lastItem.firstChild.textContent;
+            const rows = Array.from(necklaceTable.rows).slice(1).filter(row => row.querySelector('a[href*="/lock/"]'));
 
-            const itemRank = itemName.match(/\[(\w+)\d\]/)[1];
+            const lockPromises = [];
+            for (const row of rows) {
+                const itemName = row.firstChild.textContent;
+                const itemRankMatch = itemName.match(/\[([A-Za-z]+)\d*\]/);
+                if (!itemRankMatch) continue;
+                const itemRank = itemRankMatch[1];
 
-// PtまたはAuの場合、無条件でロック処理を実行
-        if (itemRank === 'Pt' || itemRank === 'Au') {
-              try {
-                  const lockLink = lastItem.querySelectorAll('a')[1];
-                  if (lockLink && lockLink.href.includes('/lock/')) {
-                      await fetch(lockLink.href);
-                      await new Promise(resolve => setTimeout(resolve, 200));
-                  }
-              } catch (error) {
-                  count.textContent = chestCount + ', ロック失敗: ' + error.message;
-              }
-          }
-            if(itemRank === 'Pt' || itemRank === 'Au' || itemRank === 'Ag'){
-              const p = document.createElement('p');
-              p.textContent = itemName;
-              if(itemRank === 'Pt') p.style.background = '#f45d01';
-              if(itemRank === 'Au') p.style.background = '#a633d6';
-              if(itemRank === 'Ag') p.style.background = '#2175d9';
-              p.style.color = '#fff';
-              p.style.margin = '1px';
-              epic.prepend(p);
+                if(itemRank === 'Pt' || itemRank === 'Au' || itemRank === 'Ag'){
+                    const p = document.createElement('p');
+                    p.textContent = itemName;
+                    if(itemRank === 'Pt') p.style.background = '#f45d01';
+                    if(itemRank === 'Au') p.style.background = '#a633d6';
+                    if(itemRank === 'Ag') p.style.background = '#2175d9';
+                    p.style.color = '#fff';
+                    p.style.margin = '1px';
+                    epic.prepend(p);
+                }
+
+                if(!shouldNotRecycle.checked){
+                    const itemEffectsLi = row.cells[3].querySelectorAll('li');
+                    const itemEffects = [...itemEffectsLi].map(elm => {
+                        const v = elm.textContent;
+                        const match = v.match(/^(.+): (\d+)% (.+)$/);
+                        if (!match) return ["", "", "0"];
+                        const [, type, value, effect] = match;
+                        return [type, effect, value];
+                    });
+
+                    const buffCount = itemEffects.filter(effects => buffs.includes(effects[1])).length;
+                    const debuffCount = itemEffects.filter(effects => debuffs.includes(effects[1])).length;
+
+                    if (itemRank === 'Pt' || itemRank === 'Au' || (minBuffs[itemRank] !== undefined && buffCount >= minBuffs[itemRank] && debuffCount <= maxDebuffs[itemRank])) {
+                        const lockLink = row.querySelectorAll('a')[1];
+                        if (lockLink && lockLink.href.includes('/lock/')) {
+                            lockPromises.push(fetch(lockLink.href));
+                        }
+                    } else {
+                        const recycleLink = row.querySelectorAll('a')[3];
+                        if (recycleLink && recycleLink.href.includes('/recycle/')) {
+                            lockPromises.push(fetch(recycleLink.href));
+                        }
+                    }
+                }
             }
 
+            if (lockPromises.length > 0) {
+                await Promise.all(lockPromises);
+            }
 
             if(!shouldNotRecycle.checked){
-              const itemEffectsLi = lastItem.cells[3].querySelectorAll('li');
-              const itemEffects = [...itemEffectsLi].map(elm => {
-                const v = elm.textContent;
-                const match = v.match(/^(.+): (\d+)% (.+)$/);
-                const [, type, value, effect] = match;
-                return [type, effect, value];
-              });
-              
-              const buffCount = itemEffects.filter(effects => buffs.includes(effects[1])).length;
-              const debuffCount = itemEffects.filter(effects => debuffs.includes(effects[1])).length;
-              // 分解
-              if (itemRank !== 'Pt' && itemRank !== 'Au' && (buffCount < minBuffs[itemRank] || debuffCount > maxDebuffs[itemRank])) {
-                console.log(itemEffects);
                 try {
-                  const recycleLink = lastItem.querySelectorAll('a')[3];
-                  const response = await fetch(recycleLink.href);
-                  if (!response.ok) {
-                    throw new Error('Fail to recycle an item');
-                  }
+                    await fetch('https://donguri.5ch.net/recycleunlocked', {method: 'POST'});
                 } catch (error) {
-                  forceStop(error);
-                  break;
+                    forceStop(error);
+                    break;
                 }
-              }
-              chestCount++;
-              count.textContent = chestCount;
-              if (loopCond === 'num') loopNum.value = maxCount - chestCount;
-              stat = 'success';
             }
+            chestCount++;
+            count.textContent = chestCount;
+            if (loopCond === 'num') loopNum.value = Math.max(0, maxCount - chestCount);
+            stat = 'success';
           }
 
           if(stat !== 'success') {
