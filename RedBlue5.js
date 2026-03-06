@@ -2634,6 +2634,7 @@
         '参加するには、装備中の武器と防具のアイテムID'
       ],
       nonAdjacent: [
+        'このタイルは攻撃できません。水タイルは占領できません。',
         'このタイルは攻撃できません。あなたのチームが首都を持つまで、どの首都にも隣接するタイルを主張することはできません。',
         'あなたのチームは首都を持っていないため、他のチームの首都に攻撃できません。'
       ],
@@ -2776,17 +2777,17 @@
 
             if (success) {
               if (currentProgress < 16) {
-                nextProgress = 26;
+                nextProgress = 25;
                } else if (currentProgress < 33) {
-                nextProgress = 43;
+                nextProgress = 42;
                } else if (currentProgress < 50) {
-                nextProgress = 60;
+                nextProgress = 59;
                } else if (currentProgress < 66) {
-                nextProgress = 76;
+                nextProgress = 75;
                } else if (currentProgress < 83) {
-                nextProgress = 93;
+                nextProgress = 92;
                } else {
-                nextProgress = 10;
+                nextProgress = 9;
                }
               next = `→ ${nextProgress}±2%`;
               isAutoJoinRunning = false;
@@ -2943,16 +2944,6 @@
 
         const capitalSet = new Set(capitalMap.map(([r, c]) => `${r}-${c}`));
 
-        const nonAdjacentCells = cells.filter(([r, c]) => {
-          const key = `${r}-${c}`;
-          return !capitalSet.has(key) && !adjacentSet.has(key) && !waterSet.has(key);
-        });
-
-        const capitalAdjacentCells = cells.filter(([r, c]) => {
-          const key = `${r}-${c}`;
-          return adjacentSet.has(key) && !waterSet.has(key);
-        });
-
         const teamColorSet = new Set();
         for(const [key, value] of Object.entries(cellColors)) {
           if (teamColor === value.replace('#','')) {
@@ -2972,11 +2963,6 @@
           }
         }
 
-        const teamAdjacentCells = cells.filter(([r, c]) => {
-          const key = `${r}-${c}`;
-          return (teamColorSet.has(key) || teamAdjacentSet.has(key)) && !waterSet.has(key);
-        })
-
         const mapEdgeSet = new Set();
         for (let i=0; i<rows; i++) {
           mapEdgeSet.add(`${i}-0`);
@@ -2987,10 +2973,36 @@
           mapEdgeSet.add(`${rows-1}-${i}`);
         }
 
-        const mapEdgeCells = cells.filter(([r, c]) => {
+        //霧セル除外
+        const filterFog = (list) => list.filter(([r, c]) => exploredSet.has(`${r}-${c}`));
+
+        const nonAdjacentbaseCells = cells.filter(([r, c]) => {
+          const key = `${r}-${c}`;
+          return !capitalSet.has(key) && !adjacentSet.has(key) && !waterSet.has(key);
+        });
+
+        const nonAdjacentCells = teamColorSet.size > 0 ? filterFog(nonAdjacentbaseCells) : nonAdjacentbaseCells;
+
+        const capitalAdjacentbaseCells = cells.filter(([r, c]) => {
+          const key = `${r}-${c}`;
+          return adjacentSet.has(key) && !waterSet.has(key);
+        });
+
+        const capitalAdjacentCells = filterFog(capitalAdjacentbaseCells);
+
+        const teamAdjacentbaseCells = cells.filter(([r, c]) => {
+          const key = `${r}-${c}`;
+          return (teamColorSet.has(key) || teamAdjacentSet.has(key)) && !waterSet.has(key);
+        })
+
+        const teamAdjacentCells = filterFog(teamAdjacentbaseCells);
+
+        const mapEdgebaseCells = cells.filter(([r, c]) => {
           const key = `${r}-${c}`;
           return mapEdgeSet.has(key) && !capitalSet.has(key) && !waterSet.has(key);
         })
+
+        const mapEdgeCells = filterFog(mapEdgebaseCells);
 
         function shuffle(arr) {
           for (let i = arr.length - 1; i > 0; i--) {
@@ -3000,14 +3012,11 @@
           return arr;
         }
 
-        //霧セル除外
-        const filterFog = (list) => list.filter(([r, c]) => exploredSet.has(`${r}-${c}`));
-
         const regions = {
-          nonAdjacent: shuffle(filterFog(nonAdjacentCells)),
-          capitalAdjacent: shuffle(filterFog(capitalAdjacentCells)),
-          teamAdjacent: shuffle(filterFog(teamAdjacentCells)),
-          mapEdge: shuffle(filterFog(mapEdgeCells))
+          nonAdjacent: shuffle(nonAdjacentCells),
+          capitalAdjacent: shuffle(capitalAdjacentCells),
+          teamAdjacent: shuffle(teamAdjacentCells),
+          mapEdge: shuffle(mapEdgeCells)
         };
 
         return regions;
