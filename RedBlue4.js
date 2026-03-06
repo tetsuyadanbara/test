@@ -3,15 +3,15 @@
 // @version      1.2.2d改 Red vs Blue
 // @description  fix arena ui and add functions
 // @author       ぱふぱふ
-// @match        https://donguri.5ch.net/teambattle?m=hc
-// @match        https://donguri.5ch.net/teambattle?m=l
-// @match        https://donguri.5ch.net/teambattle?m=rb
-// @match        https://donguri.5ch.net/bag
+// @match        https://donguri.5ch.io/teambattle?m=hc
+// @match        https://donguri.5ch.io/teambattle?m=l
+// @match        https://donguri.5ch.io/teambattle?m=rb
+// @match        https://donguri.5ch.io/bag
 // ==/UserScript==
 
 
 (()=>{
-  if(location.href === 'https://donguri.5ch.net/bag') {
+  if(location.href === 'https://donguri.5ch.io/bag') {
     function saveCurrentEquip(url, index) {
       let currentEquip = JSON.parse(localStorage.getItem('current_equip')) || [];
       const regex = /https:\/\/donguri\.5ch\.net\/equip\/(\d+)/;
@@ -21,7 +21,7 @@
     }
     const tableIds = ['weaponTable', 'armorTable', 'necklaceTable'];
     tableIds.forEach((elm, index)=>{
-      const equipLinks = document.querySelectorAll(`#${elm} a[href^="https://donguri.5ch.net/equip/"]`);
+      const equipLinks = document.querySelectorAll(`#${elm} a[href^="https://donguri.5ch.io/equip/"]`);
       [...equipLinks].forEach(link => {
         link.addEventListener('click', ()=>{
           saveCurrentEquip(link.href, index);
@@ -1642,7 +1642,7 @@
     async function showEquipList(){
       if(!weaponTable || !armorTable || !necklaceTable) {
         try {
-          const res = await fetch('https://donguri.5ch.net/bag');
+          const res = await fetch('https://donguri.5ch.io/bag');
           if(!res.ok) throw new Error('bag response error');
           const text = await res.text();
           const doc = new DOMParser().parseFromString(text, 'text/html');
@@ -1659,7 +1659,7 @@
             table.style.margin = '0';
             const rows = table.querySelectorAll('tr');
             rows.forEach(row => {
-              const id = row.cells[1].querySelector('a')?.href.replace('https://donguri.5ch.net/equip/','');
+              const id = row.cells[1].querySelector('a')?.href.replace('https://donguri.5ch.io/equip/','');
               row.cells[0].style.textDecorationLine = 'underline';
               row.cells[0].style.cursor = 'pointer';
               row.cells[0].dataset.id = id;
@@ -1821,7 +1821,7 @@
     const equipPresets = JSON.parse(localStorage.getItem('equipPresets')) || {};
     const fetchPromises = equipPresets[presetName].id
       .filter(id => id !== undefined && id !== null && !currentEquip.includes(id)) // 未登録or既に装備中の部位は除外
-      .map(id => fetch('https://donguri.5ch.net/equip/' + id));
+      .map(id => fetch('https://donguri.5ch.io/equip/' + id));
 
     stat.textContent = '装備中...';
     try {
@@ -1920,7 +1920,7 @@
       grid.style.gridTemplateRows = `repeat(${rows}, 35px)`;
       grid.style.gridTemplateColumns = `repeat(${cols}, 35px)`;
       grid.style.gap = '2px';
-      grid.style.justifyContent = 'start';
+      grid.style.justifyContent = 'center';
       grid.style.position = 'relative';
 
       grid.style.maxWidth = '100%';
@@ -2008,7 +2008,7 @@
       grid.parentNode.style.height = null;
       grid.parentNode.style.padding = '20px 0';
       grid.parentNode.style.maxWidth = '100%';
-      grid.parentNode.style.overflowX = 'auto';
+      //grid.parentNode.style.overflowX = 'auto';
     }
 
     const cells = grid ? grid.querySelectorAll('.cell') : [];
@@ -2024,7 +2024,7 @@
   async function fetchSingleArenaInfo(elm) {
     try {
       const { row, col } = elm.dataset;
-      const url = `https://donguri.5ch.net/teambattle?r=${row}&c=${col}&`+MODE;
+      const url = `https://donguri.5ch.io/teambattle?r=${row}&c=${col}&`+MODE;
       const res = await fetch(url);
       if(!res.ok) throw new Error(res.status + ' res.ng');
       const text = await res.text();
@@ -2222,7 +2222,7 @@
   })();
 
   async function fetchArenaTable(row, col){
-    const url = `https://donguri.5ch.net/teambattle?r=${row}&c=${col}&`+MODE;
+    const url = `https://donguri.5ch.io/teambattle?r=${row}&c=${col}&`+MODE;
     try {
       const res = await fetch(url);
       if(!res.ok) throw new Error('res.ng');
@@ -2634,6 +2634,7 @@
         '参加するには、装備中の武器と防具のアイテムID'
       ],
       nonAdjacent: [
+        'このタイルは攻撃できません。水タイルは占領できません。',
         'このタイルは攻撃できません。あなたのチームが首都を持つまで、どの首都にも隣接するタイルを主張することはできません。',
         'あなたのチームは首都を持っていないため、他のチームの首都に攻撃できません。'
       ],
@@ -2775,18 +2776,18 @@
             }
 
             if (success) {
-              if (currentProgress < 16) {
-                nextProgress = 26;
-               } else if (currentProgress < 33) {
-                nextProgress = 43;
-               } else if (currentProgress < 50) {
-                nextProgress = 60;
-               } else if (currentProgress < 66) {
-                nextProgress = 76;
-               } else if (currentProgress < 83) {
-                nextProgress = 93;
+              if (currentProgress < 7) {
+                nextProgress = 20;
+               } else if (currentProgress < 24) {
+                nextProgress = 37;
+               } else if (currentProgress < 41) {
+                nextProgress = 53;
+               } else if (currentProgress < 57) {
+                nextProgress = 70;
+               } else if (currentProgress < 74) {
+                nextProgress = 86;
                } else {
-                nextProgress = 10;
+                nextProgress = 3;
                }
               next = `→ ${nextProgress}±2%`;
               isAutoJoinRunning = false;
@@ -2943,16 +2944,6 @@
 
         const capitalSet = new Set(capitalMap.map(([r, c]) => `${r}-${c}`));
 
-        const nonAdjacentCells = cells.filter(([r, c]) => {
-          const key = `${r}-${c}`;
-          return !capitalSet.has(key) && !adjacentSet.has(key) && !waterSet.has(key);
-        });
-
-        const capitalAdjacentCells = cells.filter(([r, c]) => {
-          const key = `${r}-${c}`;
-          return adjacentSet.has(key) && !waterSet.has(key);
-        });
-
         const teamColorSet = new Set();
         for(const [key, value] of Object.entries(cellColors)) {
           if (teamColor === value.replace('#','')) {
@@ -2972,11 +2963,6 @@
           }
         }
 
-        const teamAdjacentCells = cells.filter(([r, c]) => {
-          const key = `${r}-${c}`;
-          return (teamColorSet.has(key) || teamAdjacentSet.has(key)) && !waterSet.has(key);
-        })
-
         const mapEdgeSet = new Set();
         for (let i=0; i<rows; i++) {
           mapEdgeSet.add(`${i}-0`);
@@ -2987,10 +2973,36 @@
           mapEdgeSet.add(`${rows-1}-${i}`);
         }
 
-        const mapEdgeCells = cells.filter(([r, c]) => {
+        //霧セル除外
+        const filterFog = (list) => list.filter(([r, c]) => exploredSet.has(`${r}-${c}`));
+
+        const nonAdjacentbaseCells = cells.filter(([r, c]) => {
+          const key = `${r}-${c}`;
+          return !capitalSet.has(key) && !adjacentSet.has(key) && !waterSet.has(key);
+        });
+
+        const nonAdjacentCells = teamColorSet.size > 0 ? filterFog(nonAdjacentbaseCells) : nonAdjacentbaseCells;
+
+        const capitalAdjacentbaseCells = cells.filter(([r, c]) => {
+          const key = `${r}-${c}`;
+          return adjacentSet.has(key) && !waterSet.has(key);
+        });
+
+        const capitalAdjacentCells = filterFog(capitalAdjacentbaseCells);
+
+        const teamAdjacentbaseCells = cells.filter(([r, c]) => {
+          const key = `${r}-${c}`;
+          return (teamColorSet.has(key) || teamAdjacentSet.has(key)) && !waterSet.has(key);
+        })
+
+        const teamAdjacentCells = filterFog(teamAdjacentbaseCells);
+
+        const mapEdgebaseCells = cells.filter(([r, c]) => {
           const key = `${r}-${c}`;
           return mapEdgeSet.has(key) && !capitalSet.has(key) && !waterSet.has(key);
         })
+
+        const mapEdgeCells = filterFog(mapEdgebaseCells);
 
         function shuffle(arr) {
           for (let i = arr.length - 1; i > 0; i--) {
@@ -3000,14 +3012,11 @@
           return arr;
         }
 
-        //霧セル除外
-        const filterFog = (list) => list.filter(([r, c]) => exploredSet.has(`${r}-${c}`));
-
         const regions = {
-          nonAdjacent: shuffle(filterFog(nonAdjacentCells)),
-          capitalAdjacent: shuffle(filterFog(capitalAdjacentCells)),
-          teamAdjacent: shuffle(filterFog(teamAdjacentCells)),
-          mapEdge: shuffle(filterFog(mapEdgeCells))
+          nonAdjacent: shuffle(nonAdjacentCells),
+          capitalAdjacent: shuffle(capitalAdjacentCells),
+          teamAdjacent: shuffle(teamAdjacentCells),
+          mapEdge: shuffle(mapEdgeCells)
         };
 
         return regions;
@@ -3039,7 +3048,7 @@
     }
     async function equipChange (region) {
       const [ row, col ] = region;
-      const url = `https://donguri.5ch.net/teambattle?r=${row}&c=${col}&`+MODE;
+      const url = `https://donguri.5ch.io/teambattle?r=${row}&c=${col}&`+MODE;
       try {
         const res = await fetch(url);
         if(!res.ok) throw new Error(`[${res.status}] /teambattle?r=${row}&c=${col}`);
@@ -3081,7 +3090,7 @@
 
   async function drawProgressBar(){
     try {
-      const res = await fetch('https://donguri.5ch.net/');
+      const res = await fetch('https://donguri.5ch.io/');
       if (!res.ok) throw new Error(res.status);
       const text = await res.text();
       const doc = new DOMParser().parseFromString(text, 'text/html');
