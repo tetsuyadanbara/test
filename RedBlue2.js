@@ -3,25 +3,25 @@
 // @version      1.2.2d改 Red vs Blue
 // @description  fix arena ui and add functions
 // @author       ぱふぱふ
-// @match        https://donguri.5ch.net/teambattle?m=hc
-// @match        https://donguri.5ch.net/teambattle?m=l
-// @match        https://donguri.5ch.net/teambattle?m=rb
-// @match        https://donguri.5ch.net/bag
+// @match        https://donguri.5ch.io/teambattle?m=hc
+// @match        https://donguri.5ch.io/teambattle?m=l
+// @match        https://donguri.5ch.io/teambattle?m=rb
+// @match        https://donguri.5ch.io/bag
 // ==/UserScript==
 
 
 (()=>{
-  if(location.href === 'https://donguri.5ch.net/bag') {
+  if(location.href === 'https://donguri.5ch.io/bag') {
     function saveCurrentEquip(url, index) {
       let currentEquip = JSON.parse(localStorage.getItem('current_equip')) || [];
-      const regex = /https:\/\/donguri\.5ch\.net\/equip\/(\d+)/;
+      const regex = /https:\/\/donguri\.5ch\.io\/equip\/(\d+)/;
       const equipId = url.match(regex)[1];
       currentEquip[index] = equipId;
       localStorage.setItem('current_equip', JSON.stringify(currentEquip));
     }
     const tableIds = ['weaponTable', 'armorTable', 'necklaceTable'];
     tableIds.forEach((elm, index)=>{
-      const equipLinks = document.querySelectorAll(`#${elm} a[href^="https://donguri.5ch.net/equip/"]`);
+      const equipLinks = document.querySelectorAll(`#${elm} a[href^="https://donguri.5ch.io/equip/"]`);
       [...equipLinks].forEach(link => {
         link.addEventListener('click', ()=>{
           saveCurrentEquip(link.href, index);
@@ -1642,7 +1642,7 @@
     async function showEquipList(){
       if(!weaponTable || !armorTable || !necklaceTable) {
         try {
-          const res = await fetch('https://donguri.5ch.net/bag');
+          const res = await fetch('https://donguri.5ch.io/bag');
           if(!res.ok) throw new Error('bag response error');
           const text = await res.text();
           const doc = new DOMParser().parseFromString(text, 'text/html');
@@ -1659,7 +1659,7 @@
             table.style.margin = '0';
             const rows = table.querySelectorAll('tr');
             rows.forEach(row => {
-              const id = row.cells[1].querySelector('a')?.href.replace('https://donguri.5ch.net/equip/','');
+              const id = row.cells[1].querySelector('a')?.href.replace('https://donguri.5ch.io/equip/','');
               row.cells[0].style.textDecorationLine = 'underline';
               row.cells[0].style.cursor = 'pointer';
               row.cells[0].dataset.id = id;
@@ -1821,7 +1821,7 @@
     const equipPresets = JSON.parse(localStorage.getItem('equipPresets')) || {};
     const fetchPromises = equipPresets[presetName].id
       .filter(id => id !== undefined && id !== null && !currentEquip.includes(id)) // 未登録or既に装備中の部位は除外
-      .map(id => fetch('https://donguri.5ch.net/equip/' + id));
+      .map(id => fetch('https://donguri.5ch.io/equip/' + id));
 
     stat.textContent = '装備中...';
     try {
@@ -2019,7 +2019,7 @@
   async function fetchSingleArenaInfo(elm) {
     try {
       const { row, col } = elm.dataset;
-      const url = `https://donguri.5ch.net/teambattle?r=${row}&c=${col}&`+MODE;
+      const url = `https://donguri.5ch.io/teambattle?r=${row}&c=${col}&`+MODE;
       const res = await fetch(url);
       if(!res.ok) throw new Error(res.status + ' res.ng');
       const text = await res.text();
@@ -2217,7 +2217,7 @@
   })();
 
   async function fetchArenaTable(row, col){
-    const url = `https://donguri.5ch.net/teambattle?r=${row}&c=${col}&`+MODE;
+    const url = `https://donguri.5ch.io/teambattle?r=${row}&c=${col}&`+MODE;
     try {
       const res = await fetch(url);
       if(!res.ok) throw new Error('res.ng');
@@ -3036,7 +3036,7 @@
     }
     async function equipChange (region) {
       const [ row, col ] = region;
-      const url = `https://donguri.5ch.net/teambattle?r=${row}&c=${col}&`+MODE;
+      const url = `https://donguri.5ch.io/teambattle?r=${row}&c=${col}&`+MODE;
       try {
         const res = await fetch(url);
         if(!res.ok) throw new Error(`[${res.status}] /teambattle?r=${row}&c=${col}`);
@@ -3078,7 +3078,7 @@
 
   async function drawProgressBar(){
     try {
-      const res = await fetch('https://donguri.5ch.net/');
+      const res = await fetch('https://donguri.5ch.io/');
       if (!res.ok) throw new Error(res.status);
       const text = await res.text();
       const doc = new DOMParser().parseFromString(text, 'text/html');
