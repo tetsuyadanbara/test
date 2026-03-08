@@ -5,8 +5,8 @@
 // @description  アイテム強化のボタンをページ上部に追加
 // @license      MIT
 // @author       81f32c5c
-// @match        https://donguri.5ch.net/modify/weapon/view/*
-// @match        https://donguri.5ch.net/modify/armor/view/*
+// @match        https://donguri.5ch.io/modify/weapon/view/*
+// @match        https://donguri.5ch.io/modify/armor/view/*
 // @grant        none
 // @downloadURL https://update.greasyfork.org/scripts/548831/5ch%20donguri%20item%20modify.user.js
 // @updateURL https://update.greasyfork.org/scripts/548831/5ch%20donguri%20item%20modify.meta.js
