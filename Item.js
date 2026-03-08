@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         5ch donguri item modify
 // @namespace    https://greasyfork.org/ja/users/1513015-81f32c5c
-// @version      1.1.0
-// @description  アイテム強化ボタンを常にページ上部に表示
+// @version      1.1.1
+// @description  アイテム強化ボタンをページ上部に常時表示
 // @license      MIT
 // @author       81f32c5c
 // @match        https://donguri.5ch.io/modify/weapon/*
@@ -13,11 +13,23 @@
 (() => {
   'use strict';
 
+  if (!location.pathname.startsWith('/modify/')) return;
+
+  const pathParts = location.pathname.split('/');
+  // ["", "modify", "weapon", "view|dmghigh|speed|critical...", "19762984"]
+  if (pathParts.length < 5) return;
+
+  const itemType = pathParts[2];
+  const itemId = pathParts[4];
+
+  if (!['weapon', 'armor'].includes(itemType) || !itemId) return;
+
+  const settingsKey = `/modify/${itemType}`;
+
   // CSSを1回だけ追加
-  (() => {
-    if (document.getElementById('donguri-item-modify-style')) return;
+  if (!document.getElementById('donguri-item-mod-style')) {
     const style = document.createElement('style');
-    style.id = 'donguri-item-modify-style';
+    style.id = 'donguri-item-mod-style';
     style.textContent = `
       .gray {
         color: black !important;
@@ -31,27 +43,15 @@
       }
     `;
     document.head.appendChild(style);
-  })();
+  }
 
-  const pathParts = location.pathname.split('/');
-  // ["", "modify", "weapon", "view|dmghigh|speed...", "19762984"]
-  if (pathParts.length < 5 || pathParts[1] !== 'modify') return;
-
-  const itemType = pathParts[2];
-  const itemId = pathParts[4];
-
-  if (!['weapon', 'armor'].includes(itemType) || !itemId) return;
-
-  const settingsKey = `/modify/${itemType}`;
-
-  const settings = (() => {
-    try {
-      const parsed = JSON.parse(localStorage.getItem(settingsKey));
-      return Array.isArray(parsed) && parsed.length === 8 ? parsed : Array(8).fill(false);
-    } catch (e) {
-      return Array(8).fill(false);
-    }
-  })();
+  let settings;
+  try {
+    const parsed = JSON.parse(localStorage.getItem(settingsKey));
+    settings = Array.isArray(parsed) && parsed.length === 8 ? parsed : Array(8).fill(false);
+  } catch (e) {
+    settings = Array(8).fill(false);
+  }
 
   const saveSettings = () => {
     try {
@@ -59,9 +59,9 @@
     } catch (e) {}
   };
 
-  const createElement = (tag, className) => {
+  const createElement = (tag, cls) => {
     const el = document.createElement(tag);
-    if (className) el.classList.add(className);
+    if (cls) el.classList.add(cls);
     return el;
   };
 
@@ -82,23 +82,23 @@
     ? [
         { name: 'DMG（最小値）', path: 'dmglow' },
         { name: 'DMG（最大値）', path: 'dmghigh' },
-        { name: 'SPD',           path: 'speed' },
-        { name: 'CRIT',          path: 'critical' }
+        { name: 'SPD', path: 'speed' },
+        { name: 'CRIT', path: 'critical' }
       ]
     : [
         { name: 'DEF（最小値）', path: 'deflow' },
         { name: 'DEF（最大値）', path: 'defhigh' },
-        { name: 'WT.',           path: 'weight' },
-        { name: 'CRIT',          path: 'critical' }
+        { name: 'WT.', path: 'weight' },
+        { name: 'CRIT', path: 'critical' }
       ];
 
-  const groups = [[], [], [], []]; // 上昇form / 下降form / 上昇表示切替 / 下降表示切替
+  const groups = [[], [], [], []];
 
   optionDefs.forEach((info, index) => {
     const nameUp = `${info.name}↑`;
     const nameDown = `${info.name}↓`;
 
-    // 上昇ボタン
+    // 上昇フォーム
     const upForm = createElement('form', 'upgrade-option');
     upForm.action = makeActionUrl(info.path);
     upForm.method = 'POST';
@@ -108,7 +108,7 @@
     upButton.textContent = nameUp;
     groups[0].push(upForm);
 
-    // 下降ボタン
+    // 下降フォーム
     const downForm = createElement('form', 'upgrade-option');
     downForm.action = makeActionUrl(info.path + 'down');
     downForm.method = 'POST';
@@ -146,26 +146,25 @@
     };
     groups[3].push(downToggleBox);
 
-    // 保存済み状態の復元
-    if (settings[index]) toggle(upForm, upToggleButton, index);
-    if (settings[index + 4]) toggle(downForm, downToggleButton, index + 4);
+    // 保存済み状態を復元
+    if (settings[index]) {
+      toggle(upForm, upToggleButton, index);
+    }
+    if (settings[index + 4]) {
+      toggle(downForm, downToggleButton, index + 4);
+    }
   });
 
   // 二重生成防止
-  const oldPanels = document.querySelectorAll('.donguri-item-modify-panel');
-  oldPanels.forEach(el => el.remove());
+  document.querySelectorAll('.donguri-item-modify-panel').forEach(el => el.remove());
 
-  // 上部操作パネル
   const topContainer = createElement('div', 'container');
   topContainer.classList.add('donguri-item-modify-panel');
-
   const topOptions = topContainer.appendChild(createElement('div', 'upgrade-options'));
   topOptions.append(...groups[0], ...groups[1]);
 
-  // 下部設定パネル
   const bottomContainer = createElement('div', 'container');
   bottomContainer.classList.add('donguri-item-modify-panel');
-
   const bottomOptions = bottomContainer.appendChild(createElement('div', 'upgrade-options'));
   bottomOptions.append(...groups[2], ...groups[3]);
 
