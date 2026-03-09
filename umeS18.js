@@ -2695,7 +2695,6 @@
 
       let regions = await getRegions();
       const excludeSet = new Set();
-      const isMorning = isMorningTime();
       let loop = 0;
 
       let cellType;
@@ -2713,6 +2712,7 @@
         let success = false;
         await new Promise(resolve => setTimeout(resolve, 0));
         isAutoJoinRunning = true;
+        const isMorning = isMorningTime();
 
         regions[cellType] = regions[cellType]
           .filter(e => !excludeSet.has(e.join(',')));
