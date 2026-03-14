@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Donguri Bag Enhancer
 // @namespace    https://donguri.5ch.io/
-// @version      10.0.0.0
+// @version      10.0.4.5
 // @description  5ちゃんねる「どんぐりシステム」の「アイテムバッグ」ページ機能改良スクリプト。
 // @author       福呼び草
 // @assistant    ChatGPT (OpenAI)
@@ -23,13 +23,14 @@
   // ============================================================
   // スクリプト自身のバージョン（About 表示用）
   // ============================================================
-  const DBE_VERSION    = '10.0.0.0';
+  const DBE_VERSION    = '10.0.4.5';
 
   // ============================================================
   // 現在のどんぐりドメイン
   // - 固定ドメイン文字列に依存しないよう、実行中オリジンを使う
   // ============================================================
   const DBE_ORIGIN = location.origin;
+
   // ============================================================
   // 多重起動ガード（同一ページで DBE が複数注入される事故を防ぐ）
   // - 既に同等以上のバージョンが動いている場合、このインスタンスは停止
@@ -400,6 +401,7 @@
     ['うちわR',                    { kana:'ウチワR',                      limited:true  }],
     ['チョコレートハンマー',       { kana:'チョコレートハンマー',         limited:true  }],
     ['桃花うちわ',                 { kana:'トウカウチワ',                 limited:true  }],
+    ['純白報復の大槌',             { kana:'ジュンパクホウフクノオオヅチ', limited:true  }],
   ]);
   // レジストリ（常設防具）
   const armorRegistry = new Map([
@@ -447,6 +449,7 @@
     ['極光の冠兜',                 { kana:'キョッコウノカンムリカブト',   limited:true  }],
     ['月影の告白ゆかた',           { kana:'ツキカゲノコクハクユカタ',     limited:true  }],
     ['乱れ桜の外套',               { kana:'ミダレザクラノガイトウ',       limited:true  }],
+    ['白薔薇の誓約鎧',             { kana:'シロバラノセイヤクヨロイ',     limited:true  }],
   ]);
 
   // ============================================================
@@ -2505,13 +2508,12 @@
 
     // ──────────────────────────────────────────────
     // 分子カウント：実際に「宝箱を開ける」送信を行ったタイミングで加算する
-    //  - 大型宝箱は 1回の送信で 10回相当として +10
+    //  - 標準/大型/バトル標準/バトル大型のいずれも「ボタン実行回数」を +1 で数える
     //  - URL監視の自動カウント(dbeChestMaybeCount)は _countFromUrl=true のときのみ有効
     // ──────────────────────────────────────────────
     function dbeChestOpenStep(){
       try{
-        const DBE_CHEST = (window.DBE_CHEST = window.DBE_CHEST || {});
-        return (DBE_CHEST.type === 'large' || DBE_CHEST.type === 'battle_large') ? 10 : 1;
+        return 1;
       }catch(_){ return 1; }
     }
     function dbeChestBumpProcessed(step, src, url){
@@ -3083,9 +3085,8 @@
             const rUnlimited = document.getElementById('dbe-radio-Chest--unlimited');
             const nTimes     = document.getElementById('dbe-prm-Chest--open-times');
             DBE_CHEST.unlimited     = !!(rUnlimited && rUnlimited.checked);
-            // 分母：標準/バトル＝×1回、大型＝×10回
-            const factor = (String(type)==='large') ? 10 : 1;
-            DBE_CHEST._totalPlanned = DBE_CHEST.unlimited ? null : Math.max(1, Number(nTimes?.value||1)) * factor;
+            // 分母：標準/大型/バトル標準/バトル大型のいずれも「ボタン実行回数」をそのまま使う
+            DBE_CHEST._totalPlanned = DBE_CHEST.unlimited ? null : Math.max(1, Number(nTimes?.value||1));
             DBE_CHEST.processed     = 0;
             DBE_CHEST._userAbort    = false;
             DBE_CHEST._serverError  = false;
@@ -4467,6 +4468,48 @@
         return {wep:[],amr:[],nec:[]};
       }
     }
+
+    // 選別専用：保存済みJSONを優先してルール群のスナップショットを取得
+    // - 宝箱／バトル宝箱の選別時は「その瞬間の保存済みJSON」を優先
+    // - 取得失敗時のみ _rulesData へフォールバック
+    function dbeGetRulesSnapshotForSelection(){
+      try{
+        let src = null;
+
+        // 1) 本流ストレージ（dbe-rules-v1）を最優先
+        try{
+          if (typeof loadRulesFromStorage === 'function'){
+            const r = loadRulesFromStorage();
+            if (dbeLooksLikeRules(r)) src = r;
+          }
+        }catch(_){}
+
+        // 2) 互換キー探索
+        if (!src){
+          try{
+            const r = dbeLoadRulesFromStorage();
+            if (dbeLooksLikeRules(r)) src = r;
+          }catch(_){}
+        }
+
+        // 3) 最後にメモリ上の _rulesData
+        if (!src){
+          try{
+            if (typeof _rulesData === 'object' && dbeLooksLikeRules(_rulesData)) src = _rulesData;
+          }catch(_){}
+        }
+
+        const base = src || { wep:[], amr:[], nec:[] };
+        return dbeNormalizeCardsShape(JSON.parse(JSON.stringify(base)));
+      }catch(_){
+        try{
+          return dbeNormalizeCardsShape(JSON.parse(JSON.stringify(_rulesData || {wep:[],amr:[],nec:[]})));
+        }catch(__){
+          return {wep:[],amr:[],nec:[]};
+        }
+      }
+    }
+
     // 保存：可能なら本体の保存関数(saveRulesToStorage)を使い、それが無ければ互換キーへ保存
     function dbeSaveAllFilterCards(newData){
       const data = dbeNormalizeCardsShape(newData);
@@ -5350,14 +5393,7 @@
                 DBE_CHEST.stage = 'recycling';
                 scheduleNextRecycle();
               } else {
-                if (DBE_CHEST.unlimited
-                    && DBE_CHEST.qLock.length===0
-                    && (!DBE_CHEST.qRecycle || DBE_CHEST.qRecycle.length===0)
-                    && (DBE_CHEST.onlyNew ? (DBE_CHEST.newFound||0)===0 : false)) {
-                  window.DBE_finishChest && window.DBE_finishChest();
-                } else {
-                  afterIterationStep(targetDoc);
-                }
+                afterIterationStep(targetDoc);
               }
             });
             return;
@@ -5784,21 +5820,65 @@
 
           // ☆ 追加：数値抽出ヘルパー（空や非数値は NaN になる＝判定時に不一致で落とす）
           const numFromCell = (td)=> {
-          const t = (td?.textContent || '').replace(/[^\d.\-]/g,'').trim();
-          // 小数が来ても parseInt で整数化（必要に応じて parseFloat に切替可）
-          const v = t ? parseFloat(t) : NaN;
-          return Number.isFinite(v) ? v : NaN;
-        };
-
-          // ☆ 追加：範囲（min/max）抽出ヘルパー（ATK/DEF 用）
-          const rangeFromCell = (td)=>{
-            const nums = String(td?.textContent || '').match(/\d+/g);
-            if (!nums || !nums.length) return {min:NaN, max:NaN};
-            const a = parseInt(nums[0],10);
-            const b = (nums.length>1) ? parseInt(nums[1],10) : a;
-            return {min:(Number.isFinite(a)?a:NaN), max:(Number.isFinite(b)?b:NaN)};
+            const raw = String(td?.textContent || '').normalize('NFKC');
+            const m = raw.match(/-?\d+(?:\.\d+)?/);
+            if (!m) return NaN;
+            const v = parseFloat(m[0]);
+            return Number.isFinite(v) ? v : NaN;
           };
 
+          // ☆ 追加：範囲（min/max）抽出ヘルパー（ATK/DEF 用）
+          // - まず「a-b」「a～b」「a〜b」のような範囲表記を優先
+          // - 見つからなければ、セル中の独立した数値トークン先頭2つを使う
+          const rangeFromCell = (td)=>{
+            const raw = String(td?.textContent || '').normalize('NFKC');
+
+            // 1) 範囲表記を優先
+            let m = raw.match(/(-?\d+(?:\.\d+)?)\s*(?:[~〜～\-−ー－]\s*)(-?\d+(?:\.\d+)?)/);
+            if (m){
+              const a = parseFloat(m[1]);
+              const b = parseFloat(m[2]);
+              return {
+                min: Number.isFinite(a) ? a : NaN,
+                max: Number.isFinite(b) ? b : NaN
+              };
+            }
+
+            // 2) フォールバック：独立した数値トークン
+            const nums = raw.match(/-?\d+(?:\.\d+)?/g);
+            if (!nums || !nums.length) return {min:NaN, max:NaN};
+            const a = parseFloat(nums[0]);
+            const b = (nums.length > 1) ? parseFloat(nums[1]) : a;
+            return {
+              min: Number.isFinite(a) ? a : NaN,
+              max: Number.isFinite(b) ? b : NaN
+            };
+          };
+
+          // ☆ 追加：マリモ抽出ヘルパー
+          // - 既存実装のようにセル中の数字を全部連結しない
+          // - 「先頭側の独立した数値」または「マリモ直前/直後の数値」を優先
+          const marimoFromCell = (td)=>{
+            const raw = String(td?.textContent || '').normalize('NFKC').trim();
+            if (!raw) return NaN;
+
+            // 1) 「マリモ 2」「2 マリモ」など、語の近傍を優先
+            let m =
+              raw.match(/マリモ\D*(-?\d+(?:\.\d+)?)/i) ||
+              raw.match(/(-?\d+(?:\.\d+)?)\D*マリモ/i);
+            if (m){
+              const v = parseFloat(m[1]);
+              return Number.isFinite(v) ? v : NaN;
+            }
+
+            // 2) 先頭側の独立した数値を採用
+            m = raw.match(/-?\d+(?:\.\d+)?/);
+            if (!m) return NaN;
+            const v = parseFloat(m[0]);
+            return Number.isFinite(v) ? v : NaN;
+          };
+
+        const rulesSnap = dbeGetRulesSnapshotForSelection();
         Array.from(table.tBodies[0].rows).forEach(tr=>{
 
           const a = tr.cells[iEqup]?.querySelector('a[href*="/equip/"]');
@@ -5825,25 +5905,54 @@
                           || '';
           // ★ element フォールバック強化：行全体からも抽出
           const pickElem = ()=>{
-            // 1) 明示列があれば、それを正規化して採用
+            const candidates = ['火','氷','雷','風','地','水','光','闇','なし'];
+
+            // 1) 明示列があれば最優先。ただし失敗時に即 unknown にはせず、後段へフォールバックする
             if (iElem>=0){
-              const norm = normalizeElem(tr.cells[iElem]?.textContent||'');
-              return norm || '__unknown__';
+              const rawElemCell = tr.cells[iElem]?.textContent || '';
+              const norm = normalizeElem(rawElemCell);
+              if (norm) return norm;
             }
-            // 2) 行テキストから推測（正規化）
-            const candidates=['火','氷','雷','風','地','水','光','闇','なし'];
-            const t = _rowText;
-            for (const err of candidates){ if (t.includes(err)) return err; }
-            // 3) 見つからなければ「未特定」
+
+            // 2) 名称セル・行全体から再推測
+            //    （ELEM列の文字列が崩れている/空でも、他セルに属性語が残っていれば拾う）
+            {
+              const probes = [
+                _rawName || '',
+                _rowText || ''
+              ];
+              for (const src of probes){
+                const norm = normalizeElem(src);
+                if (norm) return norm;
+              }
+            }
+
+            // 3) normalizeElem を通さない素朴探索（最後の保険）
+            {
+              const probes = [
+                tr.cells[iElem]?.textContent || '',
+                _rawName || '',
+                _rowText || ''
+              ];
+              for (const src of probes){
+                const txt = String(src || '').normalize('NFKC');
+                for (const err of candidates){
+                  if (txt.includes(err)) return err;
+                }
+              }
+            }
+
+            // 4) 見つからなければ未特定
             return '__unknown__';
           };
+
           const atkR = (kind==='wep' && iAtk>=0) ? rangeFromCell(tr.cells[iAtk]) : null;
           const defR = (kind==='amr' && iDef>=0) ? rangeFromCell(tr.cells[iDef]) : null;
           const rowInfo = {
             id,
             name : normalizeItemName(_rawName),
             elem : pickElem(),
-            mrm  : iMrm>=0 ? parseInt((tr.cells[iMrm]?.textContent||'0').replace(/[^\d]/g,''),10)||0 : 0,
+            mrm  : iMrm>=0 ? marimoFromCell(tr.cells[iMrm]) : NaN,
             rar  : _rarHit,
             kind,
             // ☆ 追加：行から SPD / WT. / ATK / DEF / CRIT を数値抽出（なければ NaN）
@@ -5870,7 +5979,7 @@
             rowInfo.hasUnknown = nec.hasUnknown;
           }
 
-          const act = decideAction(rowInfo); // 'lock' | 'del' | null
+          const act = decideAction(rowInfo, rulesSnap); // 'lock' | 'del' | null
           if (act==='lock' && hrefL.includes('/lock/')){
             DBE_CHEST.qLock.push({table:kind, id});
           } else if (act==='del'){
@@ -5915,15 +6024,44 @@
 
     // 〓〓〓 エレメント名の正規化（表記ゆれ吸収） 〓〓〓
     function normalizeElem(raw){
-      const s = String(raw||'').trim();
+      const s = String(raw||'').normalize('NFKC').trim();
       if(!s) return '';
-      // 全角空白除去・角括弧などのノイズ削除
-      const t = s.replace(/[\u3000\s]+/g,' ').replace(/[［\[]?[属性]?[］\]]?/g,'').trim();
+
+      const allow = ['火','氷','雷','風','地','水','光','闇','なし'];
+      const allowSet = new Set(allow);
+
+      // 1) まず文字列中に属性語がそのまま含まれていれば優先採用
+      //    （例: "ELEM 火", "属性: 水", "[闇]" など）
+      for (const e of allow){
+        if (s.includes(e)) return e;
+      }
+
+      // 2) ノイズ除去後に厳密一致
+      const t = s
+        .replace(/[\u3000\s]+/g,' ')
+        .replace(/[［］\[\]【】()（）]/g,' ')
+        .replace(/属性|ELEM|ELEMENT|elem|element|Attr|ATTR/gi,' ')
+        .replace(/[:：]/g,' ')
+        .trim();
+
       // 同義語 → 正規化
-      const map = { '無':'なし', '無属性':'なし', 'none':'なし', 'ナシ':'なし' };
+      const map = {
+        '無':'なし',
+        '無属性':'なし',
+        'none':'なし',
+        'None':'なし',
+        'ナシ':'なし'
+      };
       const v = map[t] || t;
-      const allow = new Set(['火','氷','雷','風','地','水','光','闇','なし']);
-      return allow.has(v) ? v : '';
+      if (allowSet.has(v)) return v;
+
+      // 3) 最後の保険：空白区切りトークンから拾う
+      const toks = t.split(/\s+/).filter(Boolean);
+      for (const tok of toks){
+        const vv = map[tok] || tok;
+        if (allowSet.has(vv)) return vv;
+      }
+      return '';
     }
 
     // 〓〓〓 エレメント一致判定（'不問'（旧:すべて）なら無条件通過。unknownは既定で不一致、設定ONで許容） 〓〓〓
@@ -5946,15 +6084,106 @@
       return targets.includes(elemVal);
     }
 
+    // 〓〓〓 規則評価用：数値しきい値の正規化 〓〓〓
+    // - 全角数字を含む入力を NFKC で半角化
+    // - 数字/小数点/符号 以外を除去
+    // - 空や非数値は NaN
+    function dbeRuleThresholdNumber(raw){
+      const s = String(raw ?? '')
+        .normalize('NFKC')
+        .replace(/[^\d.\-]/g,'')
+        .trim();
+      if (!s) return NaN;
+      const n = Number(s);
+      return Number.isFinite(n) ? n : NaN;
+    }
+
+    // 〓〓〓 複数選択ルールの正規化（Rarity / Element） 〓〓〓
+    // - 旧形式/新形式/複数選択/全選択 を同じ基準で扱う
+    // - 「全選択」は非アクティブ（= 前段フィルタを素通し）として扱う
+    function dbeNormalizeRarityRule(raw){
+      const ALL = ['UR','SSR','SR','R','N'];
+      const allow = new Set(ALL);
+
+      // 未指定 / 互換の「すべて」
+      if (!raw) return { active:false, list:[] };
+      if (typeof rarityIsAll === 'function' && rarityIsAll(raw)) {
+        return { active:false, list:[] };
+      }
+      if (raw === 'すべて' || raw === '不問' || raw === '選択してください') {
+        return { active:false, list:[] };
+      }
+
+      let picked = [];
+      if (Array.isArray(raw)){
+        picked = raw.map(v=>String(v||'').trim()).filter(v=>allow.has(v));
+      } else if (typeof raw === 'string'){
+        const v = String(raw||'').trim();
+        if (allow.has(v)) picked = [v];
+      } else if (typeof raw === 'object'){
+        picked = ALL.filter(k => !!raw[k]);
+      }
+
+      // 重複除去
+      picked = Array.from(new Set(picked));
+
+      // 全5種選択は「すべて」と同義にする
+      if (picked.length >= ALL.length) {
+        return { active:false, list:[] };
+      }
+      return { active:(picked.length > 0), list:picked };
+    }
+
+    function dbeNormalizeElementRule(rule){
+      const ALL = ['火','氷','雷','風','地','水','光','闇','なし'];
+      const allow = new Set(ALL);
+
+      // 新形式 elm 優先
+      if (rule && rule.elm){
+        const all = !!rule.elm.all;
+        const picked = Array.isArray(rule.elm.selected)
+          ? Array.from(new Set(rule.elm.selected.map(normalizeElem).filter(v=>allow.has(v))))
+          : [];
+        if (all || picked.length >= ALL.length) {
+          return { active:false, list:[] };
+        }
+        return { active:(picked.length > 0), list:picked };
+      }
+
+      // 旧形式 elem 互換
+      const raw = rule ? rule.elem : null;
+      if (!raw) return { active:false, list:[] };
+      if (raw === 'すべて' || raw === '不問') return { active:false, list:[] };
+
+      let picked = [];
+      if (Array.isArray(raw)){
+        picked = raw.map(normalizeElem).filter(v=>allow.has(v));
+      } else if (typeof raw === 'string'){
+        const v = normalizeElem(raw);
+        if (allow.has(v)) picked = [v];
+      } else if (typeof raw === 'object'){
+        picked = ALL.filter(k => !!raw[k]).map(normalizeElem).filter(v=>allow.has(v));
+      }
+
+      picked = Array.from(new Set(picked));
+      if (picked.length >= ALL.length) {
+        return { active:false, list:[] };
+      }
+      return { active:(picked.length > 0), list:picked };
+    }
+
     // 〓〓〓 規則評価：最初に合致したルールの action を採用（上から順=「▲」の並び順） 〓〓〓
-      function decideAction(rowInfo){
+      function decideAction(rowInfo, rulesSnap){
         // rowInfo: {id,name,elem,mrm,rar,kind, spd, wt, atkMin, atkMax, defMin, defMax, crit, (nec: grade,buffCnt,debuffCnt,delta,unknown...) }
         if (rowInfo && rowInfo.kind==='nec' && rowInfo.hasUnknown) {
           return null;
         }
         // rowInfo: { id, name, elem, mrm, rar, kind, spd, wt }
-        // _rulesData: { nec[], wep[], amr[] }
-        const list = (rowInfo.kind==='wep') ? _rulesData.wep : (rowInfo.kind==='amr' ? _rulesData.amr : _rulesData.nec);
+        // rulesSnap: { nec[], wep[], amr[] }  … 宝箱選別時は保存済みJSON優先のスナップショット
+        const rules = (rulesSnap && typeof rulesSnap === 'object')
+          ? rulesSnap
+          : dbeGetRulesSnapshotForSelection();
+        const list = (rowInfo.kind==='wep') ? (rules.wep || []) : (rowInfo.kind==='amr' ? (rules.amr || []) : (rules.nec || []));
 
         for (const r of list){
 
@@ -5984,47 +6213,20 @@
             }
 
             {
-              let active = false;
-              let matched = true;
-              const raw = r.rarity;
-              // 「すべて」扱い（null/undefined だけでなく、旧形式の all/全5種 なども含む）
-              const isAll = (!raw) ? true : (typeof rarityIsAll==='function' ? rarityIsAll(raw) : (raw==='すべて'));
-              if (!isAll && raw && raw!=='選択してください'){
-                if (Array.isArray(raw)){
-                  active = (raw.length > 0);
-                  matched = !active ? true : raw.includes(rowInfo.rar);
-                } else if (typeof raw === 'string'){
-                  active = true;
-                  matched = (raw === rowInfo.rar);
-                } else if (typeof raw === 'object'){
-                  // 旧形式：{UR:true,...} のような形も許容
-                  const picked = ['UR','SSR','SR','R','N'].filter(k=>raw[k]);
-                  active = (picked.length > 0);
-                  matched = !active ? true : picked.includes(rowInfo.rar);
-                } else {
-                  active = false;
-                  matched = true;
-                }
-              }
-              rarityActive = !!active;
+              const rr = dbeNormalizeRarityRule(r.rarity);
+              const active = !!rr.active;
+              const matched = !active ? true : rr.list.includes(rowInfo.rar);
+              rarityActive = active;
               // Rarity 不一致なら以降スキップ（保留）
               if (active && !matched) continue;
             }
 
             // (3) Element でフィルタ（※「すべて」は非アクティブ＝判定スキップ）
             {
-              let active = false;
-              let matched = true;
-              if (r.elm){
-                const picks = Array.isArray(r.elm.selected) ? r.elm.selected : [];
-                active = (!r.elm.all && picks.length>0);
-              } else if (r.elem){
-                active = (r.elem !== '不問' && r.elem !== 'すべて');
-              }
-              if (active){
-                matched = matchElementRule(r, rowInfo.elem);
-              }
-              elemActive = !!active;
+              const er = dbeNormalizeElementRule(r);
+              const active = !!er.active;
+              const matched = !active ? true : er.list.includes(rowInfo.elem);
+              elemActive = active;
               // Element 不一致なら以降スキップ（保留）
               if (active && !matched) continue;
             }
@@ -6046,9 +6248,9 @@
               const st = r.spd;
               if (st){
                 const v  = rowInfo.spd;
-                const th = Number(st.value)||0;
+                const th = dbeRuleThresholdNumber(st.value);
                 const matched =
-                  Number.isFinite(v) &&
+                  Number.isFinite(v) && Number.isFinite(th) &&
                   ((st.border==='以上') ? (v>=th) : (st.border==='未満') ? (v<th) : false);
                 apply(true, matched);
               }
@@ -6056,9 +6258,9 @@
               const st = r.wt;
               if (st){
                 const v  = rowInfo.wt;
-                const th = Number(st.value)||0;
+                const th = dbeRuleThresholdNumber(st.value);
                 const matched =
-                  Number.isFinite(v) &&
+                  Number.isFinite(v) && Number.isFinite(th) &&
                   ((st.border==='以上') ? (v>=th) : (st.border==='未満') ? (v<th) : false);
                 apply(true, matched);
               }
@@ -6067,7 +6269,7 @@
             // ── min/max（武器：ATK / 防具：DEF） ※未指定（all）は extra に入らないので非アクティブ
             if (rowInfo.kind==='wep'){
               if (r.minATK){
-                const th = Number(String(r.minATK.value ?? '').replace(/[^\d.\-]/g,''));
+                const th = dbeRuleThresholdNumber(r.minATK.value);
                 const v  = rowInfo.atkMin;
                 const matched =
                   Number.isFinite(v) && Number.isFinite(th) &&
@@ -6075,7 +6277,7 @@
                 apply(true, matched);
               }
               if (r.maxATK){
-                const th = Number(String(r.maxATK.value ?? '').replace(/[^\d.\-]/g,''));
+                const th = dbeRuleThresholdNumber(r.maxATK.value);
                 const v  = rowInfo.atkMax;
                 const matched =
                   Number.isFinite(v) && Number.isFinite(th) &&
@@ -6084,7 +6286,7 @@
               }
             } else if (rowInfo.kind==='amr'){
               if (r.minDEF){
-                const th = Number(String(r.minDEF.value ?? '').replace(/[^\d.\-]/g,''));
+                const th = dbeRuleThresholdNumber(r.minDEF.value);
                 const v  = rowInfo.defMin;
                 const matched =
                   Number.isFinite(v) && Number.isFinite(th) &&
@@ -6092,7 +6294,7 @@
                 apply(true, matched);
               }
               if (r.maxDEF){
-                const th = Number(String(r.maxDEF.value ?? '').replace(/[^\d.\-]/g,''));
+                const th = dbeRuleThresholdNumber(r.maxDEF.value);
                 const v  = rowInfo.defMax;
                 const matched =
                   Number.isFinite(v) && Number.isFinite(th) &&
@@ -6105,7 +6307,7 @@
             {
               const cr = (r.crit || r.CRIT);
               if (cr){
-                const th = Number(String(cr.value ?? '').replace(/[^\d.\-]/g,''));
+                const th = dbeRuleThresholdNumber(cr.value);
                 const v  = rowInfo.crit;
                 const matched =
                   Number.isFinite(v) && Number.isFinite(th) &&
@@ -6118,11 +6320,11 @@
             {
               const mm = r.mrm;
               if (mm && mm.mode==='spec'){
-                const v  = Number(rowInfo.mrm)||0;
-                const th = Number(mm.value)||0;
+                const v  = dbeRuleThresholdNumber(rowInfo.mrm);
+                const th = dbeRuleThresholdNumber(mm.value);
                 const matched =
-                  (mm.border==='以上') ? (v>=th) :
-                  (mm.border==='未満') ? (v<th) : false;
+                  Number.isFinite(v) && Number.isFinite(th) &&
+                  ((mm.border==='以上') ? (v>=th) : (mm.border==='未満') ? (v<th) : false);
                 apply(true, matched);
               }
             }
@@ -6412,7 +6614,11 @@
         // 次ループ：背景ページを /chest or /battlechest へ
         DBE_CHEST.qLock = [];
         DBE_CHEST.stage = 'load_chest';
-        DBE_CHEST.iframe.src = (DBE_CHEST.type==='battle')
+        const isBattleType = (t)=>{
+          const s = String(t || '');
+          return (s === 'battle' || s === 'battle_normal' || s === 'battle_large');
+        };
+        DBE_CHEST.iframe.src = isBattleType(DBE_CHEST.type)
           ? `${DBE_ORIGIN}/battlechest`
           : `${DBE_ORIGIN}/chest`;
         try{ tickProgressHud(); }catch(_){}
@@ -9865,6 +10071,43 @@
     return true;
   }
 
+  function dbeReapplyBodyColumnClasses(tableId){
+    const table = document.getElementById(tableId);
+    if (!table || !table.tHead || !table.tBodies || !table.tBodies[0]) return;
+
+    const colMap = columnIds[tableId];
+    if (!colMap) return;
+
+    const knownClasses = Object.values(colMap);
+    const headerCells = Array.from(table.tHead.rows[0]?.cells || []);
+    if (!headerCells.length) return;
+
+    const headerKeys = headerCells.map(th=>{
+      // 1) data-colkey を優先
+      const dk = th?.dataset?.colkey || '';
+      if (dk) return dk;
+
+      // 2) 既存クラスから判定
+      const byCls = knownClasses.find(cls => th.classList && th.classList.contains(cls));
+      if (byCls) return byCls;
+
+      // 3) ヘッダータイトル文字列から判定
+      const txt = (th.textContent || '').trim();
+      return colMap[txt] || '';
+    });
+
+    Array.from(table.tBodies[0].rows).forEach(row=>{
+      Array.from(row.cells || []).forEach((td, i)=>{
+        if (!td) return;
+        const key = headerKeys[i] || '';
+        if (!key) return;
+
+        // 列クラスの再付与
+        td.classList.add(key);
+      });
+    });
+  }
+
   // ============================================================
   // ▽ここから▽ ItemID Copy Utilities（v13.11.4 用・互換実装）
   //  - /equip/<数字> 等から固有IDを抽出
@@ -10910,6 +11153,24 @@
             }
           }catch(_){}
 
+          // 設定（dbe-W-Settings）：「ネックレス、武器、防具の『錠／解錠』列を隠す」を再適用
+          // ※tbody差し替え後は、新しい行のセル表示状態が初期状態に戻るため
+          try{
+            const hideLock = (typeof readBool === 'function') ? readBool('hideLockCol') : false;
+            document.querySelectorAll(`.${columnIds[id]['解']}`).forEach(el=>{
+              el.style.display = hideLock ? 'none' : '';
+            });
+          }catch(_){}
+
+          // 設定（dbe-W-Settings）：「ネックレス、武器、防具の『分解』列を隠す」を再適用
+          // ※tbody差し替え後は、新しい行のセル表示状態が初期状態に戻るため
+          try{
+            const hideRycl = (typeof readBool === 'function') ? readBool('hideRyclCol') : false;
+            document.querySelectorAll(`.${columnIds[id]['分解']}`).forEach(el=>{
+              el.style.display = hideRycl ? 'none' : '';
+            });
+          }catch(_){}
+
           // 増減列が有効な場合、tbody差し替え後に増減セルを再構築（新規行に追加）
           const __showDeltaNow = (typeof readBool === 'function') ? readBool('showDelta') : true;
           const hasDeltaHeader = !!(table.tHead && table.tHead.rows && table.tHead.rows[0] && table.tHead.rows[0].querySelector('th.'+deltaColClass));
@@ -10937,6 +11198,28 @@
               td.textContent = tot>0? ('△'+tot) : (tot<0? ('▼'+Math.abs(tot)) : '0');
             });
           }
+
+          // tbody差し替え後の新しい行に、列クラス（necClm-*）を再付与
+          // ※ hideRyclCol / hideLockCol などの設定反映は列クラス依存のため
+          try{
+            dbeReapplyBodyColumnClasses(id);
+          }catch(_){}
+
+          // 設定（dbe-W-Settings）：「ネックレス、武器、防具の『錠／解錠』列を隠す」を再適用
+          try{
+            const hideLock = (typeof readBool === 'function') ? readBool('hideLockCol') : false;
+            document.querySelectorAll(`.${columnIds[id]['解']}`).forEach(el=>{
+              el.style.display = hideLock ? 'none' : '';
+            });
+          }catch(_){}
+
+          // 設定（dbe-W-Settings）：「ネックレス、武器、防具の『分解』列を隠す」を再適用
+          try{
+            const hideRycl = (typeof readBool === 'function') ? readBool('hideRyclCol') : false;
+            document.querySelectorAll(`.${columnIds[id]['分解']}`).forEach(el=>{
+              el.style.display = hideRycl ? 'none' : '';
+            });
+          }catch(_){}
 
           // フィルター＆（必要なら）最後のソートを再適用
           applyFilter();
@@ -11547,6 +11830,28 @@
             }
           }catch(_){}
 
+          // tbody差し替え後の新しい行に、列クラス（wepClm-* / amrClm-*）を再付与
+          // ※ hideRyclCol / hideLockCol などの設定反映は列クラス依存のため
+          try{
+            dbeReapplyBodyColumnClasses(id);
+          }catch(_){}
+
+          // 設定（dbe-W-Settings）：「ネックレス、武器、防具の『錠／解錠』列を隠す」を再適用
+          try{
+            const hideLock = (typeof readBool === 'function') ? readBool('hideLockCol') : false;
+            document.querySelectorAll(`.${columnIds[id]['解']}`).forEach(el=>{
+              el.style.display = hideLock ? 'none' : '';
+            });
+          }catch(_){}
+
+          // 設定（dbe-W-Settings）：「ネックレス、武器、防具の『分解』列を隠す」を再適用
+          try{
+            const hideRycl = (typeof readBool === 'function') ? readBool('hideRyclCol') : false;
+            document.querySelectorAll(`.${columnIds[id]['分解']}`).forEach(el=>{
+              el.style.display = hideRycl ? 'none' : '';
+            });
+          }catch(_){}
+
           // フィルター＆最後のソートを維持したまま再適用
           applyFilter();
           try{ applyColor(); }catch(_){}
@@ -11845,144 +12150,140 @@
         });
       });
 
-      // 〓〓〓〓〓〓 4 段階サイクル（①〜④）【リニューアル版】 〓〓〓〓〓〓
+      // 〓〓〓〓〓〓 4 段階サイクル（①〜④）【v10.0.3.0】〓〓〓〓〓〓
       // 対象：weaponTable の wepClm-Name / armorTable の amrClm-Name
-      // 名称・Rarity・Marimo・限定（未知/既知）・カナを用いた多段ソート
+      // 方針：
+      //   - 名称列クリック時は「名称列だけ」を基準にソートする
+      //   - ただし名称同値内では Rarity 降順を適用する
+      //   - さらに名称/Rarity まで同値の場合のみ、既存の並び（＝ソート履歴の結果）を保持する
+      //   - 半角全角は NFKC で同等扱い
 
       const nameThOrig  = hdrs[idxMap[nameTitle]];
       const nameTh      = nameThOrig.cloneNode(true);
       nameThOrig.parentNode.replaceChild(nameTh, nameThOrig);
       nameTh.style.cursor = 'pointer';
-      if (!table.dataset.nameSortPhase) table.dataset.nameSortPhase = '0';            // 次に実行する段階（0..3）
-      if (!table.dataset.nameSortLastApplied) table.dataset.nameSortLastApplied = ''; // 直近適用の記憶
+      if (!table.dataset.nameSortPhase) table.dataset.nameSortPhase = '0';
+      if (!table.dataset.nameSortLastApplied) table.dataset.nameSortLastApplied = '';
 
-      // ヘッダー行・セルを都度取り直し（差し替えや再描画に強い）
-      function getHeaderRowNow(){
-        const th = (table.tHead && table.tHead.rows && table.tHead.rows[0] && table.tHead.rows[0].cells[idxMap[nameTitle]]) || nameTh;
-        return (th && th.closest) ? th.closest('tr') : (table.tHead && table.tHead.rows && table.tHead.rows[0]) || headerRow;
-      }
-      function getNameThNow(){
-        return (table.tHead && table.tHead.rows && table.tHead.rows[0] && table.tHead.rows[0].cells[idxMap[nameTitle]]) || nameTh;
-      }
-
-      // 各種レジストリ
       const metaCache  = new WeakMap();
-      const kanaDict   = (id === 'weaponTable') ? weaponKana   : armorKana;    // Map<Name, Kana>
-      const limitedSet = (id === 'weaponTable') ? limitedWeapon: limitedArmor; // Set<Name>
-      const keyMap     = (id === 'weaponTable') ? weaponKeyToName : armorKeyToName; // Map<Key, CanonicalName>
+      const limitedSet = (id === 'weaponTable') ? limitedWeapon : limitedArmor;
+      const keyMap     = (id === 'weaponTable') ? weaponKeyToName : armorKeyToName;
 
-      // 既知限定の判定（表示名 or 正規化キー→正規名）
-      function isKnownLimited(name){
-        if (limitedSet.has(name)) return true;
-        const canonical = keyMap.get(makeKey(name));
-        return canonical ? limitedSet.has(canonical) : false;
-      }
-      // 未知限定の検知：セル内にシリアル系表示があるが、レジストリに未登録
-      function hasSerialLike(text){
-        // 例: [54], [ 003 ], ( 1 of 20 ), （12／50）ほかを広めに吸収
-        return /\[\s*\d+\s*\]|(?:\(\s*\d+\s*(?:of|\/|／)\s*\d+\s*\))|（\s*\d+\s*(?:of|\/|／)\s*\d+\s*）/i.test(text);
+      function clearNameSortIndicator(){
+        const headerRowNow = (nameTh && typeof nameTh.closest === 'function')
+          ? nameTh.closest('tr')
+          : (table.tHead && table.tHead.rows && table.tHead.rows[0]) || headerRow;
+        if (headerRowNow){
+          headerRowNow.querySelectorAll('.sort-indicator, .sort-indicator-left, .dbe-name-sort-indicator-exact').forEach(el => el.remove());
+        }
       }
 
-      // フリガナ比較のための正規化
-      function normalizeForFuri(s){
-        if (!s) return '';
-        // ひら→カナ、NFKC
-        return [...s].map(ch => (ch >= '\u3041' && ch <= '\u3096') ? String.fromCharCode(ch.charCodeAt(0)+0x60) : ch).join('').normalize('NFKC');
+      function setNameSortIndicatorExact(label, arrow){
+        clearNameSortIndicator();
+        const span = document.createElement('span');
+        span.className = 'dbe-name-sort-indicator-exact';
+        span.style.display = 'inline-flex';
+        span.style.alignItems = 'center';
+        span.style.gap = '0.1em';
+        span.style.marginLeft = '0.35em';
+        span.style.color = 'red';
+        span.style.fontWeight = 'bold';
+        const svg = ARROW_SVG[arrow === '⬇' ? 'down' : 'up'];
+        span.innerHTML = `${svg}<span class="sort-label">${label}</span>`;
+        nameTh.appendChild(span);
       }
-      // 文字カテゴリ: 0=記号, 1=数字, 2=英字, 3=日本語（カナ/かな/漢字）
+
+      function normalizeNameForSort(s){
+        return String(s || '').normalize('NFKC');
+      }
+
+      // 文字カテゴリ:
+      //   0=記号
+      //   1=数字
+      //   2=英字
+      //   3=日本語（ひらがな/カタカナ/漢字）
       function charType(ch){
         const cp = ch.codePointAt(0);
-        // 日本語（カタカナ/長音）
         if ((cp >= 0x30A0 && cp <= 0x30FF) || cp === 0x30FC) return 3;
-        // ひらがな（normalize前後の保険）
         if (cp >= 0x3040 && cp <= 0x309F) return 3;
-        // 漢字（CJK統合/拡張A/互換）
-        if ((cp >= 0x4E00 && cp <= 0x9FFF) || (cp >= 0x3400 && cp <= 0x4DBF) || (cp >= 0xF300 && cp <= 0xFAFF)) return 3;
-        // 記号
-        if (cp === 0x30FB) return 0; // ・（中黒）
-        // 数字（半角/全角）
+        if ((cp >= 0x4E00 && cp <= 0x9FFF) || (cp >= 0x3400 && cp <= 0x4DBF) || (cp >= 0xF900 && cp <= 0xFAFF)) return 3;
         if ((cp >= 0x30 && cp <= 0x39) || (cp >= 0xFF10 && cp <= 0xFF19)) return 1;
-        // 英字（半角/全角）
         if ((cp >= 0x41 && cp <= 0x5A) || (cp >= 0x61 && cp <= 0x7A) || (cp >= 0xFF21 && cp <= 0xFF3A) || (cp >= 0xFF41 && cp <= 0xFF5A)) return 2;
-        // それ以外は記号扱い（絵文字など）
         return 0;
       }
+
       function readChunk(s, i, type){
         let j = i;
-        if (type === 1){ // 数字
+        if (type === 1){
           while (j < s.length && charType(s[j]) === 1) j++;
-          const str = s.slice(i,j);
-          const num = Number.parseInt(str,10);
-          return { next:j, type, str, num: Number.isNaN(num) ? 0 : num };
+          const str = s.slice(i, j);
+          const num = Number.parseInt(str, 10);
+          return { next:j, type, str, num:Number.isNaN(num) ? 0 : num };
         }
-        if (type === 2){ // 英字
+        if (type === 2){
           while (j < s.length && charType(s[j]) === 2) j++;
-          return { next:j, type, str:s.slice(i,j) };
+          return { next:j, type, str:s.slice(i, j) };
         }
-        if (type === 3){ // カナ
+        if (type === 3){
           while (j < s.length && charType(s[j]) === 3) j++;
-          return { next:j, type, str:s.slice(i,j) };
+          return { next:j, type, str:s.slice(i, j) };
         }
-        // 記号
         while (j < s.length && charType(s[j]) === 0) j++;
-        return { next:j, type, str:s.slice(i,j) };
+        return { next:j, type, str:s.slice(i, j) };
       }
 
-      function compareChunksAsc(A,B,type){
-        if (type === 1){ // 数字は数値比較→桁数→文字列
-          if (A.num !== B.num) return A.num - B.num;
-          if (A.str.length !== B.str.length) return A.str.length - B.str.length;
-          return A.str.localeCompare(B.str, 'ja', {sensitivity:'base', numeric:true});
+      function compareChunkCore(A, B, type, reverseWithinType){
+        if (type === 1){
+          if (A.num !== B.num) return reverseWithinType ? (B.num - A.num) : (A.num - B.num);
+          if (A.str.length !== B.str.length) return reverseWithinType ? (B.str.length - A.str.length) : (A.str.length - B.str.length);
+          return reverseWithinType
+            ? B.str.localeCompare(A.str, 'ja', { sensitivity:'base', numeric:true })
+            : A.str.localeCompare(B.str, 'ja', { sensitivity:'base', numeric:true });
         }
-        if (type === 2){ // 英字は辞書式
-          return A.str.localeCompare(B.str, 'ja', {sensitivity:'base'});
+        if (type === 2 || type === 3){
+          return reverseWithinType
+            ? B.str.localeCompare(A.str, 'ja', { sensitivity:'base', numeric:true })
+            : A.str.localeCompare(B.str, 'ja', { sensitivity:'base', numeric:true });
         }
-        if (type === 3){ // 日本語（カナ/かな/漢字）
-          return A.str.localeCompare(B.str, 'ja', {sensitivity:'base', numeric:true});
-        }
-        // 記号はコード順
-        return A.str < B.str ? -1 : (A.str > B.str ? 1 : 0);
-      }
-      function compareChunksDesc(A,B,type){
-        if (type === 1){ // 数字は数値降順→桁数→文字列
-          if (A.num !== B.num) return B.num - A.num;
-          if (A.str.length !== B.str.length) return B.str.length - A.str.length;
-          return B.str.localeCompare(A.str, 'ja', {sensitivity:'base', numeric:true});
-        }
-        if (type === 2){ // 英字は辞書式（逆順）
-          return B.str.localeCompare(A.str, 'ja', {sensitivity:'base'});
-        }
-        if (type === 3){ // 日本語（逆順）
-          return B.str.localeCompare(A.str, 'ja', {sensitivity:'base', numeric:true});
-        }
-        // 記号は安定のためコード順の逆
-        return A.str > B.str ? -1 : (A.str < B.str ? 1 : 0);
+        return reverseWithinType
+          ? (A.str > B.str ? -1 : (A.str < B.str ? 1 : 0))
+          : (A.str < B.str ? -1 : (A.str > B.str ? 1 : 0));
       }
 
-      // フリガナ優先度：正順= 記号 < 数字(昇) < 英字(昇) < カナ(昇)
-      //                 逆順= カナ(降) < 英字(降) < 数字(降) < 記号
-      function cmpFuri(a,b,asc){
-        const sa = normalizeForFuri(a.kana ?? a.name);
-        const sb = normalizeForFuri(b.kana ?? b.name);
-        let ia=0, ib=0;
-        const rankAsc  = [0,1,2,3];
-        const rankDesc = [3,2,1,0];
+      // 名称降順：
+      //   記号 → 数字 → A→Z → あ→ん
+      // 名称昇順：
+      //   ん→あ → Z→A → 数字 → 記号
+      function compareNameOnly(aName, bName, mode){
+        const sa = normalizeNameForSort(aName);
+        const sb = normalizeNameForSort(bName);
+        let ia = 0;
+        let ib = 0;
+        const rankMap = (mode === 'desc')
+          ? { 0:0, 1:1, 2:2, 3:3 }
+          : { 3:0, 2:1, 1:2, 0:3 };
+        const reverseWithinType = (mode === 'asc');
+
         while (ia < sa.length && ib < sb.length){
           const ta = charType(sa[ia]);
           const tb = charType(sb[ib]);
-          const ra = asc ? rankAsc[ta] : rankDesc[ta];
-          const rb = asc ? rankAsc[tb] : rankDesc[tb];
+          const ra = rankMap[ta];
+          const rb = rankMap[tb];
           if (ra !== rb) return ra - rb;
+
           const ca = readChunk(sa, ia, ta);
           const cb = readChunk(sb, ib, tb);
-          const d  = asc ? compareChunksAsc(ca,cb,ta) : compareChunksDesc(ca,cb,ta);
+          const d = compareChunkCore(ca, cb, ta, reverseWithinType);
           if (d) return d;
-          ia = ca.next; ib = cb.next;
+          ia = ca.next;
+          ib = cb.next;
         }
-        return sa.length - sb.length;
+        if (sa.length !== sb.length){
+          return reverseWithinType ? (sb.length - sa.length) : (sa.length - sb.length);
+        }
+        return 0;
       }
 
-      // 行→メタ抽出
       function getMeta(row){
         if (metaCache.has(row)) return metaCache.get(row);
         const cell = row.cells[idxMap[nameTitle]];
@@ -11990,128 +12291,104 @@
         const name = (firstSpan ? firstSpan.textContent : cell.textContent).trim();
         const raw  = cell.textContent;
         const rarity = dbePickRarityFromText(raw) || 'N';
-        const marimo = parseInt(row.cells[mrimCol].textContent.replace(/\D/g,''),10) || 0;
-        const kana   = (kanaDict instanceof Map) ? (kanaDict.get(name) ?? null) : null;
-        const knownLimited = isKnownLimited(name);
-        const unknownLimited = !knownLimited && hasSerialLike(raw);
-        const hasKana = !!kana;
-       // ③④：未知限定→既知限定→非限定 の優先
-        const catLimitedAsc  = unknownLimited ? 0 : (knownLimited ? 1 : 2);
-        // ⑤⑥：未定義(kana無)を上位に
-        const catDefinedAsc  = hasKana ? 1 : 0; // 0=未定義,1=定義済み
-        const obj = { row, name, raw, rarity, marimo, kana, knownLimited, unknownLimited, hasKana,
-                      catLimitedAsc, catDefinedAsc };
+        const canonical = keyMap.get(makeKey(name)) || null;
+        const registered = !!canonical;
+        const limited = registered ? limitedSet.has(canonical) : false;
+        const obj = { row, name, raw, rarity, canonical, registered, limited };
         metaCache.set(row, obj);
         return obj;
       }
 
-      // 単純比較ヘルパー
-      function cmpRarity(a,b,asc){ const ra = rarityOrder[a.rarity] ?? 99; const rb = rarityOrder[b.rarity] ?? 99; return asc ? (ra-rb) : (rb-ra); }
-      function cmpMarimo(a,b,highFirst){ return highFirst ? (b.marimo - a.marimo) : (a.marimo - b.marimo); }
-      function cmpName(a,b,asc){ return asc ? a.name.localeCompare(b.name,'ja') : b.name.localeCompare(a.name,'ja'); }
+      // Rarity降順：UR → N
+      function compareRarityDesc(a, b){
+        const ra = rarityOrder[a.rarity] ?? 99;
+        const rb = rarityOrder[b.rarity] ?? 99;
+        return ra - rb;
+      }
 
-      // ソート本体
+      function compareGroupForPhase(a, b, phase){
+        // phase:
+        //   0 = 限定⌄
+        //   1 = 限定⌃
+        //   2 = カナ⌄
+        //   3 = カナ⌃
+        //
+        // 共通：
+        //   レジストリ未登録 → レジストリ登録済み
+        // phase 0/1:
+        //   登録済みの中では 限定 → 常設
+        // phase 2/3:
+        //   登録済みの中では 限定/常設を区別しない
+        const groupOf = (m)=>{
+          if (!m.registered) return 0;
+          if (phase === 0 || phase === 1){
+            return m.limited ? 1 : 2;
+          }
+          return 1;
+        };
+        return groupOf(a) - groupOf(b);
+      }
+
       function applyCycleSort(phase){
-        // 念のため 0..3 に正規化（旧6段階の状態が混入しても落ちないように）
         phase = Number.isFinite(phase) ? phase : 0;
         phase = ((phase % 4) + 4) % 4;
 
         const body = table.tBodies[0];
         const rows = Array.from(body.rows);
-        rows.sort((ra,rb)=>{
-          const a = getMeta(ra), b = getMeta(rb);
-          switch(phase){
-            // ①【⬆限定】：未知限定→既知限定→非限定 → （各内：フリガナ正順。ただし未知限定は同名連結） → rarity 正順 → marimo 逆順
-            case 0: {
-              const c = a.catLimitedAsc - b.catLimitedAsc;
-              if (c) return c;
-              if (a.unknownLimited && b.unknownLimited){
-                const g = cmpName(a,b,true);
-                if (g) return g;
-              } else {
-                const g = cmpFuri(a,b,true);
-                if (g) return g;
-              }
-              return cmpRarity(a,b,true) || cmpMarimo(a,b,true) || cmpName(a,b,true);
-            }
-            // ②【⬇限定】：カテゴリ順は据え置き（未知→既知→非）/ 各内の並びを逆（未知は同名 desc、他はフリガナ逆）→ rarity 逆順 → marimo 正順
-            case 1: {
-              const c = a.catLimitedAsc - b.catLimitedAsc;
-              if (c) return c;
-              if (a.unknownLimited && b.unknownLimited){
-                const g = cmpName(a,b,false);
-                if (g) return g;
-              } else {
-                const g = cmpFuri(a,b,false);
-                if (g) return g;
-              }
-              return cmpRarity(a,b,false) || cmpMarimo(a,b,false) || cmpName(a,b,true);
-            }
-            // ③【⬆カナ】
-            //   rarity 正順 → フリガナ正順 → （同名のみ）マリモ降順 → 名前
-            case 2: {
-              const r = cmpRarity(a,b,true);
-              if (r) return r;
-              const f = cmpFuri(a,b,true);
-              if (f) return f;
-              if (a.name === b.name) {
-                const m = cmpMarimo(a,b,true);
-                if (m) return m;
-              }
-              return cmpName(a,b,true);
-            }
-            // ④【⬇カナ】
-            //   rarity 逆順 → フリガナ逆順 → （同名のみ）マリモ昇順 → 名前
-            case 3: {
-              const r = cmpRarity(a,b,false);
-              if (r) return r;
-              const f = cmpFuri(a,b,false);
-              if (f) return f;
-              if (a.name === b.name) {
-                const m = cmpMarimo(a,b,false);
-                if (m) return m;
-              }
-              return cmpName(a,b,true);
-            }
-          }
+        const nameMode = (phase === 0 || phase === 2) ? 'desc' : 'asc';
+
+        rows.sort((ra, rb)=>{
+          const a = getMeta(ra);
+          const b = getMeta(rb);
+
+          // 1) レジストリ未登録 / 登録済み（必要なら限定/常設まで）
+          const g = compareGroupForPhase(a, b, phase);
+          if (g) return g;
+
+          // 2) 名称だけで比較
+          const n = compareNameOnly(a.name, b.name, nameMode);
+          if (n) return n;
+
+          // 3) 名称同値内だけ Rarity降順
+          const r = compareRarityDesc(a, b);
+          if (r) return r;
+
+          // 4) ここで 0 を返すことで、名称/Rarity 同値時のみ既存順（＝ソート履歴）を保持
           return 0;
         });
+
         rows.forEach(r => body.appendChild(r));
 
-        // ヘッダー右側にインジケーター（【⬆限定】等）
-        const headerRowNow = getHeaderRowNow();
-        if (headerRowNow) headerRowNow.querySelectorAll('.sort-indicator, .sort-indicator-left').forEach(el => el.remove());
-        const labels = [
-          ['⬆','限定'],
-          ['⬇','限定'],
-          ['⬆','カナ'],
-          ['⬇','カナ'],
+        const indicators = [
+          { label:'限定', arrow:'⬇' },
+          { label:'限定', arrow:'⬆' },
+          { label:'カナ', arrow:'⬇' },
+          { label:'カナ', arrow:'⬆' },
         ];
-        const [arrow,label] = labels[phase];
-        // 付与先のズレを回避：初期 clone 済みの nameTh を常にターゲットにする
-        updateSortIndicator(nameTh, arrow, 'right', label); // テキストは updateSortIndicator 内で 0.8em 指定
+        setNameSortIndicatorExact(indicators[phase].label, indicators[phase].arrow);
 
-        // 記憶（最後にソートされた列と方向）
         table.dataset.nameSortPhase = String(phase);
         table.dataset.nameSortLastApplied = `name:${phase}`;
         lastSortedColumn  = columnIds[id][nameTitle];
-        lastSortAscending = (phase % 2 === 0); // 0,2=⬆（正順）, 1,3=⬇
+        lastSortAscending = (phase === 1 || phase === 3);
       }
 
-      // クリックで ①→②→③→④→… をループ（dataset リセット耐性）
       let nameSortPhase = Number(table.dataset.nameSortPhase || '0');
       nameSortPhase = Number.isFinite(nameSortPhase) ? nameSortPhase : 0;
       nameSortPhase = ((nameSortPhase % 4) + 4) % 4;
+
       nameTh.addEventListener('click', (ev)=>{
         ev.stopPropagation();
         ev.preventDefault();
-        // 現在段階を適用
         applyCycleSort(nameSortPhase);
-        // 次段階へ
         nameSortPhase = (nameSortPhase + 1) % 4;
         table.dataset.nameSortPhase = String(nameSortPhase);
-        // 再適用は「直近適用済み」を優先（別処理で dataset が変化しても安定）
-        dbeRememberSort(id, ()=>applyCycleSort(Number((table.dataset.nameSortLastApplied||'name:0').split(':')[1])), 'NAME');
+        dbeRememberSort(
+          id,
+          ()=>applyCycleSort(Number((table.dataset.nameSortLastApplied || 'name:0').split(':')[1])),
+          'NAME'
+        );
+        scrollToAnchorCell();
       });
 
       // 〓〓〓〓〓〓 テーブルソート状態の記憶 〓〓〓〓〓〓
