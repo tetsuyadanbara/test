@@ -2873,11 +2873,6 @@
                   message = '[成功] ' + lastLine;
                   processType = 'return';
                   i++;
-                } else {
-                  success = true;
-                  message = '[成功] ' + lastLine;
-                  processType = 'return';
-                  i++;
                 }
               }
             } else if (messageType === 'onemoretime') {
