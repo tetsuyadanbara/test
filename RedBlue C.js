@@ -14,7 +14,7 @@
   if(location.href === 'https://donguri.5ch.io/bag') {
     function saveCurrentEquip(url, index) {
       let currentEquip = JSON.parse(localStorage.getItem('current_equip')) || [];
-      const regex = /https:\/\/donguri\.5ch\.net\/equip\/(\d+)/;
+      const regex = /https:\/\/donguri\.5ch\.io\/equip\/(\d+)/;
       const equipId = url.match(regex)[1];
       currentEquip[index] = equipId;
       localStorage.setItem('current_equip', JSON.stringify(currentEquip));
@@ -1820,7 +1820,7 @@
     if (stat.textContent === '装備中...') return;
     const equipPresets = JSON.parse(localStorage.getItem('equipPresets')) || {};
     const fetchPromises = equipPresets[presetName].id
-      .filter(id => id !== undefined && id !== null && !currentEquip.includes(id)) // 未登録or既に装備中の部位は除外
+      .filter(id => id !== undefined && id !== null)
       .map(id => fetch('https://donguri.5ch.io/equip/' + id));
 
     stat.textContent = '装備中...';
