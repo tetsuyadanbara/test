@@ -2556,7 +2556,7 @@
         let counterMonitorLogged = false;
 
         function shouldStopCounterMonitor(progress) {
-          return progress === 49 || progress === 99;
+          return progress === 48 || progress === 98;
         }
 
         function pickCellType(regions, preferred = null) {
@@ -3057,9 +3057,9 @@
             await drawProgressBar();
 
             if (shouldStopCounterMonitor(currentProgress)) {
-              nextProgress = (currentProgress === 49) ? 52 : 2;
+              nextProgress = (currentProgress === 48) ? 52 : 2;
               isAutoJoinRunning = false;
-              logMessage(null, '[監視停止] ' + currentProgress + '%で停止（49/99誤射防止）', `→ ${nextProgress}±1%`);
+              logMessage(null, '[監視停止] ' + currentProgress + '%で停止（48/98誤射防止）', `→ ${nextProgress}±1%`);
               return;
             }
 
