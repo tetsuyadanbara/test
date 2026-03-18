@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         donguri arena assist tool
-// @version      1.2.2d改 umeR/stdPRO Switch
+// @version      1.2.2d改 umeR/stdP Switch警備員専用
 // @description  fix arena ui and add functions
 // @author       ぱふぱふ
 // @match        https://donguri.5ch.io/teambattle?m=hc
@@ -1118,7 +1118,7 @@
     (()=>{
       const link = document.createElement('a');
       link.style.color = '#333';
-      link.textContent = '1.2.2d改 umeR/stdPRO Switch';
+      link.textContent = '1.2.2d改 umeR/stdP Switch警備員専用';
       footer.append(link);
     })();
 
@@ -1806,7 +1806,7 @@
   async function setPresetItems (presetName) {
     let currentEquip = JSON.parse(localStorage.getItem('current_equip')) || [];
     const stat = document.querySelector('.equip-preset-stat');
-    if (stat.textContent === '装備中.') return false;
+    if (stat.textContent === '装備中...') return;
     const equipPresets = JSON.parse(localStorage.getItem('equipPresets')) || {};
     const fetchPromises = equipPresets[presetName].id
       .filter(id => id !== undefined && id !== null) // 未登録or既に装備中の部位は除外
@@ -1840,7 +1840,6 @@
       stat.textContent = '完了: ' + presetName;
       localStorage.setItem('current_equip', JSON.stringify(equipPresets[presetName].id));
       currentEquipName = presetName;
-      return true;
     } catch (e) {
       stat.textContent = e;
       localStorage.removeItem('current_equip');
@@ -2526,7 +2525,7 @@
       const now = new Date(new Date().toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo' }));
       const hour = now.getHours();
       const minute = now.getMinutes();
-      return (hour >= 2 && hour < 23) || (hour === 8 && minute <= 30);
+      return (hour >= 2 && hour < 8) || (hour === 8 && minute <= 30);
       // 以下指定例その1（変える時は上の return hour >= 4 && hour <= 8; を書き換え、24:00をまたぐ指定はその2で）
       // 4:00～8:00
       // return hour >= 4 && hour <= 8;
@@ -2548,23 +2547,23 @@
       // return (hour > 20 || hour < 8) || (hour === 20 && minute >= 30) || (hour === 8 && minute <= 30);
     }
 
-    const logArea = dialog.querySelector('.auto-join-log');
-    const headers = { 'Content-Type': 'application/x-www-form-urlencoded' };
-    let teamColor = settings.teamColor;
-    let teamName = settings.teamName;
-    let autoJoinMode = isMorningTime() ? 'umeR' : 'stdP';
-    const counterMonitorMs = 5000;
-    let counterMonitorLogged = false;
+        const logArea = dialog.querySelector('.auto-join-log');
+        const headers = { 'Content-Type': 'application/x-www-form-urlencoded' };
+        let teamColor = settings.teamColor;
+        let teamName = settings.teamName;
+        let autoJoinMode = isMorningTime() ? 'umeR' : 'stdP';
+        const counterMonitorMs = 5000;
+        let counterMonitorLogged = false;
 
-    function shouldStopCounterMonitor(progress) {
-      return progress === 49 || progress === 99;
-    }
+        function shouldStopCounterMonitor(progress) {
+          return progress === 49 || progress === 99;
+        }
 
-    function pickCellType(regions, preferred = null) {
-      const order = ['nonAdjacent', 'teamAdjacent', 'capitalAdjacent', 'mapEdge', 'onceMore'];
-      if (preferred && regions[preferred]?.length > 0) return preferred;
-      return order.find(type => regions[type] && regions[type].length > 0) || null;
-    }
+        function pickCellType(regions, preferred = null) {
+         const order = ['nonAdjacent', 'teamAdjacent', 'capitalAdjacent', 'mapEdge', 'onceMore'];
+         if (preferred && regions[preferred]?.length > 0) return preferred;
+         return order.find(type => regions[type] && regions[type].length > 0) || null;
+        }
 
     function logMessage(region, message, next) {
       const date = new Date();
@@ -2620,7 +2619,6 @@
         '再建が必要です。'
       ],
       onemoretime: [
-        'この場所には首都を建設できません（水で隣接が不足）',
         'もう一度バトルに参加する前に、待たなければなりません。'
       ],
       breaktime: [
@@ -2727,35 +2725,14 @@
 
         regions[cellType] = regions[cellType]
           .filter(e => !excludeSet.has(e.join(',')));
-
-        if (isCounter && regions[cellType].length === 0) {
-          const nextCellType = pickCellType(regions);
-          if (nextCellType) {
-            cellType = nextCellType;
-            regions[cellType] = regions[cellType]
-              .filter(e => !excludeSet.has(e.join(',')));
-          }
-        }
-
-        if (isCounter && regions[cellType].length > 0) {
-          counterMonitorLogged = false;
-        }
-
         for (let i = 0; i < regions[cellType].length;) {
           const region = regions[cellType][i];
           let errorCount = 0;
           let next;
           try {
             const [cellRank, equipChangeStat] = await equipChange(region);
-
             if (equipChangeStat === 'noEquip') {
               excludeSet.add(region.join(','));
-              i++;
-              continue;
-            } else if (equipChangeStat === 'retryEquip') {
-              sleepTime = 1;
-              message = '[装備待ち] 換装未完了のため再試行';
-              processType = 'continue';
               i++;
               continue;
             } else {
@@ -2851,39 +2828,9 @@
             } else if (messageType === 'retry') {
               sleepTime = 20;
               processType = 'continue';
-            } else if (lastLine.includes('アリーナチャレンジは失敗しました')) {
-              message = lastLine;
-
-              if (isCounter) {
-                excludeSet.clear();
-                counterMonitorLogged = false;
-                regions = await getRegions();
-                cellType = pickCellType(regions, cellType) || 'mapEdge';
-                restartAfterLoop = true;
-                sleepTime = 1;
-                processType = 'reload';
-              } else if (isMorning) {
-                excludeSet.delete(region.join(','));
-                loop += 1;
-                sleepTime = 1;
-                processType = 'reload';
-              } else {
-                processType = 'continue';
-              }
-              i++;
             } else if (messageType === 'guardError') {
               message = lastLine;
-              excludeSet.add(region.join(','));
-
-              if (isCounter) {
-                counterMonitorLogged = true;
-                processType = 'break';
-              } else if (isMorning) {
-                cellType = pickCellType(regions, cellType) || 'mapEdge';
-                processType = 'break';
-              } else {
-                processType = 'continue';
-              }
+              processType = isMorning ? 'reload' : 'continue';
               i++;
             } else if (messageType === 'equipError') {
               if (isMorning) {
@@ -2901,9 +2848,8 @@
                 i++;
               } else {
                 message += ` (${cellRank}, ${currentEquipName})`;
-                sleepTime = 3;
-                cellType = 'teamAdjacent';
-                processType = 'reload';
+                processType = 'continue';
+                i++;
               }
             } else if (lastLine.length > 100) {
               message = 'どんぐりシステム';
@@ -3048,9 +2994,31 @@
               cellType = pickCellType(regions, cellType) || 'mapEdge';
               break;
             }
-          } catch (e) {
-            let message = e.message;
-            if (e === 403) {
+          } catch (e){
+            let message = '';
+            switch (e) {
+              case 403:
+                message = `[403] Forbidden`;
+                break;
+              case 404:
+                message = `[404] Not Found`;
+                break;
+              case 500:
+                message = `[500] Internal Server Error`;
+                break;
+              case 502:
+                message = `[502] Bad Gateway`;
+                break;
+              default:
+                message = e;
+                break;
+            }
+            if (e.message === '再ログインしてください') {
+              logMessage(region, '[停止] どんぐりが見つかりませんでした', '');
+              isAutoJoinRunning = false;
+              clearInterval(autoJoinIntervalId);
+              return;
+            } else if (e === 403) {
               logMessage(region, message, '');
               isAutoJoinRunning = false;
               clearInterval(autoJoinIntervalId);
@@ -3250,33 +3218,27 @@
           return cells.filter(([r, c]) => !teamColorSet.has(`${r}-${c}`));
         };
 
-        const isMorning = autoJoinMode === 'umeR' || autoJoinMode === 'counter';
+        const isMorning = isMorningTime();
         let nonAdjacentCells;
         let regions;
 
         if (isMorning) {
-          const nonAdjacentBase = cells.filter(([r, c]) => {
+          const nonAdjacentCells = cells.filter(([r, c]) => {
             const key = `${r}-${c}`;
             return !capitalSet.has(key) && !adjacentSet.has(key);
           });
 
-          const onceMoreBase = nonAdjacentBase.filter(([r, c]) => {
+          const onceMoreCells = nonAdjacentCells.filter(([r, c]) => {
             const key = `${r}-${c}`;
             return key in cellColors && !teamColorSet.has(key);
           });
 
-          const nonAdjacentCells    = await filterGuardCells(filteredCells(nonAdjacentBase));
-          const capitalAdjacentSafe = await filterGuardCells(filteredCells(capitalAdjacentCells));
-          const teamAdjacentSafe    = await filterGuardCells(filteredCells(teamAdjacentCells));
-          const mapEdgeSafe         = await filterGuardCells(filteredCells(mapEdgeCells));
-          const onceMoreSafe        = await filterGuardCells(filteredCells(onceMoreBase));
-
           regions = {
-            nonAdjacent: shuffle(nonAdjacentCells),
-            capitalAdjacent: shuffle(capitalAdjacentSafe),
-            teamAdjacent: shuffle(teamAdjacentSafe),
-            mapEdge: shuffle(mapEdgeSafe),
-            onceMore: shuffle(onceMoreSafe)
+            nonAdjacent: shuffle(filteredCells(nonAdjacentCells)),
+            capitalAdjacent: shuffle(filteredCells(capitalAdjacentCells)),
+            teamAdjacent: shuffle(filteredCells(teamAdjacentCells)),
+            mapEdge: shuffle(filteredCells(mapEdgeCells)),
+            onceMore: shuffle(filteredCells(onceMoreCells))
           };
         } else {
           const nonAdjacentBase = cells.filter(([r, c]) => {
@@ -3330,20 +3292,35 @@
           }));
 
           // 1~4を結合
-          const nonAdjacentRaw = [...group1, ...group2, ...group3, ...group4];
-          nonAdjacentCells   = await filterGuardCells(nonAdjacentRaw);
-          capitalAdjacentCells = await filterGuardCells(capitalAdjacentCells);
-          teamAdjacentCells    = await filterGuardCells(teamAdjacentCells);
-          mapEdgeCells         = await filterGuardCells(mapEdgeCells);
-          const onceMoreFiltered = await filterGuardCells(filteredCells(onceMoreCells));
+          if (autoJoinMode === 'counter') {
+            const g2 = await priorityGuardCells(group2, true);
+            const g3 = await priorityGuardCells(group3, true);
+            const g4 = await priorityGuardCells(group4, true);
+            nonAdjacentCells = [...g2, ...g3, ...g4];
 
-          regions = {
-            nonAdjacent: nonAdjacentCells,
-            capitalAdjacent: shuffle(capitalAdjacentCells),
-            teamAdjacent: shuffle(teamAdjacentCells),
-            mapEdge: shuffle(mapEdgeCells),
-            onceMore: shuffle(onceMoreFiltered)
-          };
+            regions = {
+              nonAdjacent: nonAdjacentCells,
+              capitalAdjacent: [],
+              teamAdjacent: [],
+              mapEdge: [],
+              onceMore: []
+            };
+          } else {
+            const g1 = await priorityGuardCells(group1);
+            const g2 = await priorityGuardCells(group2);
+            const g3 = await priorityGuardCells(group3);
+            const g4 = await priorityGuardCells(group4);
+            nonAdjacentCells = [...g1, ...g2, ...g3, ...g4];
+
+            regions = {
+//            nonAdjacent: shuffle(nonAdjacentCells),
+              nonAdjacent: nonAdjacentCells,
+              capitalAdjacent: shuffle(capitalAdjacentCells),
+              teamAdjacent: shuffle(teamAdjacentCells),
+              mapEdge: shuffle(mapEdgeCells),
+              onceMore: shuffle(filteredCells(onceMoreCells))
+            };
+          }
         }
         return regions;
       } catch (e) {
@@ -3358,8 +3335,8 @@
       }
     }
 
-    async function filterGuardCells(candidates) {
-     const checks = candidates.map(async ([r, c]) => {
+   async function priorityGuardCells(candidates, guardOnly = false) {
+      const checks = candidates.map(async ([r, c]) => {
         const url = `https://donguri.5ch.io/teambattle?r=${r}&c=${c}&` + MODE;
 
         try {
@@ -3370,14 +3347,24 @@
           const doc = new DOMParser().parseFromString(text, 'text/html');
           const rank = doc.querySelector('small')?.textContent || '';
 
-          return rank.includes('警備員') ? null : [r, c];
+          if (rank.includes('警備員')) return { cell: [r, c], isGuard: true };
+          return { cell: [r, c], isGuard: false };
         } catch {
           return null;
         }
       });
 
       const results = await Promise.all(checks);
-      return results.filter(Boolean);
+
+      const guards = [];
+      const nonGuards = [];
+      results.forEach(res => {
+        if (!res) return;
+        if (res.isGuard) guards.push(res.cell);
+        else nonGuards.push(res.cell);
+      });
+
+      return guardOnly ? guards : [...guards, ...nonGuards];
     }
 
     async function challenge (region) {
@@ -3421,12 +3408,12 @@
 
         if (autoEquipItemsAutojoin[rank]?.length > 0) {
           const index = Math.floor(Math.random() * autoEquipItemsAutojoin[rank].length);
-          const changed = await setPresetItems(autoEquipItemsAutojoin[rank][index]);
-          return [rank, changed ? 'success' : 'retryEquip'];
+          await setPresetItems(autoEquipItemsAutojoin[rank][index]);
+          return [rank, 'success'];
         } else if (autoEquipItems[rank]?.length > 0) {
           const index = Math.floor(Math.random() * autoEquipItems[rank].length);
-          const changed = await setPresetItems(autoEquipItems[rank][index]);
-          return [rank, changed ? 'success' : 'retryEquip'];
+          await setPresetItems(autoEquipItems[rank][index]);
+          return [rank, 'success'];
         } else {
           return [rank, 'noEquip'];
         }
