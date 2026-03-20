@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Donguri Bag Enhancer
 // @namespace    https://donguri.5ch.io/
-// @version      10.0.4.5
+// @version      10.0.5.1
 // @description  5ちゃんねる「どんぐりシステム」の「アイテムバッグ」ページ機能改良スクリプト。
 // @author       福呼び草
 // @assistant    ChatGPT (OpenAI)
@@ -23,7 +23,7 @@
   // ============================================================
   // スクリプト自身のバージョン（About 表示用）
   // ============================================================
-  const DBE_VERSION    = '10.0.4.5';
+  const DBE_VERSION    = '10.0.5.1';
 
   // ============================================================
   // 現在のどんぐりドメイン
@@ -336,13 +336,45 @@
 
   // ============================================================
   // 統一レジストリ方式
-  //   ※[表示名 { kana:読み仮名, limited:限定or常設 }]
-  //   ※下のレジストリから派生構造（weaponKana/armorKana, limitedWeapon/limitedArmor）を自動生成します
+  //   ※[表示名 { kana:読み仮名, category:'event'|'limited'|'regular' }]
+  //   ※ category は
+  //      'event'   = イベント中装備
+  //      'limited' = 限定装備
+  //      'regular' = 常設装備
+  //     を表す
+  //   ※互換のため、旧形式 { limited:true|false } も受理
+  //   ※さらに eventActive:true を付けた場合は category 指定より優先して
+  //     「イベント中装備」として扱う
+  //   ※イベント未開催時は 'event' 登録が 0 件でもよい
+  //     （空カテゴリとして存在）
+  //   ※下のレジストリから派生構造
+  //     （weaponKana/armorKana, eventWeapon/eventArmor, limitedWeapon/limitedArmor）
+  //     を自動生成します
   // ============================================================
-  function makeKey(s){
+
+    function makeKey(s){
     if (!s) return '';
     return s.normalize('NFKC').toUpperCase().trim();
   }
+
+  function normalizeRegistryCategory(meta){
+    if (!meta || typeof meta !== 'object') return 'regular';
+    if (meta.eventActive === true) return 'event';
+    if (meta.category === 'event' || meta.category === 'limited' || meta.category === 'regular'){
+      return meta.category;
+    }
+    if (meta.limited === true) return 'limited';
+    return 'regular';
+  }
+
+  // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+  // レジストリ（武器）
+  // ※現在イベント中として扱いたい装備には eventActive:true を付与してください
+  // 例:
+  // ['装備名', { kana:'ソウビメイ', limited:true, eventActive:true }],
+  // ['装備名', { kana:'ソウビメイ', category:'event' }],
+  // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
   // レジストリ（常設武器）
   const weaponRegistry = new Map([
     ['F5アタック',                 { kana:'F5アタック',                   limited:false }],
@@ -367,20 +399,21 @@
     ['ママさんダンプ',             { kana:'ママサンダンプ',               limited:false }],
     ['ムチ',                       { kana:'ムチ',                         limited:false }],
     ['モバイルバッテリー',         { kana:'モバイルバッテリー',           limited:false }],
-    ['狩人罠',                     { kana:'カリウドワナ',                 limited:true  }],
-    ['狐火閃光',                   { kana:'キツネビセンコウ',             limited:true  }],
-    ['投縄網',                     { kana:'ナゲナワアミ',                 limited:true  }],
-    ['猟犬笛',                     { kana:'リョウケンブエ',               limited:true  }],
-    ['パンプキンランチャー',       { kana:'パンプキンランチャー',         limited:true  }],
-    ['ゴーストネット',             { kana:'ゴーストネット',               limited:true  }],
-    ['キャンディコーンブラスター', { kana:'キャンディコーンブラスター',   limited:true  }],
-    ['魔女のおたま',               { kana:'マジョノオタマ',               limited:true  }],
-    ['墓掘りシャベル',             { kana:'ハカホリシャベル',             limited:true  }],
-    ['叫ぶランタン',               { kana:'サケブランタン',               limited:true  }],
-    ['クモの巣のムチ',             { kana:'クモノスノムチ',               limited:true  }],
-    ['呪いの鐘',                   { kana:'ノロイノカネ',                 limited:true  }],
-    ['コウモリブーメラン',         { kana:'コウモリブーメラン',           limited:true  }],
-    ['スカルマレット',             { kana:'スカルマレット',               limited:true  }],
+  // レジストリ（限定武器から常設武器に変更）
+    ['狩人罠',                     { kana:'カリウドワナ',                 limited:false }],
+    ['狐火閃光',                   { kana:'キツネビセンコウ',             limited:false }],
+    ['投縄網',                     { kana:'ナゲナワアミ',                 limited:false }],
+    ['猟犬笛',                     { kana:'リョウケンブエ',               limited:false }],
+    ['パンプキンランチャー',       { kana:'パンプキンランチャー',         limited:false }],
+    ['ゴーストネット',             { kana:'ゴーストネット',               limited:false }],
+    ['キャンディコーンブラスター', { kana:'キャンディコーンブラスター',   limited:false }],
+    ['魔女のおたま',               { kana:'マジョノオタマ',               limited:false }],
+    ['墓掘りシャベル',             { kana:'ハカホリシャベル',             limited:false }],
+    ['叫ぶランタン',               { kana:'サケブランタン',               limited:false }],
+    ['クモの巣のムチ',             { kana:'クモノスノムチ',               limited:false }],
+    ['呪いの鐘',                   { kana:'ノロイノカネ',                 limited:false }],
+    ['コウモリブーメラン',         { kana:'コウモリブーメラン',           limited:false }],
+    ['スカルマレット',             { kana:'スカルマレット',               limited:false }],
   // レジストリ（限定武器）
     ['カエルの拡声器',             { kana:'カエルノカクセイキ',           limited:true  }],
     ['カエルのメガホン',           { kana:'カエルノメガホン',             limited:true  }],
@@ -402,7 +435,18 @@
     ['チョコレートハンマー',       { kana:'チョコレートハンマー',         limited:true  }],
     ['桃花うちわ',                 { kana:'トウカウチワ',                 limited:true  }],
     ['純白報復の大槌',             { kana:'ジュンパクホウフクノオオヅチ', limited:true  }],
+  // レジストリ（イベント開催中の限定武器）
+    ['春暁花杖',                   { kana:'シュンギョウカジョウ',         limited:true, eventActive:true   }],
   ]);
+
+  // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+  // レジストリ（防具）
+  // ※現在イベント中として扱いたい装備には eventActive:true を付与してください
+  // 例:
+  // ['装備名', { kana:'ソウビメイ', limited:true, eventActive:true }],
+  // ['装備名', { kana:'ソウビメイ', category:'event' }],
+  // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
   // レジストリ（常設防具）
   const armorRegistry = new Map([
     ['SPF50+',                     { kana:'SPF50プラス',                  limited:false }],
@@ -450,6 +494,8 @@
     ['月影の告白ゆかた',           { kana:'ツキカゲノコクハクユカタ',     limited:true  }],
     ['乱れ桜の外套',               { kana:'ミダレザクラノガイトウ',       limited:true  }],
     ['白薔薇の誓約鎧',             { kana:'シロバラノセイヤクヨロイ',     limited:true  }],
+  // レジストリ（イベント開催中の限定防具）
+    ['命護りの春司衣',             { kana:'イノチマモリノハルツカサキヌ', limited:true, eventActive:true }],
   ]);
 
   // ============================================================
@@ -457,6 +503,8 @@
   // ============================================================
   const weaponKana = new Map();
   const armorKana  = new Map();
+  const eventWeapon   = new Set();
+  const eventArmor    = new Set();
   const limitedWeapon = new Set();
   const limitedArmor  = new Set();
   const weaponKeyToName = new Map();
@@ -474,7 +522,11 @@
       if (meta && typeof meta.kana === 'string' && meta.kana.trim()){
         weaponKana.set(name, meta.kana.trim());
       }
-      if (meta && meta.limited === true){
+      const category = normalizeRegistryCategory(meta);
+      if (category === 'event'){
+        eventWeapon.add(name);
+      }
+      if (category === 'event' || category === 'limited'){
         limitedWeapon.add(name);
       }
     }
@@ -489,7 +541,11 @@
       if (meta && typeof meta.kana === 'string' && meta.kana.trim()){
         armorKana.set(name, meta.kana.trim());
       }
-      if (meta && meta.limited === true){
+      const category = normalizeRegistryCategory(meta);
+      if (category === 'event'){
+        eventArmor.add(name);
+      }
+      if (category === 'event' || category === 'limited'){
         limitedArmor.add(name);
       }
     }
@@ -12150,13 +12206,18 @@
         });
       });
 
-      // 〓〓〓〓〓〓 4 段階サイクル（①〜④）【v10.0.3.0】〓〓〓〓〓〓
+      // 〓〓〓〓〓〓 4 段階サイクル（①〜④）【v10.0.5.0】〓〓〓〓〓〓
       // 対象：weaponTable の wepClm-Name / armorTable の amrClm-Name
       // 方針：
       //   - 名称列クリック時は「名称列だけ」を基準にソートする
       //   - ただし名称同値内では Rarity 降順を適用する
-      //   - さらに名称/Rarity まで同値の場合のみ、既存の並び（＝ソート履歴の結果）を保持する
+      //   - さらに名称/Rarity まで同値の場合のみ、既存の並び（＝過去のソート履歴の結果）を保持する
       //   - 半角全角は NFKC で同等扱い
+      //   - 4段階サイクルは下記
+      //       0 = ↓ 限定 … 未定義 → イベント中装備(昇順) → 限定装備(昇順) → 常設装備(昇順)
+      //       1 = ↑ 限定 … 未定義 → イベント中装備(降順) → 限定装備(降順) → 常設装備(降順)
+      //       2 = ↓ カナ  … 未定義 → 登録済みをカテゴリ非区別で昇順
+      //       3 = ↑ カナ  … 未定義 → 登録済みをカテゴリ非区別で降順
 
       const nameThOrig  = hdrs[idxMap[nameTitle]];
       const nameTh      = nameThOrig.cloneNode(true);
@@ -12166,6 +12227,7 @@
       if (!table.dataset.nameSortLastApplied) table.dataset.nameSortLastApplied = '';
 
       const metaCache  = new WeakMap();
+      const eventSet   = (id === 'weaponTable') ? eventWeapon : eventArmor;
       const limitedSet = (id === 'weaponTable') ? limitedWeapon : limitedArmor;
       const keyMap     = (id === 'weaponTable') ? weaponKeyToName : armorKeyToName;
 
@@ -12250,19 +12312,19 @@
           : (A.str < B.str ? -1 : (A.str > B.str ? 1 : 0));
       }
 
-      // 名称降順：
-      //   記号 → 数字 → A→Z → あ→ん
       // 名称昇順：
-      //   ん→あ → Z→A → 数字 → 記号
+      //   記号 → 1→9 → A→Z → あ→ん
+      // 名称降順：
+      //   ん→あ → Z→A → 9→1 → 記号
       function compareNameOnly(aName, bName, mode){
         const sa = normalizeNameForSort(aName);
         const sb = normalizeNameForSort(bName);
         let ia = 0;
         let ib = 0;
-        const rankMap = (mode === 'desc')
+        const rankMap = (mode === 'asc')
           ? { 0:0, 1:1, 2:2, 3:3 }
           : { 3:0, 2:1, 1:2, 0:3 };
-        const reverseWithinType = (mode === 'asc');
+        const reverseWithinType = (mode === 'desc');
 
         while (ia < sa.length && ib < sb.length){
           const ta = charType(sa[ia]);
@@ -12293,8 +12355,16 @@
         const rarity = dbePickRarityFromText(raw) || 'N';
         const canonical = keyMap.get(makeKey(name)) || null;
         const registered = !!canonical;
-        const limited = registered ? limitedSet.has(canonical) : false;
-        const obj = { row, name, raw, rarity, canonical, registered, limited };
+        const category = !registered
+          ? 'unregistered'
+          : eventSet.has(canonical)
+          ? 'event'
+          : limitedSet.has(canonical)
+          ? 'limited'
+          : 'regular';
+        const limited = (category === 'limited');
+        const eventActive = (category === 'event');
+        const obj = { row, name, raw, rarity, canonical, registered, category, limited, eventActive };
         metaCache.set(row, obj);
         return obj;
       }
@@ -12308,21 +12378,23 @@
 
       function compareGroupForPhase(a, b, phase){
         // phase:
-        //   0 = 限定⌄
-        //   1 = 限定⌃
-        //   2 = カナ⌄
-        //   3 = カナ⌃
+        //   0 = 限定↓
+        //   1 = 限定↑
+        //   2 = カナ↓
+        //   3 = カナ↑
         //
         // 共通：
         //   レジストリ未登録 → レジストリ登録済み
         // phase 0/1:
-        //   登録済みの中では 限定 → 常設
+        //   登録済みの中では イベント中装備 → 限定装備 → 常設装備
         // phase 2/3:
-        //   登録済みの中では 限定/常設を区別しない
+        //   登録済みの中では イベント中/限定/常設を区別しない
         const groupOf = (m)=>{
           if (!m.registered) return 0;
           if (phase === 0 || phase === 1){
-            return m.limited ? 1 : 2;
+            if (m.category === 'event')   return 1;
+            if (m.category === 'limited') return 2;
+            return 3;
           }
           return 1;
         };
@@ -12335,7 +12407,7 @@
 
         const body = table.tBodies[0];
         const rows = Array.from(body.rows);
-        const nameMode = (phase === 0 || phase === 2) ? 'desc' : 'asc';
+        const nameMode = (phase === 0 || phase === 2) ? 'asc' : 'desc';
 
         rows.sort((ra, rb)=>{
           const a = getMeta(ra);
@@ -12370,7 +12442,7 @@
         table.dataset.nameSortPhase = String(phase);
         table.dataset.nameSortLastApplied = `name:${phase}`;
         lastSortedColumn  = columnIds[id][nameTitle];
-        lastSortAscending = (phase === 1 || phase === 3);
+        lastSortAscending = (phase === 0 || phase === 2);
       }
 
       let nameSortPhase = Number(table.dataset.nameSortPhase || '0');
