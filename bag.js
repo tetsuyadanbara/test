@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Donguri Bag Enhancer
 // @namespace    https://donguri.5ch.io/
-// @version      10.0.5.1
+// @version      10.0.6.0
 // @description  5ちゃんねる「どんぐりシステム」の「アイテムバッグ」ページ機能改良スクリプト。
 // @author       福呼び草
 // @assistant    ChatGPT (OpenAI)
@@ -23,7 +23,7 @@
   // ============================================================
   // スクリプト自身のバージョン（About 表示用）
   // ============================================================
-  const DBE_VERSION    = '10.0.5.1';
+  const DBE_VERSION    = '10.0.6.0';
 
   // ============================================================
   // 現在のどんぐりドメイン
@@ -3902,6 +3902,7 @@
         DBE_CHEST.stage         = 'idle';
         DBE_CHEST.busy          = false;
         DBE_CHEST._lootObserved = false;   // 次回実行で lootObserver を再アタッチ可能に
+        try{ dbeCancelPendingChestOpenRequest(); }catch(_){}
       }catch(_){}
       // 進行UIタイマーを止め、閉じるを有効化（ウインドウ自体は自動で閉じない）
       try{ if (typeof dbeFinishProgressUI === 'function') dbeFinishProgressUI(); }catch(_){}
@@ -4971,6 +4972,54 @@
       partLimited.appendChild(spanTimes);
       grp3.appendChild(row4);
 
+      // ◇5段目：宝箱／バトル宝箱の開封間隔
+      const row5 = document.createElement('div');
+      Object.assign(row5.style,{
+        display:'flex',
+        alignItems:'center',
+        justifyContent:'center',
+        gap:'8px',
+        flexWrap:'wrap',
+        width:'100%',
+        fontSize:'0.95em'
+      });
+      const openInterval = document.createElement('input');
+      openInterval.type = 'number';
+      openInterval.id = 'dbe-prm-Chest--open-interval-sec';
+      openInterval.min = '1.0';
+      openInterval.max = '10.0';
+      openInterval.step = '0.1';
+      openInterval.value = '1.5';
+      Object.assign(openInterval.style,{width:'4.5em',padding:'2px 0 2px 8px'});
+
+      const openJitter = document.createElement('input');
+      openJitter.type = 'number';
+      openJitter.id = 'dbe-prm-Chest--open-jitter-sec';
+      openJitter.min = '0.0';
+      openJitter.max = '10.0';
+      openJitter.step = '0.1';
+      openJitter.value = '0.0';
+      Object.assign(openJitter.style,{width:'4.5em',padding:'2px 0 2px 8px'});
+
+      const clampOpenTimingInput = (el, min, max, fallback)=>{
+        let v = Number(el.value);
+        if (!Number.isFinite(v)) v = fallback;
+        if (v < min) v = min;
+        if (v > max) v = max;
+        el.value = v.toFixed(1);
+      };
+      openInterval.addEventListener('change', ()=> clampOpenTimingInput(openInterval, 1.0, 10.0, 1.0));
+      openJitter.addEventListener('change',  ()=> clampOpenTimingInput(openJitter,  0.0, 10.0, 0.0));
+
+      row5.append(
+        document.createTextNode('宝箱／バトル宝箱を'),
+        openInterval,
+        document.createTextNode('秒（揺らぎ'),
+        openJitter,
+        document.createTextNode('秒）以上の間隔で開封')
+      );
+      grp3.appendChild(row5);
+
       return wrap;
     }
 
@@ -4999,8 +5048,111 @@
       _totalPlanned:null,      // 回数指定の合計（無制限は null）
       _progressTimer:null,     // 進行UI更新用タイマー
       _lootObserved:false,     // 取得結果監視の装着済みフラグ
-      _userAbort:false         // 「中断する」押下フラグ（次の実行を抑止）
+      _userAbort:false,        // 「中断する」押下フラグ（次の実行を抑止）
+      _openGateUntil:0,        // 次の開封リクエスト送信が許可される時刻（ms epoch）
+      _openGateTimer:null,     // 開封待機タイマー
+      _pendingOpenRequest:null // 待機後に送る開封リクエスト
     });
+
+    function dbeClampChestOpenSec(v, min, max, fallback){
+      let n = Number(v);
+      if (!Number.isFinite(n)) n = fallback;
+      if (n < min) n = min;
+      if (n > max) n = max;
+      return Math.round(n * 10) / 10;
+    }
+
+    function dbeReadChestOpenTiming(){
+      const aEl = document.getElementById('dbe-prm-Chest--open-interval-sec');
+      const bEl = document.getElementById('dbe-prm-Chest--open-jitter-sec');
+      const a = dbeClampChestOpenSec(aEl?.value, 1.0, 10.0, 1.0);
+      const b = dbeClampChestOpenSec(bEl?.value, 0.0, 10.0, 0.0);
+      if (aEl) aEl.value = a.toFixed(1);
+      if (bEl) bEl.value = b.toFixed(1);
+      return {
+        intervalSec: a,
+        jitterSec  : b,
+        waitMs     : Math.round((a + (Math.random() * b)) * 1000)
+      };
+    }
+
+    function dbeEnsureChestWaitModal(){
+      const wnd = ensureWindowShell('dbe-Dialog-ChestWait');
+      const closeBtn = wnd.firstElementChild;
+      if (closeBtn && closeBtn.tagName === 'BUTTON'){
+        closeBtn.style.display = 'none';
+        closeBtn.disabled = true;
+      }
+      Array.from(wnd.children).forEach((ch, i)=>{ if (i > 0) ch.remove(); });
+      const box = document.createElement('div');
+      Object.assign(box.style,{
+        minWidth:'18em',
+        padding:'0.8em 1.2em',
+        textAlign:'center',
+        fontSize:'1.0em',
+        fontWeight:'bold'
+      });
+      box.textContent = '少しお待ちください';
+      wnd.appendChild(box);
+      return wnd;
+    }
+
+    function dbeShowChestWaitModal(){
+      const wnd = dbeEnsureChestWaitModal();
+      wnd.style.display = 'block';
+      dbeBringDialogToFront(wnd);
+    }
+
+    function dbeHideChestWaitModal(){
+      const wnd = document.getElementById('dbe-Dialog-ChestWait');
+      if (wnd) wnd.style.display = 'none';
+    }
+
+    function dbeCancelPendingChestOpenRequest(){
+      try{
+        clearTimeout(DBE_CHEST._openGateTimer);
+        DBE_CHEST._openGateTimer = null;
+        DBE_CHEST._pendingOpenRequest = null;
+      }catch(_){}
+      dbeHideChestWaitModal();
+    }
+
+    function dbeArmChestOpenGateFromNow(){
+      const timing = dbeReadChestOpenTiming();
+      DBE_CHEST._openGateUntil = Date.now() + timing.waitMs;
+      chestDiag('openGate armed', timing);
+      return timing;
+    }
+
+    function dbeScheduleChestOpenRequest(sendFn){
+      const now = Date.now();
+      const gateUntil = Number(DBE_CHEST._openGateUntil || 0);
+
+      if (now >= gateUntil){
+        dbeHideChestWaitModal();
+        dbeArmChestOpenGateFromNow();
+        sendFn();
+        return;
+      }
+
+      DBE_CHEST._pendingOpenRequest = sendFn;
+      dbeShowChestWaitModal();
+      clearTimeout(DBE_CHEST._openGateTimer);
+      DBE_CHEST._openGateTimer = setTimeout(()=>{
+        const fn = DBE_CHEST._pendingOpenRequest;
+        DBE_CHEST._pendingOpenRequest = null;
+        DBE_CHEST._openGateTimer = null;
+        dbeHideChestWaitModal();
+        if (DBE_CHEST._userAbort){
+          (window.DBE_finishChest ? window.DBE_finishChest() : finishChest());
+          return;
+        }
+        if (typeof fn === 'function'){
+          dbeArmChestOpenGateFromNow();
+          fn();
+        }
+      }, Math.max(0, gateUntil - now));
+    }
 
 // ============================================================
     //  バックアップ管理ウインドウ（dbe-W-Backup）
@@ -5117,6 +5269,11 @@
       DBE_CHEST.stage = 'init';
       DBE_CHEST.type  = kind;
       DBE_CHEST.didWork = true;              // ← 追加：フロー開始時に作業フラグON
+      DBE_CHEST._openGateUntil = 0;
+      DBE_CHEST._pendingOpenRequest = null;
+      clearTimeout(DBE_CHEST._openGateTimer);
+      DBE_CHEST._openGateTimer = null;
+      dbeHideChestWaitModal();
       // ★ 処理の安定化のため、列表示を一時的に「錠/解錠＝表示」「分解＝表示」「ネックレス増減＝表示」に強制
       try{ loadRulesFromStorage(); }catch(_){}
       try{ __dbeForceShowColsForRun(); }catch(_){}
@@ -5420,10 +5577,17 @@
             (window.DBE_finishChest ? window.DBE_finishChest() : finishChest());
             return;
           }
-          // 分子（開封回数）を加算：送信の直前にカウント
-          try{ dbeChestBumpProcessed(dbeChestOpenStep(), 'open', loc); }catch(_){ }
-          DBE_CHEST.stage = 'submit_chest';
-          setTimeout(()=>btn.click(), 50);
+          dbeScheduleChestOpenRequest(()=>{
+            if (DBE_CHEST._userAbort){
+              chestDiag('userAbort: stop before queued open submit');
+              (window.DBE_finishChest ? window.DBE_finishChest() : finishChest());
+              return;
+            }
+            // 分子（開封回数）を加算：送信の直前にカウント
+            try{ dbeChestBumpProcessed(dbeChestOpenStep(), 'open', loc); }catch(_){ }
+            DBE_CHEST.stage = 'submit_chest';
+            setTimeout(()=>btn.click(), 50);
+          });
           return;
         }
         // 宝箱オープン後は /bag が返る想定
@@ -5571,6 +5735,7 @@
       // 進行UIの停止（中断/完了共通）
       try{ (window.DBE_CHEST = window.DBE_CHEST || {})._autoRunning = false; }catch(_){ }
       try{ if (typeof dbeFinishProgressUI === 'function') dbeFinishProgressUI(); }catch(_){ }
+      try{ dbeCancelPendingChestOpenRequest(); }catch(_){}
       // 終了メッセージ
       hideOverlay();
       DBE_CHEST.stage   = 'idle';
@@ -5695,19 +5860,9 @@
     // 〓〓〓 宝箱を連続開封し、選別して施錠or分解or保留する 〓〓〓
     function buildLockQueuesAfterOpen(doc){
 
-      // 宝箱の開封間隔：三角分布（最小0秒, 最頻0.1秒, 最大0.3秒）
-      DBE_CHEST.delay = ()=> {
-        const min = 0, mode = 0.1, max = 0.3;
-        const u = Math.random();
-        const c = (mode - min) / (max - min);
-        let x;
-        if (u < c) {
-          x = min + Math.sqrt(u * (max - min) * (mode - min));
-        } else {
-          x = max - Math.sqrt((1 - u) * (max - min) * (max - mode));
-        }
-        return x * 1000;
-      };
+      // 施錠／分解の間隔は固定 300ms。
+      // 宝箱／バトル宝箱の開封間隔は dbeScheduleChestOpenRequest() 側で別制御する。
+      DBE_CHEST.delay = ()=>300;
 
       // 共通ヘルパー：ネックレス効果解析（Buff/DeBuffの個数、増減％合計、unknown）
       function dbeParseNecEffects(tr, iAttr, iName){
