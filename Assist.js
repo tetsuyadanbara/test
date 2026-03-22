@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Donguri Battle Assistant
 // @namespace    https://donguri.5ch.io/
-// @version      3.1.2.3
+// @version      3.3.1.0
 // @description  5ちゃんねるのどんぐりシステムから派生したゲームの操作性を改善するためのユーザースクリプト
 // @author       福呼び草
 // @assistant    ChatGPT (OpenAI)
@@ -19,7 +19,7 @@
   // =========================
   // スクリプト自身のバージョン（スクリプト情報表示用）
   // =========================
-  const DBA_VERSION = '3.1.2.3';
+  const DBA_VERSION = '3.3.1.0';
 
   console.log('[DBA] BOOT', 'ver=', DBA_VERSION, 'href=', location.href);
 
@@ -432,6 +432,9 @@
     #dba-battlemap-layer[data-syncing="1"] .dba-layer-cell__content {
       visibility: hidden;
     }
+    #dba-battlemap-layer[data-syncing="1"] .dba-layer-cell__deco {
+      visibility: hidden;
+    }
     #dba-battlemap-layer-grid {
       width: 100%;
       height: 100%;
@@ -439,6 +442,17 @@
       background: transparent;
       box-sizing: border-box;
       contain: layout paint style;
+    }
+    .dba-layer-cell__deco {
+      position: absolute;
+      inset: 0;
+      display: block;
+      pointer-events: none;
+      user-select: none;
+      background: transparent;
+      background-repeat: no-repeat;
+      transform: translateZ(0);
+      backface-visibility: hidden;
     }
     .dba-layer-cell {
       position: relative;
@@ -478,6 +492,21 @@
       text-shadow:
         0 0 4px rgba(255,255,255,1),
         0 0 8px rgba(255,255,255,0.75);
+    }
+
+    .dba-layer-cell[data-dba-capital-crown="1"]::after {
+      content: "👑";
+      position: absolute;
+      right: 2px;
+      bottom: 1px;
+      font-size: 1.6rem;
+      line-height: 1.6;
+      pointer-events: none;
+      user-select: none;
+      z-index: 2;
+      text-shadow:
+        0 0 8px rgba(0,0,0,0.8),
+        0 0 8px rgba(0,0,0,0.8);
     }
 
     /* ===== バトルマップ直下の情報テーブル（2連table）の縦伸び抑制 ===== */
@@ -959,6 +988,19 @@
       word-break: break-word;
       white-space: normal;
     }
+    .dba-setting-subgroup {
+      margin-top: 8px;
+      margin-left: 26px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .dba-setting-subgroup .dba-setting-checkline {
+      font-weight: 600;
+    }
+    .dba-setting-subgroup .dba-setting-checktext {
+      line-height: 1.35;
+    }
     .dba-setting-row input[type="number"] {
       width: 60px;
       box-sizing: border-box;
@@ -1432,7 +1474,89 @@
       font-size: 0.95em;
       line-height: 1.25em;
     }
-      /* ===== オート装備（候補ポップアップ / 設定） ===== */
+    /* ===== 装備ロスター：オプション ===== */
+    #dba-m-roster-option.dba-m-std {
+      width: min(720px, calc(100vw - 24px));
+      max-height: min(88vh, calc(100vh - 24px));
+      overflow: hidden;
+    }
+    #dba-m-roster-option.dba-m-std .dba-modal__mid {
+      max-height: calc(min(88vh, calc(100vh - 24px)) - 110px);
+      overflow: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+    .dba-roster-opt-section {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      padding: 12px 12px;
+      border: 1px solid #00000022;
+      border-radius: 12px;
+      background: #fff;
+      box-sizing: border-box;
+    }
+    .dba-roster-opt-section__title {
+      margin: 0;
+      padding: 0 0 8px 0;
+      border-bottom: 1px solid #00000022;
+      font-size: 1.02em;
+      font-weight: 800;
+      text-align: left;
+      line-height: 1.35;
+    }
+    .dba-roster-opt-note {
+      margin: 0;
+      padding: 0;
+      font-size: 0.92em;
+      font-weight: 600;
+      line-height: 1.45;
+      text-align: left;
+      color: #333;
+      white-space: normal;
+      overflow-wrap: anywhere;
+      word-break: break-word;
+    }
+    .dba-roster-opt-btngrid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 10px;
+      align-items: stretch;
+    }
+    .dba-roster-opt-btngrid .dba-btn-mini {
+      width: 100%;
+      min-height: 44px;
+      margin: 0;
+      padding: 10px 12px;
+      text-align: center;
+      box-sizing: border-box;
+    }
+    /* ===== 装備ロスター：バックアップ直接編集 ===== */
+    #dba-m-roster-backup-editor.dba-m-std {
+      width: min(1040px, calc(100vw - 16px));
+      height: min(94vh, calc(100vh - 16px));
+      max-height: min(94vh, calc(100vh - 16px));
+      overflow: hidden;
+    }
+    #dba-m-roster-backup-editor.dba-m-std .dba-modal__mid {
+      flex: 1 1 auto;
+      min-height: 0;
+      height: auto;
+      max-height: none;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      padding: 12px;
+    }
+    #dba-m-roster-backup-editor .dba-backup-textarea {
+      flex: 1 1 auto;
+      min-height: 0;
+      height: 100%;
+      max-height: none;
+      resize: none;
+    }
+    /* ===== オート装備（候補ポップアップ / 設定） ===== */
     #dba-auto-equip-pop {
       position: fixed;
       z-index: 999998; /* fnbar(999999)より下 */
@@ -2009,6 +2133,8 @@
   const LS_AUTO_EQUIP_NOTIFY_AUTOCLOSE_SEC_KEY = 'dba.autoEquip.notifyAutoClose.sec.v1'; // number
   const LS_AUTO_EQUIP_PREFER_TOP_KEY = 'dba.autoEquip.preferTop.enabled.v1'; // 0/1 「一番上の装備候補を常に優先する」
   const LS_CURRENT_PRESET_NAME_KEY = 'dba.roster.currentPresetName.v1'; // string 現在装備中として扱うプリセット名
+  const LS_ROSTER_SCROLL_REMEMBER_KEY = 'dba.roster.scrollRemember.v1'; // 0/1
+  const LS_ROSTER_SCROLL_TOP_KEY = 'dba.roster.scrollTop.v1'; // number
   const LS_BR_TAIL2_KEY = 'dba.battleResult.tail2.v1'; // 戦闘結果「末尾2行のみ表示」ON/OFF
   const LS_BR_ALIGN_KEY = 'dba.battleResult.align.v1'; // left / center / right
   const LS_BR_PASS_KEY  = 'dba.battleResult.passThrough.v1'; // 0/1 クリック透過
@@ -2016,6 +2142,10 @@
   const LS_BR_WIDTH_KEY = 'dba.battleResult.widthPx.v1'; // number 横幅(px)
   const LS_BR_HIDE_CLOSE_KEY = 'dba.battleResult.hideClose.v1'; // 0/1 「戦闘結果」ウインドウのCloseボタン非表示
   const LS_BR_HIDE_OPT_KEY   = 'dba.battleResult.hideOption.v1'; // 0/1 「戦闘結果」ウインドウのオプションボタン非表示
+
+  const DBA_ROSTER_UI_STATE = {
+    scrollTop: 0
+  };
 
   // トップページ「経過時間」プログレス（同期用）
   const LS_TOP_ELAPSED_PROGRESS_KEY = 'dba.topElapsedProgress.v1';
@@ -3091,8 +3221,15 @@
       enabled: false,
       battleCount: 20
     },
-    // レッドvsブルー：各セルにレギュレーションを表示するか
-    rbLayer: { showCellRegulation: false },
+    // レッドvsブルー：Reg.表示・境界線・アニメーション・首都王冠・誰もいない
+    rbLayer: {
+      showCellRegulation: false,
+      showOriginalBorder: false,
+      borderOpacity: 80,
+      stopAnimation: false,
+      showCapitalCrown: false,
+      showNobodyHolder: false
+    },
     // レイヤー文字濃度（範囲：0〜100）
     layer: { textOpacity: 100 },
     // オリジナルHTMLの<header>要素を表示するか
@@ -3461,6 +3598,77 @@
     }catch(_e){}
   }
 
+  function loadRosterScrollRememberEnabled(){
+    try{
+      const raw = localStorage.getItem(LS_ROSTER_SCROLL_REMEMBER_KEY);
+      if(raw == null) return false; // デフォルトOFF
+      return raw === '1';
+    }catch(_e){
+      return false;
+    }
+  }
+
+  function saveRosterScrollRememberEnabled(on){
+    try{
+      localStorage.setItem(LS_ROSTER_SCROLL_REMEMBER_KEY, on ? '1' : '0');
+    }catch(_e){}
+  }
+
+  function loadRosterSavedScrollTop(){
+    try{
+      const raw = localStorage.getItem(LS_ROSTER_SCROLL_TOP_KEY);
+      if(raw == null) return 0;
+      const n = Number.parseInt(raw, 10);
+      if(!Number.isFinite(n)) return 0;
+      return Math.max(0, n);
+    }catch(_e){
+      return 0;
+    }
+  }
+
+  function saveRosterSavedScrollTop(v){
+    try{
+      const n = Number.parseInt(v, 10);
+      localStorage.setItem(LS_ROSTER_SCROLL_TOP_KEY, String(Number.isFinite(n) ? Math.max(0, n) : 0));
+    }catch(_e){}
+  }
+
+  function clearRosterSavedScrollTop(){
+    try{
+      localStorage.removeItem(LS_ROSTER_SCROLL_TOP_KEY);
+    }catch(_e){}
+  }
+
+  function captureRosterListScrollState(){
+    const list = document.getElementById('dba-roster-list');
+    if(!(list instanceof HTMLElement)) return 0;
+    const top = Math.max(0, Math.round(list.scrollTop || 0));
+    DBA_ROSTER_UI_STATE.scrollTop = top;
+    if(loadRosterScrollRememberEnabled()){
+      saveRosterSavedScrollTop(top);
+    }
+    return top;
+  }
+
+  function prepareRosterScrollStateForOpen(){
+    if(loadRosterScrollRememberEnabled()){
+      DBA_ROSTER_UI_STATE.scrollTop = loadRosterSavedScrollTop();
+    }else{
+      DBA_ROSTER_UI_STATE.scrollTop = 0;
+      clearRosterSavedScrollTop();
+    }
+  }
+
+  function finalizeRosterScrollStateOnClose(){
+    const top = captureRosterListScrollState();
+    if(loadRosterScrollRememberEnabled()){
+      saveRosterSavedScrollTop(top);
+    }else{
+      DBA_ROSTER_UI_STATE.scrollTop = 0;
+      clearRosterSavedScrollTop();
+    }
+  }
+
   function getTeamChallengeUrl(){
     return makeTeamChallengeUrl(mode);
   }
@@ -3650,6 +3858,14 @@
     return x;
   }
 
+  function sanitizeRbBorderOpacity(v){
+    const x = Number.parseInt(v, 10);
+    if(!Number.isFinite(x)) return 100;
+    if(x < 50) return 50;
+    if(x > 100) return 100;
+    return x;
+  }
+
   function sanitizeLightRefreshBattleCount(v){
     const x = Number.parseInt(v, 10);
     if(!Number.isFinite(x)) return DEFAULT_SETTINGS.lightRefresh.battleCount;
@@ -3690,6 +3906,11 @@
       }
       if(obj && obj.rbLayer){
         out.rbLayer.showCellRegulation = !!obj.rbLayer.showCellRegulation;
+        out.rbLayer.showOriginalBorder = !!obj.rbLayer.showOriginalBorder;
+        out.rbLayer.borderOpacity = sanitizeRbBorderOpacity(obj.rbLayer.borderOpacity);
+        out.rbLayer.stopAnimation = !!obj.rbLayer.stopAnimation;
+        out.rbLayer.showCapitalCrown = !!obj.rbLayer.showCapitalCrown;
+        out.rbLayer.showNobodyHolder = !!obj.rbLayer.showNobodyHolder;
       }
       if(obj && obj.layer){
         out.layer.textOpacity = sanitizeOpacity(obj.layer.textOpacity);
@@ -3728,7 +3949,14 @@
           enabled: !!s?.lightRefresh?.enabled,
           battleCount: sanitizeLightRefreshBattleCount(s?.lightRefresh?.battleCount)
         },
-        rbLayer: { showCellRegulation: !!s?.rbLayer?.showCellRegulation },
+        rbLayer: {
+          showCellRegulation: !!s?.rbLayer?.showCellRegulation,
+          showOriginalBorder: !!s?.rbLayer?.showOriginalBorder,
+          borderOpacity: sanitizeRbBorderOpacity(s?.rbLayer?.borderOpacity),
+          stopAnimation: !!s?.rbLayer?.stopAnimation,
+          showCapitalCrown: !!s?.rbLayer?.showCapitalCrown,
+          showNobodyHolder: !!s?.rbLayer?.showNobodyHolder
+        },
         layer: { textOpacity: sanitizeOpacity(s?.layer?.textOpacity) },
         header: { showOriginalHeader: !!s?.header?.showOriginalHeader }
       };
@@ -5755,12 +5983,25 @@
   let dbaLayerLastStructKey = '';
   let dbaLayerResizeObs = null;
   let dbaLayerMutObs = null;
+  let dbaLayerCellDecoMap = new Map();
   let dbaLayerCellContentMap = new Map();
   let dbaLayerLastRectKey = '';
   let dbaLayerLastGridStyleKey = '';
+  let dbaLayerPendingRectKey = '';
+  let dbaLayerPendingRectCount = 0;
+  let dbaLayerSyncRetryCount = 0;
+  let dbaLayerInitHydrateStarted = false;
+  let dbaLayerInitHydratePromise = null;
+  const DBA_LAYER_RECT_STABLE_FRAMES = 2;
+  const DBA_LAYER_SYNC_RETRY_LIMIT = 12;
   // light reload 時にセル内テキストの再表示待機フレーム数
   const DBA_LAYER_TEXT_SHOW_DELAY_FRAMES = 6;
   let dbaLayerShowRAFs = [];
+
+  function resetBattlemapLayerRectStabilizer(){
+    dbaLayerPendingRectKey = '';
+    dbaLayerPendingRectCount = 0;
+  }
 
   function cancelBattlemapLayerShowReserve(){
     if(!Array.isArray(dbaLayerShowRAFs)) dbaLayerShowRAFs = [];
@@ -5822,7 +6063,11 @@
     const grid = document.getElementById('dba-battlemap-layer-grid');
     if(!grid) return;
     beginBattlemapLayerTextFreeze();
+    resetBattlemapLayerRectStabilizer();
+    dbaLayerInitHydrateStarted = false;
+    dbaLayerInitHydratePromise = null;
     grid.textContent = '';
+    dbaLayerCellDecoMap = new Map();
     dbaLayerCellContentMap = new Map();
     const frag = document.createDocumentFragment();
     for(let r=0;r<rows;r++){
@@ -5831,10 +6076,18 @@
         cell.className = 'dba-layer-cell';
         cell.dataset.row = String(r);
         cell.dataset.col = String(c);
+
+        const deco = document.createElement('div');
+        deco.className = 'dba-layer-cell__deco';
+        deco.style.background = 'transparent';
+
         const content = document.createElement('div');
         content.className = 'dba-layer-cell__content';
         content.textContent = ''; // 将来：ここに文字列/絵文字を配置
+
+        cell.appendChild(deco);
         cell.appendChild(content);
+        dbaLayerCellDecoMap.set(`${r},${c}`, deco);
         dbaLayerCellContentMap.set(`${r},${c}`, content);
         frag.appendChild(cell);
       }
@@ -5907,6 +6160,17 @@
     return { left, top, width, height };
   }
 
+  function isBattlemapLayerRectStable(rectKey){
+    if(!rectKey) return false;
+    if(dbaLayerPendingRectKey !== rectKey){
+      dbaLayerPendingRectKey = rectKey;
+      dbaLayerPendingRectCount = 1;
+      return false;
+    }
+    dbaLayerPendingRectCount += 1;
+    return dbaLayerPendingRectCount >= clampInt(DBA_LAYER_RECT_STABLE_FRAMES, 1, 10);
+  }
+
   function syncBattlemapLayer(){
     const root = document.getElementById('dba-battlemap-layer');
     const grid = document.getElementById('dba-battlemap-layer-grid');
@@ -5948,12 +6212,19 @@
       metrics.height
     ].join('|');
     if(rectKey !== dbaLayerLastRectKey){
+      if(!isBattlemapLayerRectStable(rectKey)){
+        beginBattlemapLayerTextFreeze();
+        return null;
+      }
       layoutChanged = true;
       dbaLayerLastRectKey = rectKey;
+      resetBattlemapLayerRectStabilizer();
       root.style.left = metrics.left + 'px';
       root.style.top = metrics.top + 'px';
       root.style.width = metrics.width + 'px';
       root.style.height = metrics.height + 'px';
+    }else{
+      resetBattlemapLayerRectStabilizer();
     }
 
     const colGapPx = Math.max(0, Math.round(parseCssPx(spec.colGap || '0px')));
@@ -5981,6 +6252,12 @@
       rebuildLayerCells(spec.rows, spec.cols);
     }
 
+    {
+      const snap = getBattlemapSnapshotFromDoc(document);
+      renderRbOriginalBorders(snap);
+      renderRbCapitalCrowns(snap);
+    }
+
     if(layoutChanged){
       beginBattlemapLayerTextFreeze();
       endBattlemapLayerTextFreeze();
@@ -5994,10 +6271,121 @@
     dbaLayerRAF = requestAnimationFrame(() => {
       dbaLayerRAF = 0;
       const ok = syncBattlemapLayer();
-      if(!ok){
+      if(ok === true){
+        dbaLayerSyncRetryCount = 0;
         endBattlemapLayerTextFreeze();
+        return;
       }
+
+      dbaLayerSyncRetryCount += 1;
+      if(dbaLayerSyncRetryCount < clampInt(DBA_LAYER_SYNC_RETRY_LIMIT, 1, 60)){
+        scheduleBattlemapLayerSync();
+        return;
+      }
+
+      dbaLayerSyncRetryCount = 0;
+      endBattlemapLayerTextFreeze();
     });
+  }
+
+  function collectInitLayerHydrateJobs(){
+    const cells = Array.from(document.querySelectorAll('#dba-battlemap-layer-grid .dba-layer-cell'));
+    if(cells.length === 0) return [];
+
+    let baseJobs = null;
+    if(mode === 'rb'){
+      const known = extractRbKnownCoordsFromDoc(document);
+      baseJobs = (known && known.length > 0)
+        ? known
+        : cells.map((c) => ({ row: Number(c.dataset.row), col: Number(c.dataset.col) }));
+    }else{
+      baseJobs = cells.map((c) => ({ row: Number(c.dataset.row), col: Number(c.dataset.col) }));
+    }
+
+    const out = [];
+    const seen = new Set();
+    for(const job of baseJobs){
+      if(!job) continue;
+      const row = Number(job.row);
+      const col = Number(job.col);
+      if(!Number.isFinite(row) || !Number.isFinite(col)) continue;
+
+      const key = `${row}-${col}`;
+      if(seen.has(key)) continue;
+      seen.add(key);
+
+      const currentText = sanitizeText(getLayerCellText(row, col));
+      const alreadyHydrated =
+        currentText &&
+        currentText !== '…' &&
+        !currentText.startsWith('ERR');
+
+      if(alreadyHydrated) continue;
+      out.push({ row, col });
+    }
+
+    return out;
+  }
+
+  async function hydrateBattlemapLayerTextsOnInit(){
+    if(dbaLayerInitHydratePromise) return dbaLayerInitHydratePromise;
+    if(dbaLayerInitHydrateStarted) return null;
+    dbaLayerInitHydrateStarted = true;
+
+    const p = (async () => {
+      try{
+        await raf2();
+        resetBattlemapLayerRectStabilizer();
+        scheduleBattlemapLayerSync();
+        await raf2();
+
+        const jobs = collectInitLayerHydrateJobs();
+        if(jobs.length === 0){
+          const snap0 = getBattlemapSnapshotFromDoc(document);
+          renderRbOriginalBorders(snap0);
+          renderRbCapitalCrowns(snap0);
+          endBattlemapLayerTextFreeze();
+          return true;
+        }
+
+        beginBattlemapLayerTextFreeze();
+        for(const j of jobs){
+          setLayerCellText(j.row, j.col, '…');
+        }
+
+        // 文字レイヤーの非表示待機時間
+        const CONCURRENCY = 1;
+        await mapLimit(jobs, CONCURRENCY, async (job) => {
+          const { row, col } = job;
+          try{
+            const { holder, reg } = await fetchCellDetail(row, col);
+            setLayerCellText(row, col, buildLayerCellDisplayText(reg, holder, row, col));
+          }catch(_e){
+            setLayerCellText(row, col, '');
+          }
+          return true;
+        });
+
+        const snap = getBattlemapSnapshotFromDoc(document);
+        renderRbOriginalBorders(snap);
+        renderRbCapitalCrowns(snap);
+        endBattlemapLayerTextFreeze();
+        return true;
+      }catch(_e){
+        try{
+          const snap = getBattlemapSnapshotFromDoc(document);
+          renderRbOriginalBorders(snap);
+          renderRbCapitalCrowns(snap);
+        }catch(_e2){}
+        endBattlemapLayerTextFreeze();
+        return false;
+      }finally{
+        dbaLayerInitHydratePromise = null;
+      }
+    })();
+
+    dbaLayerInitHydratePromise = p;
+    return p;
   }
 
   function initBattlemapLayer(){
@@ -6013,6 +6401,7 @@
 
       // まず同期
       scheduleBattlemapLayerSync();
+      hydrateBattlemapLayerTextsOnInit().catch(()=>{});
 
       // スクロール・リサイズ追従
       window.addEventListener('scroll', scheduleBattlemapLayerSync, { passive: true });
@@ -7240,12 +7629,11 @@
 
       const dy = Number(e.deltaY || 0);
 
-      // list 自身がスクロール可能なら、そのスクロールだけを許可して背面伝播を止める
+      // list 自身がスクロール可能なら、ネイティブスクロールをそのまま使い、
+      // 背面 modal / page への伝播だけを止める
       if(canScrollElementByDelta(listEl, dy)){
-        e.preventDefault();
         e.stopPropagation();
         e.stopImmediatePropagation();
-        listEl.scrollTop += dy;
         return;
       }
 
@@ -7276,9 +7664,10 @@
       const deltaY = touchStartY - t.clientY;
 
       if(canScrollElementByDelta(listEl, deltaY)){
-        // list 内だけスクロールさせ、背面の modal / page には渡さない
+        // list 内だけネイティブスクロールさせ、背面の modal / page には渡さない
         e.stopPropagation();
         e.stopImmediatePropagation();
+        touchStartY = t.clientY;
         return;
       }
 
@@ -7286,6 +7675,7 @@
       e.preventDefault();
       e.stopPropagation();
       e.stopImmediatePropagation();
+      touchStartY = t.clientY;
     };
 
     const onScrollChainBlock = (e) => {
@@ -7410,6 +7800,7 @@
     document.body.appendChild(dlg);
 
     function closeDirect(){
+      finalizeRosterScrollStateOnClose();
       try{ dlg.close(); }catch(_e){ dlg.removeAttribute('open'); }
     }
     btnX.addEventListener('click', (e) => { e.preventDefault(); e.stopPropagation(); closeDirect(); });
@@ -7420,6 +7811,16 @@
   function renderRosterModalState(selectedPresetName){
     const box = document.getElementById('dba-roster-box');
     if(!box) return;
+    {
+      const prevList = document.getElementById('dba-roster-list');
+      if(prevList instanceof HTMLElement){
+        const prevTop = Math.max(0, Math.round(prevList.scrollTop || 0));
+        DBA_ROSTER_UI_STATE.scrollTop = prevTop;
+        if(loadRosterScrollRememberEnabled()){
+          saveRosterSavedScrollTop(prevTop);
+        }
+      }
+    }
     const { roster } = getActiveRoster();
     const title = roster ? roster.title : '装備ロスター';
     const presets = roster && roster.presets ? roster.presets : {};
@@ -7468,19 +7869,19 @@
     btnRename.className = 'dba-btn-mini';
     btnRename.textContent = '名前変更';
 
+    const btnOption = document.createElement('button');
+    btnOption.type = 'button';
+    btnOption.className = 'dba-btn-mini';
+    btnOption.textContent = 'オプション';
+
     const btnWipe = document.createElement('button');
     btnWipe.type = 'button';
     btnWipe.className = 'dba-btn-mini dba-btn-mini--danger';
     btnWipe.textContent = 'ロスター削除';
 
-    const btnBackup = document.createElement('button');
-    btnBackup.type = 'button';
-    btnBackup.className = 'dba-btn-mini';
-    btnBackup.textContent = 'バックアップ';
-
     headBtns.appendChild(btnRename);
+    headBtns.appendChild(btnOption);
     headBtns.appendChild(btnWipe);
-    headBtns.appendChild(btnBackup);
 
     head.appendChild(headTitle);
     head.appendChild(headBtns);
@@ -7622,6 +8023,24 @@
     }
     box.appendChild(list);
 
+    list.addEventListener('scroll', () => {
+      const top = Math.max(0, Math.round(list.scrollTop || 0));
+      DBA_ROSTER_UI_STATE.scrollTop = top;
+      if(loadRosterScrollRememberEnabled()){
+        saveRosterSavedScrollTop(top);
+      }
+    }, { passive: true });
+
+    requestAnimationFrame(() => {
+      const restoreTop = Math.max(
+        0,
+        loadRosterScrollRememberEnabled()
+          ? loadRosterSavedScrollTop()
+          : Number(DBA_ROSTER_UI_STATE.scrollTop || 0)
+      );
+      list.scrollTop = restoreTop;
+    });
+
     if(addPickMode){
       const releaseScrollLock = installRosterInsertPickScrollLock(list);
 
@@ -7717,6 +8136,16 @@
       });
     });
 
+    btnOption.addEventListener('click', (e) => {
+      e.preventDefault(); e.stopPropagation();
+      if(rosterDlg) rosterDlg.dataset.dbaDelMode = '0';
+      if(rosterDlg) rosterDlg.dataset.dbaEditMode = '0';
+      if(rosterDlg) rosterDlg.dataset.dbaAddPickMode = '0';
+      openRosterOptionsModal(() => {
+        renderRosterModalState(selectedPresetName || null);
+      });
+    });
+
     btnWipe.addEventListener('click', (e) => {
       e.preventDefault(); e.stopPropagation();
       if(rosterDlg) rosterDlg.dataset.dbaDelMode = '0';
@@ -7724,15 +8153,6 @@
       openRosterWipeModal(() => {
         deleteActiveRosterAndSwitch();
         renderRosterModalState(null);
-      });
-    });
-
-    btnBackup.addEventListener('click', (e) => {
-      e.preventDefault(); e.stopPropagation();
-      if(rosterDlg) rosterDlg.dataset.dbaDelMode = '0';
-      if(rosterDlg) rosterDlg.dataset.dbaEditMode = '0';
-      openRosterBackupModal(() => {
-        renderRosterModalState(selectedPresetName || null);
       });
     });
 
@@ -7802,6 +8222,7 @@
     const openNow = () => {
       buildRosterModal();
       createRosterIfNeeded();
+      prepareRosterScrollStateForOpen();
       const dlg = document.getElementById('dba-m-roster');
       if(dlg){
         dlg.dataset.dbaAddPickMode = '0';
@@ -9112,6 +9533,168 @@
 
     overwriteRosterFromObject(importedObj);
     try{ onDone && onDone(); }catch(_e){}
+  }
+
+  function ensureRosterOptionsModal(){
+    if(document.getElementById('dba-m-roster-option')) return;
+
+    const dlg = document.createElement('dialog');
+    dlg.id = 'dba-m-roster-option';
+    dlg.className = 'dba-m-std';
+
+    const top = document.createElement('div');
+    top.className = 'dba-modal__top';
+    const t = document.createElement('div');
+    t.className = 'dba-modal__title';
+    t.textContent = '装備ロスター：オプション';
+    const x = document.createElement('button');
+    x.type = 'button';
+    x.className = 'dba-btn-x';
+    x.textContent = '×';
+    top.appendChild(t);
+    top.appendChild(x);
+
+    const mid = document.createElement('div');
+    mid.className = 'dba-modal__mid';
+
+    const rememberSection = document.createElement('section');
+    rememberSection.className = 'dba-roster-opt-section';
+
+    const rememberTitle = document.createElement('div');
+    rememberTitle.className = 'dba-roster-opt-section__title';
+    rememberTitle.textContent = '表示オプション';
+    rememberSection.appendChild(rememberTitle);
+
+    const rememberLabel = document.createElement('label');
+    rememberLabel.className = 'dba-setting-checkline';
+    const rememberChk = document.createElement('input');
+    rememberChk.type = 'checkbox';
+    rememberChk.id = 'dba-roster-option-scroll-remember';
+    const rememberText = document.createElement('span');
+    rememberText.className = 'dba-setting-checktext';
+    rememberText.textContent = 'プリセットリストのスクロール位置を記憶する。';
+    rememberLabel.appendChild(rememberChk);
+    rememberLabel.appendChild(rememberText);
+    rememberSection.appendChild(rememberLabel);
+
+    const rememberNote = document.createElement('p');
+    rememberNote.className = 'dba-roster-opt-note';
+    rememberNote.textContent = '次に「装備ロスター」を開いた時、プリセットリストのスクロール位置を復元します。';
+    rememberSection.appendChild(rememberNote);
+
+    mid.appendChild(rememberSection);
+
+    const backupSection = document.createElement('section');
+    backupSection.className = 'dba-roster-opt-section';
+
+    const backupTitle = document.createElement('div');
+    backupTitle.className = 'dba-roster-opt-section__title';
+    backupTitle.textContent = 'バックアップ';
+    backupSection.appendChild(backupTitle);
+
+    const backupNote = document.createElement('p');
+    backupNote.className = 'dba-roster-opt-note';
+    backupNote.textContent = '現在の装備ロスターを保存・復元したり、JSON を直接編集したりできます。';
+    backupSection.appendChild(backupNote);
+
+    const backupWrap = document.createElement('div');
+    backupWrap.className = 'dba-roster-opt-btngrid';
+
+    const btnExport = document.createElement('button');
+    btnExport.type = 'button';
+    btnExport.id = 'dba-roster-option-btn-export';
+    btnExport.className = 'dba-btn-mini';
+    btnExport.textContent = 'エクスポート';
+
+    const btnImport = document.createElement('button');
+    btnImport.type = 'button';
+    btnImport.id = 'dba-roster-option-btn-import';
+    btnImport.className = 'dba-btn-mini';
+    btnImport.textContent = 'インポート';
+
+    const btnEdit = document.createElement('button');
+    btnEdit.type = 'button';
+    btnEdit.id = 'dba-roster-option-btn-edit';
+    btnEdit.className = 'dba-btn-mini';
+    btnEdit.textContent = 'ファイルを直接編集';
+
+    backupWrap.appendChild(btnExport);
+    backupWrap.appendChild(btnImport);
+    backupWrap.appendChild(btnEdit);
+    backupSection.appendChild(backupWrap);
+    mid.appendChild(backupSection);
+
+    const bot = document.createElement('div');
+    bot.className = 'dba-modal__bot';
+    const cancel = document.createElement('button');
+    cancel.type = 'button';
+    cancel.className = 'dba-btn-close';
+    cancel.textContent = 'Close';
+    bot.appendChild(cancel);
+
+    dlg.appendChild(top);
+    dlg.appendChild(mid);
+    dlg.appendChild(bot);
+    document.body.appendChild(dlg);
+
+    function closeDirect(){
+      try{ dlg.close(); }catch(_e){ dlg.removeAttribute('open'); }
+    }
+    x.addEventListener('click', (e)=>{ e.preventDefault(); e.stopPropagation(); closeDirect(); });
+    cancel.addEventListener('click', (e)=>{ e.preventDefault(); e.stopPropagation(); closeDirect(); });
+    dlg.addEventListener('cancel', (e)=>{ e.preventDefault(); closeDirect(); });
+  }
+
+  function openRosterOptionsModal(onDone){
+    const openNow = () => {
+      ensureRosterOptionsModal();
+      const dlg = document.getElementById('dba-m-roster-option');
+      if(!dlg) return;
+
+      const chkRemember = document.getElementById('dba-roster-option-scroll-remember');
+      const btnExport = document.getElementById('dba-roster-option-btn-export');
+      const btnImport = document.getElementById('dba-roster-option-btn-import');
+      const btnEdit = document.getElementById('dba-roster-option-btn-edit');
+
+      if(chkRemember){
+        chkRemember.checked = loadRosterScrollRememberEnabled();
+        chkRemember.onchange = () => {
+          const on = !!chkRemember.checked;
+          saveRosterScrollRememberEnabled(on);
+          if(on){
+            const top = captureRosterListScrollState();
+            saveRosterSavedScrollTop(top);
+          }else{
+            clearRosterSavedScrollTop();
+          }
+        };
+      }
+
+      if(btnExport){
+        btnExport.onclick = (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          exportRosterViaUi(onDone);
+        };
+      }
+      if(btnImport){
+        btnImport.onclick = async (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          await importRosterViaUi(onDone);
+        };
+      }
+      if(btnEdit){
+        btnEdit.onclick = (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          openRosterBackupEditorModal(onDone);
+        };
+      }
+
+      try{ dlg.showModal(); }catch(_e){ dlg.setAttribute('open',''); }
+    };
+    if(document.body) openNow(); else document.addEventListener('DOMContentLoaded', openNow, { once:true });
   }
 
   function ensureRosterBackupModal(){
@@ -10920,6 +11503,28 @@
         scheduleFnbarHeightSync();
       }
 
+      if(mode === 'rb'){
+        const rbApi = window.__DBA_RB_API;
+        const cur = loadSettings();
+        if(rbApi && typeof rbApi === 'object'){
+          try{
+            if(cur?.rbLayer?.stopAnimation){
+              if(typeof rbApi.stopAnimation === 'function'){
+                rbApi.stopAnimation();
+              }else if(typeof rbApi.redrawOverlay === 'function'){
+                rbApi.redrawOverlay();
+              }
+            }else{
+              if(typeof rbApi.resumeAnimation === 'function'){
+                rbApi.resumeAnimation();
+              }else if(typeof rbApi.redrawOverlay === 'function'){
+                rbApi.redrawOverlay();
+              }
+            }
+          }catch(_e){}
+        }
+      }
+
       // 差し替えで微妙にレイアウトが動いても、スクロールは維持
       try{ window.scrollTo(sx, sy); }catch(_e){}
       dbgLog('battlemapRefresh', 'info', 'REFRESH header/team-tables done', { mode, topUrl });
@@ -10989,6 +11594,49 @@
       'let HAS_CAPITAL = !!(fow && fow.hasCapital);'
     );
 
+    patched = patched.replace(
+      'let borderPx = 2;',
+      `let borderPx = 2;
+        let dbaAnimRaf = 0;
+        function dbaShouldStopAnimation(){
+          try{
+            const raw = localStorage.getItem('dba.settings.v1');
+            if(!raw) return false;
+            const obj = JSON.parse(raw);
+            return !!(obj && obj.rbLayer && obj.rbLayer.stopAnimation);
+          }catch(_e){
+            return false;
+          }
+        }
+        function dbaOverlayTime(t){
+          return dbaShouldStopAnimation() ? 0 : (t || 0);
+        }`
+    );
+
+    patched = patched.replace(
+      'octx.lineDashOffset = -(t * ANT_SPEED);',
+      'octx.lineDashOffset = -(dbaOverlayTime(t) * ANT_SPEED);'
+    );
+
+    patched = patched.replace(
+      /function\s+loop\s*\(\s*t\s*\)\s*\{\s*drawOverlay\s*\(\s*t\s*\|\|\s*0\s*\)\s*;\s*requestAnimationFrame\s*\(\s*loop\s*\)\s*;\s*\}/,
+      `function loop(t){
+         dbaAnimRaf = 0;
+         drawOverlay(t||0);
+         if(dbaShouldStopAnimation()) return;
+         dbaAnimRaf = requestAnimationFrame(loop);
+       }`
+    );
+
+    patched = patched.replace(
+      /drawStatic\s*\(\s*\)\s*;\s*drawOverlay\s*\(\s*performance\.now\s*\(\s*\)\s*\)\s*;\s*requestAnimationFrame\s*\(\s*loop\s*\)\s*;/,
+      `drawStatic();
+       drawOverlay(performance.now());
+       if(!dbaShouldStopAnimation()){
+         dbaAnimRaf = requestAnimationFrame(loop);
+       }`
+    );
+
     const injected = `
       function dbaClearPlainObject(obj){
         if(!obj || typeof obj !== 'object') return;
@@ -11012,6 +11660,15 @@
         for(const v of values){
           dst.add(String(v));
         }
+      }
+
+      function dbaStopAnimationLoopHard(){
+        try{
+          if(dbaAnimRaf){
+            cancelAnimationFrame(dbaAnimRaf);
+            dbaAnimRaf = 0;
+          }
+        }catch(_e){}
       }
 
       function dbaFogStateAt(r,c){
@@ -11472,7 +12129,36 @@
 
       window.__DBA_RB_API = {
         version: 2,
-        applySnapshot: dbaApplySnapshot
+        applySnapshot: dbaApplySnapshot,
+        redrawOverlay: function(){
+          try{
+            drawOverlay(dbaShouldStopAnimation() ? 0 : performance.now());
+            return true;
+          }catch(_e){
+            return false;
+          }
+        },
+        stopAnimation: function(){
+          try{
+            dbaStopAnimationLoopHard();
+            drawOverlay(0);
+            return true;
+          }catch(_e){
+            return false;
+          }
+        },
+        resumeAnimation: function(){
+          try{
+            dbaStopAnimationLoopHard();
+            drawOverlay(performance.now());
+            if(!dbaShouldStopAnimation()){
+              dbaAnimRaf = requestAnimationFrame(loop);
+            }
+            return true;
+          }catch(_e){
+            return false;
+          }
+        }
       };
     `;
 
@@ -11491,7 +12177,13 @@
       if(!txt.includes('const GRID_SIZE')) continue;
       if(!txt.includes('function drawStatic()')) continue;
       if(!txt.includes('const buildingsPayload')) continue;
-      sc.textContent = patchRbBattlemapScriptForDbaApi(txt);
+      const patched = patchRbBattlemapScriptForDbaApi(txt);
+      sc.textContent = patched;
+      try{
+        const okLoop = patched.includes('if(dbaShouldStopAnimation()) return;');
+        const okMain = patched.includes('if(!dbaShouldStopAnimation()){');
+        console.log('[DBA][RB][PATCH]', { okLoop, okMain });
+      }catch(_e){}
       break;
     }
   }
@@ -11881,6 +12573,22 @@
     if(cell) cell.textContent = text;
   }
 
+  function setLayerCellCapitalCrown(row, col, on){
+    const content = dbaLayerCellContentMap.get(`${row},${col}`) || null;
+    const cell = content && content.parentElement ? content.parentElement : null;
+    if(!cell) return;
+    if(on){
+      cell.dataset.dbaCapitalCrown = '1';
+    }else{
+      delete cell.dataset.dbaCapitalCrown;
+    }
+  }
+
+  function setLayerCellDecoBackground(row, col, backgroundValue){
+    const cell = dbaLayerCellDecoMap.get(`${row},${col}`) || null;
+    if(cell) cell.style.background = String(backgroundValue || 'transparent');
+  }
+
   function getLayerCellText(row, col){
     const cell = dbaLayerCellContentMap.get(`${row},${col}`) || null;
     return cell ? String(cell.textContent || '') : '';
@@ -11892,6 +12600,141 @@
     }
   }
 
+  function clearLayerDecos(){
+    for(const el of dbaLayerCellDecoMap.values()){
+      el.style.background = 'transparent';
+    }
+  }
+
+  function shouldShowRbOriginalBorder(){
+    try{
+      const s = loadSettings();
+      return !!(mode === 'rb' && s?.rbLayer?.showOriginalBorder);
+    }catch(_e){
+      return false;
+    }
+  }
+
+  function getRbOriginalBorderOpacity(){
+    try{
+      const s = loadSettings();
+      return sanitizeRbBorderOpacity(s?.rbLayer?.borderOpacity);
+    }catch(_e){
+      return 100;
+    }
+  }
+
+  function colorTokenToRgba(colorValue, alpha){
+    const s = normalizeColorTokenForCompare(colorValue);
+    const a = Math.max(0, Math.min(1, Number(alpha)));
+    const m = s.match(/^#([0-9a-f]{6})$/i);
+    if(m){
+      const hex = m[1];
+      const r = Number.parseInt(hex.slice(0, 2), 16);
+      const g = Number.parseInt(hex.slice(2, 4), 16);
+      const b = Number.parseInt(hex.slice(4, 6), 16);
+      return `rgba(${r}, ${g}, ${b}, ${a})`;
+    }
+    if(/^rgba?\(/i.test(s)){
+      return s.replace(/^rgba?\(([^)]+)\)$/i, (_all, inner) => {
+        const parts = String(inner).split(',').map(v => String(v).trim());
+        const r = clampInt(parts[0], 0, 255);
+        const g = clampInt(parts[1], 0, 255);
+        const b = clampInt(parts[2], 0, 255);
+        return `rgba(${r}, ${g}, ${b}, ${a})`;
+      });
+    }
+    return `rgba(0, 0, 0, ${a})`;
+  }
+
+  function buildRbOriginalBorderBackgroundForCell(snapshot, row, col){
+    if(!snapshot || mode !== 'rb') return 'transparent';
+
+    const selfKey = `${row}-${col}`;
+    const selfColor = normalizeColorTokenForCompare(snapshot?.cellColors?.[selfKey] || '');
+    if(!selfColor) return 'transparent';
+
+    const rows = Math.max(0, Number(snapshot?.rows || 0));
+    const cols = Math.max(0, Number(snapshot?.cols || 0));
+    if(rows <= 0 || cols <= 0) return 'transparent';
+
+    const borderOpacity = getRbOriginalBorderOpacity() / 100;
+    const opaque = colorTokenToRgba(selfColor, borderOpacity);
+    const fade = colorTokenToRgba(selfColor, 0);
+    // チーム境界グレデーションの幅（セル幅に対する％）
+    const size = '20%';
+    const layers = [];
+
+    const isSameOwner = (r, c) => {
+      if(r < 0 || c < 0 || r >= rows || c >= cols) return false;
+      const color = normalizeColorTokenForCompare(snapshot?.cellColors?.[`${r}-${c}`] || '');
+      if(!color) return false;
+      return color === selfColor;
+    };
+
+    if(!isSameOwner(row - 1, col)){
+      layers.push(`linear-gradient(to bottom, ${opaque} 0%, ${fade} 100%) top center / 100% ${size} no-repeat`);
+    }
+    if(!isSameOwner(row + 1, col)){
+      layers.push(`linear-gradient(to top, ${opaque} 0%, ${fade} 100%) bottom center / 100% ${size} no-repeat`);
+    }
+    if(!isSameOwner(row, col - 1)){
+      layers.push(`linear-gradient(to right, ${opaque} 0%, ${fade} 100%) left center / ${size} 100% no-repeat`);
+    }
+    if(!isSameOwner(row, col + 1)){
+      layers.push(`linear-gradient(to left, ${opaque} 0%, ${fade} 100%) right center / ${size} 100% no-repeat`);
+    }
+
+    return layers.length > 0 ? layers.join(', ') : 'transparent';
+  }
+
+  function renderRbOriginalBorders(snapshot){
+    if(mode !== 'rb'){
+      clearLayerDecos();
+      return;
+    }
+
+    if(!shouldShowRbOriginalBorder()){
+      clearLayerDecos();
+      return;
+    }
+
+    const snap = snapshot || getBattlemapSnapshotFromDoc(document);
+    const rows = Math.max(0, Number(snap?.rows || 0));
+    const cols = Math.max(0, Number(snap?.cols || 0));
+    if(rows <= 0 || cols <= 0){
+      clearLayerDecos();
+      return;
+    }
+
+    for(let r = 0; r < rows; r++){
+      for(let c = 0; c < cols; c++){
+        setLayerCellDecoBackground(r, c, buildRbOriginalBorderBackgroundForCell(snap, r, c));
+      }
+    }
+  }
+
+  function renderRbCapitalCrowns(snapshot){
+    const snap = snapshot || getBattlemapSnapshotFromDoc(document);
+    const rows = Math.max(0, Number(snap?.rows || 0));
+    const cols = Math.max(0, Number(snap?.cols || 0));
+
+    if(rows <= 0 || cols <= 0){
+      return;
+    }
+
+    const show = shouldShowRbCapitalCrown();
+    const capitalSet = snap?.capitalSet instanceof Set ? snap.capitalSet : new Set();
+
+    for(let r = 0; r < rows; r++){
+      for(let c = 0; c < cols; c++){
+        const key = `${r}-${c}`;
+        setLayerCellCapitalCrown(r, c, show && capitalSet.has(key));
+      }
+    }
+  }
+
+
   function shouldShowRbCellRegulation(){
     try{
       const s = loadSettings();
@@ -11901,12 +12744,51 @@
     }
   }
 
-  function buildLayerCellDisplayText(reg, holder){
+  function shouldShowRbCapitalCrown(){
+    try{
+      const s = loadSettings();
+      return !!(mode === 'rb' && s?.rbLayer?.showCapitalCrown);
+    }catch(_e){
+      return false;
+    }
+  }
+
+  function shouldShowRbNobodyHolder(){
+    try{
+      const s = loadSettings();
+      return !!(mode === 'rb' && s?.rbLayer?.showNobodyHolder);
+    }catch(_e){
+      return false;
+    }
+  }
+
+  function shouldHideRbNobodyHolder(row, col, holder){
+    if(mode !== 'rb') return false;
+    if(shouldShowRbNobodyHolder()) return false;
+
+    const holderText = sanitizeText(holder || '');
+    if(holderText !== '誰もいない') return false;
+
+    const tileColor = getCurrentRbTileColor(row, col);
+    if(tileColor){
+      // チームカラー付きセルの「誰もいない」は、プレイヤー名の可能性があるので隠さない
+      return false;
+    }
+
+    return true;
+  }
+
+  function buildLayerCellDisplayText(reg, holder, row, col){
     const regText = sanitizeText(reg || '---') || '---';
-    const holderText = sanitizeText(holder || '---') || '---';
+    const holderTextRaw = sanitizeText(holder || '---') || '---';
+    const holderText = shouldHideRbNobodyHolder(row, col, holderTextRaw) ? '' : holderTextRaw;
 
     if(mode === 'rb' && !shouldShowRbCellRegulation()){
       return holderText;
+    }
+
+    if(!holderText){
+      return regText;
     }
     return `${regText}\n${holderText}`;
   }
@@ -12136,6 +13018,7 @@
 
     // レイヤーが未生成なら生成＆同期（マップ更新後にやる：セル数変動に追従させる）
     initBattlemapLayer();
+    resetBattlemapLayerRectStabilizer();
     scheduleBattlemapLayerSync();
     await raf2(); // cells が rebuild されるのを待つ
 
@@ -12158,7 +13041,7 @@
     }
 
     // 戦況情報（全セル更新）の fetch 並行処理数（多すぎると重いので抑制）
-    const CONCURRENCY = 9;
+    const CONCURRENCY = 16;
 
     const jobs = (mode === 'rb' && rbKnownJobs && rbKnownJobs.length > 0)
       ? rbKnownJobs
@@ -12167,12 +13050,19 @@
       const { row, col } = job;
       try{
         const { holder, reg } = await fetchCellDetail(row, col);
-        setLayerCellText(row, col, buildLayerCellDisplayText(reg, holder));
+        setLayerCellText(row, col, buildLayerCellDisplayText(reg, holder, row, col));
       }catch(_e){
         setLayerCellText(row, col, `ERR\n(${row},${col})`);
       }
       return true;
     });
+
+    {
+      const snap = getBattlemapSnapshotFromDoc(document);
+      renderRbOriginalBorders(snap);
+      renderRbCapitalCrowns(snap);
+      endBattlemapLayerTextFreeze();
+    }
 
     if(btn){
       btn.disabled = false;
@@ -12898,6 +13788,7 @@
 
       // レイヤーが未生成なら生成＆同期
       initBattlemapLayer();
+      resetBattlemapLayerRectStabilizer();
       scheduleBattlemapLayerSync();
       await raf2();
 
@@ -12927,12 +13818,12 @@
       }
 
       // 戦況情報（差分更新）の fetch 並行処理数（多すぎると重いので抑制）
-      const CONCURRENCY = 4;
+      const CONCURRENCY = 12;
       await mapLimit(detailJobs, CONCURRENCY, async (job, idx) => {
         const { row, col } = job;
         try{
           const { holder, reg } = await fetchCellDetail(row, col);
-          setLayerCellText(row, col, buildLayerCellDisplayText(reg, holder));
+          setLayerCellText(row, col, buildLayerCellDisplayText(reg, holder, row, col));
         }catch(_e){
           setLayerCellText(row, col, `ERR\n(${row},${col})`);
         }
@@ -12942,6 +13833,13 @@
         }
         return true;
       });
+
+      {
+        const snap = getBattlemapSnapshotFromDoc(document);
+        renderRbOriginalBorders(snap);
+        renderRbCapitalCrowns(snap);
+        endBattlemapLayerTextFreeze();
+      }
 
       if(btn){
         btn.disabled = false;
@@ -13164,26 +14062,144 @@
       mid.appendChild(row);
     })();
 
-    // レッドvsブルー：各セルのレギュレーション表示
-    (function mkRbCellRegulationBlock(){
+    // レッドvsブルー：表示オプション
+    (function mkRbLayerDisplayBlock(){
       const row = document.createElement('div');
       row.className = 'dba-setting-row';
 
       const lab = document.createElement('label');
       lab.className = 'dba-setting-checkline';
 
-      const input = document.createElement('input');
-      input.type = 'checkbox';
-      input.checked = !!settings?.rbLayer?.showCellRegulation;
-      input.dataset.rbShowCellRegulation = '1';
+      const mark = document.createElement('span');
+      mark.textContent = '▽';
+      mark.setAttribute('aria-hidden', 'true');
 
       const txt = document.createElement('span');
       txt.className = 'dba-setting-checktext';
-      txt.textContent = '「レッドvsブルーモード」の各セルにレギュレーションを表示する。';
+      txt.textContent = '表示オプション　※現在「レッドvsブルーモード」限定';
 
-      lab.appendChild(input);
+      lab.appendChild(mark);
       lab.appendChild(txt);
       row.appendChild(lab);
+
+      const sub = document.createElement('div');
+      sub.className = 'dba-setting-subgroup';
+
+      const labStopAnim = document.createElement('label');
+      labStopAnim.className = 'dba-setting-checkline';
+
+      const inputStopAnim = document.createElement('input');
+      inputStopAnim.type = 'checkbox';
+      inputStopAnim.checked = !!settings?.rbLayer?.stopAnimation;
+      inputStopAnim.dataset.rbStopAnimation = '1';
+
+      const txtStopAnim = document.createElement('span');
+      txtStopAnim.className = 'dba-setting-checktext';
+      txtStopAnim.textContent = '境界線やアバターのアニメーションを停止する。（動作の軽量化）';
+
+      labStopAnim.appendChild(inputStopAnim);
+      labStopAnim.appendChild(txtStopAnim);
+      sub.appendChild(labStopAnim);
+
+      const labBorder = document.createElement('label');
+      labBorder.className = 'dba-setting-checkline';
+
+      const inputBorder = document.createElement('input');
+      inputBorder.type = 'checkbox';
+      inputBorder.checked = !!settings?.rbLayer?.showOriginalBorder;
+      inputBorder.dataset.rbShowOriginalBorder = '1';
+
+      const txtBorder = document.createElement('span');
+      txtBorder.className = 'dba-setting-checktext';
+      txtBorder.textContent = 'DBAオリジナルの境界カラーを表示する。';
+
+      labBorder.appendChild(inputBorder);
+      labBorder.appendChild(txtBorder);
+      sub.appendChild(labBorder);
+
+      const rowBorderOpacity = document.createElement('div');
+      rowBorderOpacity.className = 'dba-setting-row';
+
+      const titleBorderOpacity = document.createElement('div');
+      titleBorderOpacity.className = 'dba-setting-block-title';
+      titleBorderOpacity.textContent = '境界線の濃さ（不透明度：100～50％）';
+      rowBorderOpacity.appendChild(titleBorderOpacity);
+
+      const lineBorderOpacity = document.createElement('div');
+      lineBorderOpacity.style.display = 'grid';
+      lineBorderOpacity.style.gridTemplateColumns = '1fr auto';
+      lineBorderOpacity.style.alignItems = 'center';
+      lineBorderOpacity.style.gap = '10px';
+
+      const inputBorderOpacity = document.createElement('input');
+      inputBorderOpacity.type = 'range';
+      inputBorderOpacity.min = '50';
+      inputBorderOpacity.max = '100';
+      inputBorderOpacity.step = '1';
+      inputBorderOpacity.value = String(150 - sanitizeRbBorderOpacity(settings?.rbLayer?.borderOpacity));
+      inputBorderOpacity.dataset.rbBorderOpacity = '1';
+
+      const txtBorderOpacity = document.createElement('span');
+      txtBorderOpacity.textContent = `${150 - sanitizeRbBorderOpacity(inputBorderOpacity.value)}%`;
+
+      inputBorderOpacity.addEventListener('input', () => {
+        txtBorderOpacity.textContent = `${150 - sanitizeRbBorderOpacity(inputBorderOpacity.value)}%`;
+      });
+
+      lineBorderOpacity.appendChild(inputBorderOpacity);
+      lineBorderOpacity.appendChild(txtBorderOpacity);
+      rowBorderOpacity.appendChild(lineBorderOpacity);
+      sub.appendChild(rowBorderOpacity);
+
+      const labCrown = document.createElement('label');
+      labCrown.className = 'dba-setting-checkline';
+
+      const inputCrown = document.createElement('input');
+      inputCrown.type = 'checkbox';
+      inputCrown.checked = !!settings?.rbLayer?.showCapitalCrown;
+      inputCrown.dataset.rbShowCapitalCrown = '1';
+
+      const txtCrown = document.createElement('span');
+      txtCrown.className = 'dba-setting-checktext';
+      txtCrown.textContent = '首都セルに👑を表示する。';
+
+      labCrown.appendChild(inputCrown);
+      labCrown.appendChild(txtCrown);
+      sub.appendChild(labCrown);
+
+      const labReg = document.createElement('label');
+      labReg.className = 'dba-setting-checkline';
+
+      const inputReg = document.createElement('input');
+      inputReg.type = 'checkbox';
+      inputReg.checked = !!settings?.rbLayer?.showCellRegulation;
+      inputReg.dataset.rbShowCellRegulation = '1';
+
+      const txtReg = document.createElement('span');
+      txtReg.className = 'dba-setting-checktext';
+      txtReg.textContent = '各セルごとのレギュレーションを表示する。';
+
+      labReg.appendChild(inputReg);
+      labReg.appendChild(txtReg);
+      sub.appendChild(labReg);
+
+      const labNobody = document.createElement('label');
+      labNobody.className = 'dba-setting-checkline';
+
+      const inputNobody = document.createElement('input');
+      inputNobody.type = 'checkbox';
+      inputNobody.checked = !!settings?.rbLayer?.showNobodyHolder;
+      inputNobody.dataset.rbShowNobodyHolder = '1';
+
+      const txtNobody = document.createElement('span');
+      txtNobody.className = 'dba-setting-checktext';
+      txtNobody.textContent = '未占領セルと占領不可地形セルの「誰もいない」を表示する。';
+
+      labNobody.appendChild(inputNobody);
+      labNobody.appendChild(txtNobody);
+      sub.appendChild(labNobody);
+
+      row.appendChild(sub);
       mid.appendChild(row);
     })();
 
@@ -13276,7 +14292,7 @@
       row.className = 'dba-setting-row';
 
       const lab = document.createElement('label');
-      lab.textContent = 'レイヤー文字濃度（0〜100）';
+      lab.textContent = 'レイヤー文字濃度（100〜0）';
 
       const wrap = document.createElement('div');
       wrap.style.display = 'grid';
@@ -13289,18 +14305,18 @@
       input.min = '0';
       input.max = '100';
       input.step = '1';
-      input.value = String(sanitizeOpacity(settings.layer.textOpacity));
+      input.value = String(100 - sanitizeOpacity(settings.layer.textOpacity));
       input.dataset.layerOpacity = '1';
 
       const out = document.createElement('div');
-      out.textContent = input.value;
+      out.textContent = String(100 - sanitizeOpacity(input.value));
       out.style.textAlign = 'right';
       out.style.fontWeight = '700';
 
       input.addEventListener('input', () => {
-        out.textContent = input.value;
+        out.textContent = String(100 - sanitizeOpacity(input.value));
         // 即時反映（保存は Apply/OK）
-        applyLayerTextOpacity(input.value);
+        applyLayerTextOpacity(100 - sanitizeOpacity(input.value));
       }, { passive: true });
 
       wrap.appendChild(input);
@@ -13438,7 +14454,12 @@
         postBattleAutoDiff: false,
         lightRefreshEnabled: false,
         lightRefreshBattleCount: DEFAULT_SETTINGS.lightRefresh.battleCount,
+        rbShowOriginalBorder: false,
+        rbBorderOpacity: 100,
+        rbStopAnimation: false,
+        rbShowCapitalCrown: false,
         rbShowCellRegulation: false,
+        rbShowNobodyHolder: false,
         layerTextOpacity: 100,
         showOriginalHeader: false
       };
@@ -13453,10 +14474,20 @@
       if(lre) out.lightRefreshEnabled = !!lre.checked;
       const lrc = dlg.querySelector('input[type="number"][data-light-refresh-battle-count="1"]');
       if(lrc) out.lightRefreshBattleCount = Number.parseInt(lrc.value, 10);
+      const rbBorder = dlg.querySelector('input[type="checkbox"][data-rb-show-original-border="1"]');
+      if(rbBorder) out.rbShowOriginalBorder = !!rbBorder.checked;
+      const rbBorderOpacity = dlg.querySelector('input[type="range"][data-rb-border-opacity="1"]');
+      if(rbBorderOpacity) out.rbBorderOpacity = 150 - Number.parseInt(rbBorderOpacity.value, 10);
+      const rbStopAnim = dlg.querySelector('input[type="checkbox"][data-rb-stop-animation="1"]');
+      if(rbStopAnim) out.rbStopAnimation = !!rbStopAnim.checked;
+      const rbCrown = dlg.querySelector('input[type="checkbox"][data-rb-show-capital-crown="1"]');
+      if(rbCrown) out.rbShowCapitalCrown = !!rbCrown.checked;
       const rbReg = dlg.querySelector('input[type="checkbox"][data-rb-show-cell-regulation="1"]');
       if(rbReg) out.rbShowCellRegulation = !!rbReg.checked;
+      const rbNobody = dlg.querySelector('input[type="checkbox"][data-rb-show-nobody-holder="1"]');
+      if(rbNobody) out.rbShowNobodyHolder = !!rbNobody.checked;
       const op = dlg.querySelector('input[type="range"][data-layer-opacity="1"]');
-      if(op) out.layerTextOpacity = Number.parseInt(op.value, 10);
+      if(op) out.layerTextOpacity = 100 - Number.parseInt(op.value, 10);
       const hd = dlg.querySelector('input[type="checkbox"][data-show-original-header="1"]');
       if(hd) out.showOriginalHeader = !!hd.checked;
       return out;
@@ -13477,6 +14508,24 @@
       if(lrc){
         lrc.value = String(sanitizeLightRefreshBattleCount(s?.lightRefresh?.battleCount));
       }
+      const rbBorder = dlg.querySelector('input[type="checkbox"][data-rb-show-original-border="1"]');
+      if(rbBorder){
+        rbBorder.checked = !!s?.rbLayer?.showOriginalBorder;
+      }
+      const rbBorderOpacity = dlg.querySelector('input[type="range"][data-rb-border-opacity="1"]');
+      if(rbBorderOpacity){
+        rbBorderOpacity.value = String(150 - sanitizeRbBorderOpacity(s?.rbLayer?.borderOpacity));
+        const disp = rbBorderOpacity.parentElement && rbBorderOpacity.parentElement.children ? rbBorderOpacity.parentElement.children[1] : null;
+        if(disp && disp.textContent != null) disp.textContent = `${150 - sanitizeRbBorderOpacity(rbBorderOpacity.value)}%`;
+      }
+      const rbStopAnim = dlg.querySelector('input[type="checkbox"][data-rb-stop-animation="1"]');
+      if(rbStopAnim){
+        rbStopAnim.checked = !!s?.rbLayer?.stopAnimation;
+      }
+      const rbCrown = dlg.querySelector('input[type="checkbox"][data-rb-show-capital-crown="1"]');
+      if(rbCrown){
+        rbCrown.checked = !!s?.rbLayer?.showCapitalCrown;
+      }
       const pb = dlg.querySelector('input[type="checkbox"][data-post-battle-auto-diff="1"]');
       if(pb){
         pb.checked = !!s?.postBattle?.autoDiffSync;
@@ -13485,12 +14534,16 @@
       if(rbReg){
         rbReg.checked = !!s?.rbLayer?.showCellRegulation;
       }
+      const rbNobody = dlg.querySelector('input[type="checkbox"][data-rb-show-nobody-holder="1"]');
+      if(rbNobody){
+        rbNobody.checked = !!s?.rbLayer?.showNobodyHolder;
+      }
       const op = dlg.querySelector('input[type="range"][data-layer-opacity="1"]');
       if(op){
-        op.value = String(sanitizeOpacity(s.layer.textOpacity));
+        op.value = String(100 - sanitizeOpacity(s.layer.textOpacity));
         // 表示側の数値も更新
         const disp = op.parentElement && op.parentElement.children ? op.parentElement.children[1] : null;
-        if(disp && disp.textContent != null) disp.textContent = op.value;
+        if(disp && disp.textContent != null) disp.textContent = String(100 - sanitizeOpacity(op.value));
       }
       const hd = dlg.querySelector('input[type="checkbox"][data-show-original-header="1"]');
       if(hd){
@@ -13519,8 +14572,13 @@
       cur.postBattle.autoDiffSync = !!v.postBattleAutoDiff;
       cur.lightRefresh.enabled = !!v.lightRefreshEnabled;
       cur.lightRefresh.battleCount = sanitizeLightRefreshBattleCount(v.lightRefreshBattleCount);
+      cur.rbLayer.showOriginalBorder = !!v.rbShowOriginalBorder;
+      cur.rbLayer.borderOpacity = sanitizeRbBorderOpacity(v.rbBorderOpacity);
+      cur.rbLayer.stopAnimation = !!v.rbStopAnimation;
+      cur.rbLayer.showCapitalCrown = !!v.rbShowCapitalCrown;
       cur.rbLayer.showCellRegulation = !!v.rbShowCellRegulation;
       cur.layer.textOpacity = sanitizeOpacity(v.layerTextOpacity);
+      cur.rbLayer.showNobodyHolder = !!v.rbShowNobodyHolder;
       cur.header.showOriginalHeader = !!v.showOriginalHeader;
 
       /// 範囲外入力はここで px に補正し、UIにも反映
@@ -13533,20 +14591,56 @@
       scheduleBattlemapLayerSync();
 
       if(mode === 'rb'){
+        const rbApi = window.__DBA_RB_API;
+        if(rbApi && typeof rbApi === 'object'){
+          try{
+            if(cur?.rbLayer?.stopAnimation){
+              if(typeof rbApi.stopAnimation === 'function'){
+                rbApi.stopAnimation();
+              }else if(typeof rbApi.redrawOverlay === 'function'){
+                rbApi.redrawOverlay();
+              }
+            }else{
+              if(typeof rbApi.resumeAnimation === 'function'){
+                rbApi.resumeAnimation();
+              }else if(typeof rbApi.redrawOverlay === 'function'){
+                rbApi.redrawOverlay();
+              }
+            }
+          }catch(_e){}
+        }
+      }
+
+      if(mode === 'rb'){
         const showReg = !!cur?.rbLayer?.showCellRegulation;
         for(const el of document.querySelectorAll('#dba-battlemap-layer-grid .dba-layer-cell__content')){
           const raw = String(el.textContent || '');
           if(!raw) continue;
+          const row = Number(el.parentElement?.dataset?.row);
+          const col = Number(el.parentElement?.dataset?.col);
+          const parts = raw.split('\n');
+          const regPart = (parts.length >= 2) ? parts[0] : '';
+          const holderPart = (parts.length >= 2) ? parts.slice(1).join('\n') : raw;
+
           if(showReg){
-            // ONに戻しただけでは reg を再取得できないため、ここでは現状維持。
+            // ONに戻しただけでは、過去に非表示化した holder / reg をここでは復元できない。
             // 次回の「戦況情報」クリック/長押し、または攻撃後自動差分取得で再描画される。
+            if(shouldHideRbNobodyHolder(row, col, holderPart)){
+              el.textContent = regPart || '';
+            }
             continue;
           }
-          const parts = raw.split('\n');
+
+          if(shouldHideRbNobodyHolder(row, col, holderPart)){
+            el.textContent = '';
+            continue;
+          }
+
           if(parts.length >= 2){
-            el.textContent = parts.slice(1).join('\n');
+            el.textContent = holderPart;
           }
         }
+        renderRbCapitalCrowns(getBattlemapSnapshotFromDoc(document));
       }
 
       refreshInitial();
