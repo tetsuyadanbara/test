@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Donguri Battle Assistant
 // @namespace    https://donguri.5ch.io/
-// @version      3.3.1.0
+// @version      4.3.5.7
 // @description  5ちゃんねるのどんぐりシステムから派生したゲームの操作性を改善するためのユーザースクリプト
 // @author       福呼び草
 // @assistant    ChatGPT (OpenAI)
@@ -19,7 +19,7 @@
   // =========================
   // スクリプト自身のバージョン（スクリプト情報表示用）
   // =========================
-  const DBA_VERSION = '3.3.1.0';
+  const DBA_VERSION = '4.3.5.7';
 
   console.log('[DBA] BOOT', 'ver=', DBA_VERSION, 'href=', location.href);
 
@@ -92,6 +92,14 @@
       --dba-fn-shadow: rgba(0,0,0,0.15);
       --dba-fn-height: 50px; /* ファンクションセクションの高さ（JSで実測値に更新） */
       --dba-layer-text-opacity: 1; /* 0.0 - 1.0（レイヤー上の文字濃度） */
+    }
+
+    input[type="checkbox"] {
+      display: inline-block;
+      margin: 4px 0 0 0;
+      width: 20px;
+      height: 20px;
+      cursor: pointer;
     }
 
     /* ファンクションセクション本体 */
@@ -432,9 +440,6 @@
     #dba-battlemap-layer[data-syncing="1"] .dba-layer-cell__content {
       visibility: hidden;
     }
-    #dba-battlemap-layer[data-syncing="1"] .dba-layer-cell__deco {
-      visibility: hidden;
-    }
     #dba-battlemap-layer-grid {
       width: 100%;
       height: 100%;
@@ -520,6 +525,39 @@
       height: auto !important;
       min-height: 0 !important;
       max-height: none !important;
+    }
+
+    /* ===== ハードコア / ラダー：巨大マップが上下の領域へ潜り込む問題の抑制 =====
+        元ページ側は「display:flex; justify-content:center; align-items:center; height:70vh; ...」
+        の固定高コンテナ内に .grid を置いているため、セル数やセルサイズが大きいと
+        .grid がコンテナからはみ出し、上の fnbar や下の table に重なりやすい。
+        ここでは HC / ラダー系のそのコンテナだけを「自動高＋上寄せ」に変えて、
+        マップが大きい時は外枠ごと自然に伸びるようにする。 */
+    p[style*="text-align:center"][style*="margin:0 auto;"] {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: flex-start;
+      gap: 12px;
+    }
+    p[style*="text-align:center"][style*="margin:0 auto;"] > div[style*="display: flex"][style*="justify-content: center"][style*="align-items: center"][style*="background-color: #f0f0f0"] {
+      width: 100%;
+      height: auto !important;
+      min-height: min(70vh, calc(100vh - var(--dba-fn-height) - 160px));
+      padding: 12px 8px;
+      box-sizing: border-box;
+      align-items: flex-start !important;
+      overflow: visible !important;
+    }
+    p[style*="text-align:center"][style*="margin:0 auto;"] > div[style*="display: flex"][style*="justify-content: center"][style*="align-items: center"][style*="background-color: #f0f0f0"]  .grid {
+      flex: 0 0 auto;
+      margin: 0 auto;
+    }
+    p[style*="text-align:center"][style*="margin:0 auto;"] > div[style*="display:inline-flex"] {
+      flex-wrap: wrap;
+      justify-content: center;
+      max-width: 100%;
+      margin-top: 0 !important;
     }
 
     /* 汎用ボタン（機能系ボタン共通） */
@@ -796,28 +834,6 @@
       text-align: left; /* 戦闘結果は左寄せ */
     }
 
-    /* ===== 戦闘結果：タイトル欄の「末尾2行のみ表示」チェック ===== */
-    .dba-br-tail2-chk {
-      display: inline-flex;
-      gap: 8px;
-      align-items: center;
-      justify-content: flex-start;
-      font-weight: 800;
-      user-select: none;
-      cursor: pointer;
-      padding: 4px 6px;
-      border-radius: 10px;
-      border: 1px solid #00000022;
-      background: #fafafa;
-      white-space: nowrap;
-    }
-    .dba-br-tail2-chk input[type="checkbox"] {
-      width: 18px;
-      height: 18px;
-      cursor: pointer;
-      accent-color: #ea0000;
-    }
-
     /* ===== モーダル（アラート） ===== */
     .dba-m-alert {
       border: 4px solid #e00;
@@ -835,16 +851,21 @@
     .dba-m-alert::backdrop {
       background: rgba(0,0,0,0.55);
     }
-    .dba-m-alert .dba-alert__title {
+    .dba-m-alert .dba-alert__title,
+    .dba-m-alert .dba-modal__top {
       padding: 10px 12px;
       border-bottom: 1px solid #000;
       background: #f0f0e0;
+      text-align: left;
+    }
+    .dba-m-alert .dba-alert__title,
+    .dba-m-alert .dba-modal__title {
       font-size: 1.2em;
       font-weight: 800;
       line-height: 1.2em;
-      text-align: left;
     }
-    .dba-m-alert .dba-alert__mid {
+    .dba-m-alert .dba-alert__mid,
+    .dba-m-alert .dba-modal__mid {
       padding: 14px 12px;
       font-size: 1.15em;
       font-weight: 700;
@@ -852,7 +873,8 @@
       white-space: pre-wrap;
       text-align: left;
     }
-    .dba-m-alert .dba-alert__bot {
+    .dba-m-alert .dba-alert__bot,
+    .dba-m-alert .dba-modal__bot {
       display: flex;
       justify-content: center;
       gap: 10px;
@@ -951,6 +973,7 @@
     /* ===== 「設定」modal ===== */
     .dba-setting-row {
       display: block;
+      margin-left: 30px;
       padding: 8px 10px;
       border: 1px solid #00000022;
       border-radius: 10px;
@@ -970,14 +993,6 @@
       text-align: left;
       font-weight: 700;
       cursor: pointer;
-    }
-    .dba-setting-checkline input[type="checkbox"] {
-      width: 18px;
-      height: 18px;
-      margin: 2px 0 0 0;
-      flex: 0 0 auto;
-      cursor: pointer;
-      accent-color: #ea0000;
     }
     .dba-setting-checktext {
       display: block;
@@ -1053,8 +1068,7 @@
       white-space: nowrap;
     }
     .dba-setting-cellsize-name {
-      min-width: 10.5em;
-      max-width: 12em;
+      width:8.5em;
       font-weight: 700;
       text-align: left;
     }
@@ -1430,12 +1444,6 @@
       border: 1px solid #00000022;
       background: #fafafa;
     }
-    .dba-pick-filterchk input[type="checkbox"] {
-      width: 18px;
-      height: 18px;
-      cursor: pointer;
-      accent-color: #ea0000;
-    }
     .dba-pick-filterchk[data-disabled="1"] {
       opacity: 0.45;
       cursor: not-allowed;
@@ -1479,23 +1487,30 @@
       width: min(720px, calc(100vw - 24px));
       max-height: min(88vh, calc(100vh - 24px));
       overflow: hidden;
+      margin: calc(var(--dba-fn-height) + 12px) auto auto;
     }
     #dba-m-roster-option.dba-m-std .dba-modal__mid {
       max-height: calc(min(88vh, calc(100vh - 24px)) - 110px);
       overflow: auto;
       display: flex;
       flex-direction: column;
-      gap: 14px;
+      gap: 8px;
+      min-height: 0;
+      justify-content: flex-start;
+      align-items: stretch;
     }
     .dba-roster-opt-section {
       display: flex;
       flex-direction: column;
-      gap: 10px;
+      gap: 0;
+      margin: 0 0 8px 0;
       padding: 12px 12px;
       border: 1px solid #00000022;
       border-radius: 12px;
       background: #fff;
       box-sizing: border-box;
+      align-items: stretch;
+      justify-content: flex-start;
     }
     .dba-roster-opt-section__title {
       margin: 0;
@@ -1505,6 +1520,42 @@
       font-weight: 800;
       text-align: left;
       line-height: 1.35;
+    }
+    .dba-roster-opt-section__body {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      align-items: stretch;
+      justify-content: flex-start;
+      padding: 10px 0 0 0;
+      margin: 0;
+      min-height: 0;
+      box-sizing: border-box;
+    }
+    .dba-roster-opt-row {
+      display: flex;
+      align-items: flex-start;
+      justify-content: flex-start;
+      gap: 8px;
+      margin: 0;
+      padding: 0;
+      text-align: left;
+      font-weight: 700;
+      cursor: pointer;
+      box-sizing: border-box;
+    }
+    .dba-roster-opt-row input[type="checkbox"] {
+      flex: 0 0 auto;
+      margin: 2px 0 0 0;
+    }
+    .dba-roster-opt-rowtext {
+      display: block;
+      min-width: 0;
+      flex: 1 1 auto;
+      line-height: 1.4;
+      overflow-wrap: anywhere;
+      word-break: break-word;
+      white-space: normal;
     }
     .dba-roster-opt-note {
       margin: 0;
@@ -1628,12 +1679,6 @@
       border: 1px solid #00000022;
       background: #fafafa;
     }
-    .dba-ae-autoclose input[type="checkbox"] {
-      width: 18px;
-      height: 18px;
-      cursor: pointer;
-      accent-color: #ea0000;
-    }
     .dba-ae-autoclose input[type="number"] {
       width: 72px;
       box-sizing: border-box;
@@ -1745,7 +1790,7 @@
       align-items: center;
       justify-content: flex-start;
       gap: 10px;
-      padding: 10px 10px;
+      padding: 8px 8px 8px 16px;
       border: 1px solid #00000022;
       border-radius: 12px;
       background: #fff;
@@ -1753,14 +1798,11 @@
       font-weight: 800;
       text-align: left;
     }
-    .dba-ae-opt-row input[type="number"] {
-      width: 84px;
-      box-sizing: border-box;
-      padding: 6px 8px;
-      border: 1px solid #00000055;
-      border-radius: 10px;
-      font-size: 1em;
-      font-weight: 800;
+    #dba-ae-opt-autoclose-sec {
+      margin: 0 2px;
+      width: 5em;
+      height: 1.8em;
+      text-align: center;
     }
 
     /* ===== 装備ロスター：ロスター切替ポップアップ（ボタン近く） ===== */
@@ -3552,20 +3594,29 @@
     try{ localStorage.setItem(LS_AUTO_EQUIP_NOTIFY_AUTOCLOSE_KEY, on ? '1' : '0'); }catch(_e){}
   }
 
+  function sanitizeAutoEquipNotifyAutoCloseSec(sec){
+    const n = Number(sec);
+    if(!Number.isFinite(n)) return 1.5;   // 通知close デフォルト 1.5 秒
+    const clamped = Math.max(0.1, Math.min(60, n));
+    return Math.round(clamped * 10) / 10;
+  }
+
+  function formatAutoEquipNotifyAutoCloseSec(sec){
+    return sanitizeAutoEquipNotifyAutoCloseSec(sec).toFixed(1);
+  }
+
   function loadAutoEquipNotifyAutoCloseSec(){
     try{
       const raw = localStorage.getItem(LS_AUTO_EQUIP_NOTIFY_AUTOCLOSE_SEC_KEY);
-      if(raw == null) return 2; // デフォルト 2 秒
-      const n = Number.parseInt(raw, 10);
-      if(!Number.isFinite(n)) return 2;
-      return clampInt(n, 1, 60);
+      if(raw == null) return 1.5;   // 通知close デフォルト 1.5 秒
+      return sanitizeAutoEquipNotifyAutoCloseSec(raw);
     }catch(_e){
-      return 2;
+      return 1.5;   // 通知close デフォルト 1.5 秒
     }
   }
 
   function saveAutoEquipNotifyAutoCloseSec(sec){
-    const n = clampInt(sec, 1, 60);
+    const n = sanitizeAutoEquipNotifyAutoCloseSec(sec);
     try{ localStorage.setItem(LS_AUTO_EQUIP_NOTIFY_AUTOCLOSE_SEC_KEY, String(n)); }catch(_e){}
   }
 
@@ -3678,6 +3729,88 @@
     pending: false
   };
 
+  const DBA_POST_TEAMCHALLENGE_SYNC = {
+    running: false,
+    pending: false
+  };
+
+  async function fetchLatestTopPageDoc(){
+    const topUrl = makeTeambattleUrl({ m: mode });
+    const res = await fetch(topUrl, { method:'GET', credentials:'include', cache:'no-store' });
+    if(!res.ok) throw new Error(`HTTP ${res.status}`);
+    const html = await res.text();
+    const doc = new DOMParser().parseFromString(html, 'text/html');
+    return { topUrl, html, doc };
+  }
+
+  function shouldUseFullScanForFetchedTopDoc(curSnap, newSnap){
+    if(!curSnap || !newSnap) return true;
+
+    const curRows = Number(curSnap.rows);
+    const curCols = Number(curSnap.cols);
+    const newRows = Number(newSnap.rows);
+    const newCols = Number(newSnap.cols);
+
+    if(
+      !Number.isFinite(curRows) || !Number.isFinite(curCols) ||
+      !Number.isFinite(newRows) || !Number.isFinite(newCols)
+    ){
+      return true;
+    }
+
+    if(curRows <= 0 || curCols <= 0 || newRows <= 0 || newCols <= 0){
+      return true;
+    }
+
+    if(curRows !== newRows || curCols !== newCols){
+      return true;
+    }
+
+    return false;
+  }
+
+  async function scheduleBattleInfoSyncAfterTeamChallenge(){
+    const btn = document.getElementById('dba-btn-battleinfo');
+    if(!btn) return false;
+    if(!findCurrentBattlemapRoot()) return false;
+
+    if(DBA_POST_TEAMCHALLENGE_SYNC.running){
+      DBA_POST_TEAMCHALLENGE_SYNC.pending = true;
+      return true;
+    }
+
+    DBA_POST_TEAMCHALLENGE_SYNC.running = true;
+    try{
+      do{
+        DBA_POST_TEAMCHALLENGE_SYNC.pending = false;
+
+        const { topUrl, doc } = await fetchLatestTopPageDoc();
+        const curSnap = getCurrentBattlemapSnapshot();
+        const newSnap = getBattlemapSnapshotFromDoc(doc);
+
+        if(shouldUseFullScanForFetchedTopDoc(curSnap, newSnap)){
+          await scanAllCellsAndRenderFromFetchedDoc(doc, {
+            topUrl,
+            snapshot: newSnap,
+            showAlertOnError: false
+          });
+        }else{
+          await updateOnlyChangedCellsFromFetchedDoc(doc, {
+            topUrl,
+            snapshot: newSnap,
+            showAlertOnError: false
+          });
+        }
+      }while(DBA_POST_TEAMCHALLENGE_SYNC.pending);
+
+      return true;
+    }catch(_e){
+      return false;
+    }finally{
+      DBA_POST_TEAMCHALLENGE_SYNC.running = false;
+    }
+  }
+
   function hasBattleLogText(text){
     const t = sanitizeText(text || '');
     if(!t) return false;
@@ -3756,12 +3889,22 @@
   return triggerLightRefreshNow();
   }
 
+  async function scheduleAutoBattleInfoSyncAfterBattleResult(){
+    const s = loadSettings();
+    if(!s?.postBattle?.autoDiffSync) return false;
+
+    // 戦闘後の自動同期は /teamchallenge 後同期へ一本化する
+    // （失敗ダイアログを出さない / 二重実行しにくくする）
+    return scheduleBattleInfoSyncAfterTeamChallenge();
+  }
+
   async function scheduleBattleInfoDiffSyncAfterBattleLog(){
     const s = loadSettings();
     if(!s?.postBattle?.autoDiffSync) return false;
 
     const btn = document.getElementById('dba-btn-battleinfo');
     if(!btn) return false;
+    if(!findCurrentBattlemapRoot()) return false;
 
     if(DBA_POST_BATTLE_DIFF_SYNC.running){
       DBA_POST_BATTLE_DIFF_SYNC.pending = true;
@@ -3772,7 +3915,13 @@
     try{
       do{
         DBA_POST_BATTLE_DIFF_SYNC.pending = false;
-        await updateOnlyChangedCellsFromTopPage();
+        const { topUrl, doc } = await fetchLatestTopPageDoc();
+        const newSnap = getBattlemapSnapshotFromDoc(doc);
+        await updateOnlyChangedCellsFromFetchedDoc(doc, {
+          topUrl,
+          snapshot: newSnap,
+          showAlertOnError: false
+        });
       }while(DBA_POST_BATTLE_DIFF_SYNC.pending);
       return true;
     }catch(_e){
@@ -3806,9 +3955,9 @@
     if(!ct.includes('text/html')){
       const resultText = bodyText || '結果を表示できませんでした。';
       openBattleResultModalWithNode(resultText, 'ラピッド攻撃');
+      scheduleAutoBattleInfoSyncAfterBattleResult().catch(()=>{});
       if(hasBattleLogText(resultText)){
         scheduleLightRefreshAfterBattleLog();
-        scheduleBattleInfoDiffSyncAfterBattleLog().catch(()=>{});
       }
       return;
     }
@@ -3819,15 +3968,16 @@
       const text = (doc.body && doc.body.innerText) ? doc.body.innerText : sanitizeText(block.textContent || '');
       const resultText = text || '結果を表示できませんでした。';
       openBattleResultModalWithNode(resultText, 'ラピッド攻撃');
+      scheduleAutoBattleInfoSyncAfterBattleResult().catch(()=>{});
       if(hasBattleLogText(resultText)){
         scheduleLightRefreshAfterBattleLog();
-        scheduleBattleInfoDiffSyncAfterBattleLog().catch(()=>{});
       }
       return;
     }
     {
       const resultText = (doc.body && doc.body.innerText) ? doc.body.innerText : '結果を表示できませんでした。';
       openBattleResultModalWithNode(resultText, 'ラピッド攻撃');
+      scheduleBattleInfoSyncAfterTeamChallenge().catch(()=>{});
       if(hasBattleLogText(resultText)){
         scheduleLightRefreshAfterBattleLog();
         scheduleBattleInfoDiffSyncAfterBattleLog().catch(()=>{});
@@ -4077,6 +4227,62 @@
     return true;
   }
 
+  function syncHcLMapContainerHeight(){
+    try{
+      if(mode === 'rb') return false;
+
+      const grid = document.querySelector('.grid');
+      if(!(grid instanceof HTMLElement)) return false;
+
+      const outer = grid.parentElement;
+      if(!(outer instanceof HTMLElement)) return false;
+
+      const host = outer.parentElement;
+      const tables = host ? host.querySelector(':scope > div[style*="display:inline-flex"]') : null;
+
+      const gridRect = grid.getBoundingClientRect();
+      const outerRect = outer.getBoundingClientRect();
+      const gridH = Math.ceil(gridRect.height || 0);
+      const gridW = Math.ceil(gridRect.width || 0);
+
+      if(gridH <= 0 || gridW <= 0) return false;
+
+      const fnhRaw = getComputedStyle(document.documentElement).getPropertyValue('--dba-fn-height');
+      const fnh = Math.max(0, Number.parseInt(fnhRaw, 10) || 0);
+      const viewportFloor = Math.max(0, Math.floor(Math.min(window.innerHeight * 0.70, window.innerHeight - fnh - 160)));
+
+      const padY = Math.max(24, Math.ceil(outerRect.height - gridRect.height));
+      const needH = Math.max(gridH + padY, viewportFloor);
+
+      outer.style.width = '100%';
+      outer.style.height = `${needH}px`;
+      outer.style.minHeight = `${needH}px`;
+      outer.style.boxSizing = 'border-box';
+      outer.style.alignItems = 'flex-start';
+      outer.style.justifyContent = 'center';
+      outer.style.overflow = 'visible';
+
+      if(host instanceof HTMLElement){
+        host.style.display = 'flex';
+        host.style.flexDirection = 'column';
+        host.style.alignItems = 'center';
+        host.style.justifyContent = 'flex-start';
+        host.style.gap = '12px';
+      }
+
+      if(tables instanceof HTMLElement){
+        tables.style.marginTop = '0';
+        tables.style.flexWrap = 'wrap';
+        tables.style.justifyContent = 'center';
+        tables.style.maxWidth = '100%';
+      }
+
+      return true;
+    }catch(_e){
+      return false;
+    }
+  }
+
   function applyLayerTextOpacity(opacityPct){
     const s = sanitizeOpacity(opacityPct);
     const v = (s / 100).toFixed(2);
@@ -4131,8 +4337,8 @@
       return { r, c, x, y };
     }
 
-    // 長押し（0.4秒）
-    const LP_MS = 400;
+    // 長押し（0.6秒）
+    const LP_MS = 600;
     let lpTimer = 0;
     let lpFired = false;
     let lpCtx = null;
@@ -4774,13 +4980,13 @@
 
     // (1) 末尾2行のみ表示
     const tail2 = document.createElement('label');
-    tail2.className = 'dba-br-tail2-chk';
+    tail2.className = 'dba-ae-opt-row';
     tail2.id = 'dba-br-opt-tail2-wrap';
     const tail2Chk = document.createElement('input');
     tail2Chk.type = 'checkbox';
     tail2Chk.id = 'dba-br-opt-tail2';
     const tail2Text = document.createElement('span');
-    tail2Text.textContent = '末尾2行のみ表示';
+    tail2Text.textContent = '戦闘ログの末尾2行のみを表示する。';
     tail2.appendChild(tail2Chk);
     tail2.appendChild(tail2Text);
     mid.appendChild(tail2);
@@ -4885,7 +5091,7 @@
 
     // (3) クリック透過
     const passWrap = document.createElement('label');
-    passWrap.className = 'dba-br-tail2-chk';
+    passWrap.className = 'dba-ae-opt-row';
     passWrap.id = 'dba-br-opt-pass-wrap';
     passWrap.style.marginTop = '12px';
 
@@ -4893,14 +5099,14 @@
     passChk.type = 'checkbox';
     passChk.id = 'dba-br-opt-pass';
     const passText = document.createElement('span');
-    passText.textContent = '「Close」「オプション」ボタン以外はクリック判定を透過';
+    passText.textContent = '「Close」「オプション」ボタン以外はクリック判定を透過させる。';
     passWrap.appendChild(passChk);
     passWrap.appendChild(passText);
     mid.appendChild(passWrap);
 
     // (4) Closeボタン非表示
     const hideCloseWrap = document.createElement('label');
-    hideCloseWrap.className = 'dba-br-tail2-chk';
+    hideCloseWrap.className = 'dba-ae-opt-row';
     hideCloseWrap.id = 'dba-br-opt-hideclose-wrap';
     hideCloseWrap.style.marginTop = '12px';
 
@@ -4908,14 +5114,14 @@
     hideCloseChk.type = 'checkbox';
     hideCloseChk.id = 'dba-br-opt-hideclose';
     const hideCloseText = document.createElement('span');
-    hideCloseText.textContent = '「戦闘結果」ウインドウの「Close」ボタンを非表示にする';
+    hideCloseText.textContent = '「Close」ボタンを非表示にする。';
     hideCloseWrap.appendChild(hideCloseChk);
     hideCloseWrap.appendChild(hideCloseText);
     mid.appendChild(hideCloseWrap);
 
     // (5) オプションボタン非表示
     const hideOptWrap = document.createElement('label');
-    hideOptWrap.className = 'dba-br-tail2-chk';
+    hideOptWrap.className = 'dba-ae-opt-row';
     hideOptWrap.id = 'dba-br-opt-hideopt-wrap';
     hideOptWrap.style.marginTop = '12px';
 
@@ -4923,7 +5129,7 @@
     hideOptChk.type = 'checkbox';
     hideOptChk.id = 'dba-br-opt-hideopt';
     const hideOptText = document.createElement('span');
-    hideOptText.textContent = '「戦闘結果」ウインドウの「オプション」ボタンを非表示にする';
+    hideOptText.textContent = '「オプション」ボタンを非表示にする。';
     hideOptWrap.appendChild(hideOptChk);
     hideOptWrap.appendChild(hideOptText);
     mid.appendChild(hideOptWrap);
@@ -5200,6 +5406,27 @@
     bringBattleResultOptionsModalToFront();
   }
 
+  function openRosterProgressAlertModal(text, titleText){
+    buildRosterResultModal();
+    const dlg = document.getElementById('dba-m-roster-result');
+    const ttl = dlg ? dlg.querySelector('.dba-modal__title') : null;
+    const box = document.getElementById('dba-roster-result-box');
+    if(!dlg || !box) return;
+
+    setRosterResultModalAlertMode(true);
+    if(ttl) ttl.textContent = titleText || 'オート装備';
+    box.textContent = String(text ?? '');
+
+    try{ dlg.showModal(); }catch(_e){ dlg.setAttribute('open', ''); }
+  }
+
+  function closeRosterProgressAlertModal(){
+    const dlg = document.getElementById('dba-m-roster-result');
+    if(!dlg) return;
+    try{ dlg.close(); }catch(_e){ dlg.removeAttribute('open'); }
+    setRosterResultModalAlertMode(false);
+  }
+
   // =========================
   // 装備変更結果モーダル（装備ロスター専用）
   //  - 戦闘結果(dba-m-battle-result)とは分離
@@ -5268,12 +5495,25 @@
     });
   }
 
+  function setRosterResultModalAlertMode(on){
+    const dlg = document.getElementById('dba-m-roster-result');
+    if(!dlg) return;
+    if(on){
+      dlg.classList.remove('dba-m-std');
+      dlg.classList.add('dba-m-alert');
+    }else{
+      dlg.classList.remove('dba-m-alert');
+      dlg.classList.add('dba-m-std');
+    }
+  }
+
   function openRosterResultModalWithNode(nodeOrText, titleText){
     buildRosterResultModal();
     const dlg = document.getElementById('dba-m-roster-result');
     const box = document.getElementById('dba-roster-result-box');
     const title = dlg ? dlg.querySelector('.dba-modal__title') : null;
     if(!dlg || !box) return;
+    setRosterResultModalAlertMode(false);
     if(title) title.textContent = titleText || '装備変更結果';
 
     // 既存の自動クローズ予約があれば解除
@@ -5406,6 +5646,134 @@
       };
 
       try{ dlg.showModal(); }catch(_e){ dlg.setAttribute('open',''); }
+    });
+  }
+
+  function ensurePresetDuplicateRenameModal(){
+    if(document.getElementById('dba-m-preset-dup-rename')) return;
+
+    const dlg = document.createElement('dialog');
+    dlg.id = 'dba-m-preset-dup-rename';
+    dlg.className = 'dba-m-std';
+
+    const top = document.createElement('div');
+    top.className = 'dba-modal__top';
+
+    const title = document.createElement('div');
+    title.className = 'dba-modal__title';
+    title.textContent = '重複したプリセット名の変更';
+
+    const btnX = document.createElement('button');
+    btnX.type = 'button';
+    btnX.className = 'dba-btn-x';
+    btnX.textContent = '×';
+
+    top.appendChild(title);
+    top.appendChild(btnX);
+
+    const mid = document.createElement('div');
+    mid.className = 'dba-modal__mid';
+
+    const msg = document.createElement('div');
+    msg.id = 'dba-preset-dup-rename-msg';
+    msg.style.textAlign = 'left';
+    msg.style.fontWeight = '700';
+    msg.style.lineHeight = '1.45';
+    msg.style.whiteSpace = 'pre-wrap';
+    msg.style.marginBottom = '10px';
+    mid.appendChild(msg);
+
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.id = 'dba-preset-dup-rename-input';
+    input.className = 'dba-add-name';
+    input.placeholder = '新しいプリセット名';
+    mid.appendChild(input);
+
+    const bot = document.createElement('div');
+    bot.className = 'dba-modal__bot';
+
+    const btnOk = document.createElement('button');
+    btnOk.type = 'button';
+    btnOk.className = 'dba-btn-ok';
+    btnOk.textContent = '決定';
+
+    const btnCancel = document.createElement('button');
+    btnCancel.type = 'button';
+    btnCancel.className = 'dba-btn-close';
+    btnCancel.textContent = 'Cancel';
+
+    bot.appendChild(btnOk);
+    bot.appendChild(btnCancel);
+
+    dlg.appendChild(top);
+    dlg.appendChild(mid);
+    dlg.appendChild(bot);
+    document.body.appendChild(dlg);
+
+    function closeDirect(){
+      try{ dlg.close(); }catch(_e){ dlg.removeAttribute('open'); }
+    }
+    btnX.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      closeDirect();
+    });
+    btnCancel.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      closeDirect();
+    });
+    dlg.addEventListener('cancel', (e) => {
+      e.preventDefault();
+      closeDirect();
+    });
+  }
+
+  function openPresetDuplicateRenameModal(oldName, occurrence){
+    ensurePresetDuplicateRenameModal();
+    const dlg = document.getElementById('dba-m-preset-dup-rename');
+    const msg = document.getElementById('dba-preset-dup-rename-msg');
+    const input = document.getElementById('dba-preset-dup-rename-input');
+    if(!dlg || !msg || !input) return Promise.resolve(null);
+
+    const nm = sanitizeText(oldName);
+    const occ = Math.max(2, Number(occurrence) || 2);
+    msg.textContent =
+      `重複したプリセット名を検出しました。\n` +
+      `後から追加・編集された側の「${nm}」（${occ}件目）の名前を変更してください。`;
+    input.value = '';
+
+    return new Promise((resolve) => {
+      const btnOk = dlg.querySelector('.dba-btn-ok');
+      const btnCancel = dlg.querySelector('.dba-btn-close');
+
+      const finalize = (value) => {
+        try{ dlg.close(); }catch(_e){ dlg.removeAttribute('open'); }
+        resolve(value);
+      };
+
+      if(btnOk){
+        btnOk.onclick = (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          finalize(String(input.value || ''));
+        };
+      }
+      if(btnCancel){
+        btnCancel.onclick = (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          finalize(null);
+        };
+      }
+      dlg.oncancel = (e) => {
+        e.preventDefault();
+        finalize(null);
+      };
+
+      try{ dlg.showModal(); }catch(_e){ dlg.setAttribute('open',''); }
+      try{ input.focus(); input.select(); }catch(_e){}
     });
   }
 
@@ -5593,9 +5961,9 @@
     if(!ct.includes('text/html')){
       const resultText = bodyText || '結果を表示できませんでした。';
       openBattleResultModalWithNode(resultText, '戦闘結果');
+      scheduleAutoBattleInfoSyncAfterBattleResult().catch(()=>{});
       if(hasBattleLogText(resultText)){
         scheduleLightRefreshAfterBattleLog();
-        scheduleBattleInfoDiffSyncAfterBattleLog().catch(()=>{});
       }
       return;
     }
@@ -5612,9 +5980,9 @@
       if(text.length < 8){
         const resultText = (doc.body && doc.body.innerText) ? doc.body.innerText : '結果を表示できませんでした。';
         openBattleResultModalWithNode(resultText, '戦闘結果');
+        scheduleAutoBattleInfoSyncAfterBattleResult().catch(()=>{});
         if(hasBattleLogText(resultText)){
           scheduleLightRefreshAfterBattleLog();
-          scheduleBattleInfoDiffSyncAfterBattleLog().catch(()=>{});
         }
         return;
       }
@@ -5624,9 +5992,10 @@
       {
         const resultText = (doc.body && doc.body.innerText) ? doc.body.innerText : imported.textContent;
         openBattleResultModalWithNode(resultText, '戦闘結果');
+        scheduleBattleInfoSyncAfterTeamChallenge().catch(()=>{});
+        scheduleAutoBattleInfoSyncAfterBattleResult().catch(()=>{});
         if(hasBattleLogText(resultText)){
           scheduleLightRefreshAfterBattleLog();
-          scheduleBattleInfoDiffSyncAfterBattleLog().catch(()=>{});
         }
       }
       return;
@@ -5635,6 +6004,7 @@
     {
       const resultText = (doc.body && doc.body.innerText) ? doc.body.innerText : '結果を表示できませんでした。';
       openBattleResultModalWithNode(resultText, '戦闘結果');
+      scheduleBattleInfoSyncAfterTeamChallenge().catch(()=>{});
       if(hasBattleLogText(resultText)){
         scheduleLightRefreshAfterBattleLog();
         scheduleBattleInfoDiffSyncAfterBattleLog().catch(()=>{});
@@ -5995,7 +6365,7 @@
   const DBA_LAYER_RECT_STABLE_FRAMES = 2;
   const DBA_LAYER_SYNC_RETRY_LIMIT = 12;
   // light reload 時にセル内テキストの再表示待機フレーム数
-  const DBA_LAYER_TEXT_SHOW_DELAY_FRAMES = 6;
+  const DBA_LAYER_TEXT_SHOW_DELAY_FRAMES = 2;
   let dbaLayerShowRAFs = [];
 
   function resetBattlemapLayerRectStabilizer(){
@@ -6213,7 +6583,6 @@
     ].join('|');
     if(rectKey !== dbaLayerLastRectKey){
       if(!isBattlemapLayerRectStable(rectKey)){
-        beginBattlemapLayerTextFreeze();
         return null;
       }
       layoutChanged = true;
@@ -6256,11 +6625,6 @@
       const snap = getBattlemapSnapshotFromDoc(document);
       renderRbOriginalBorders(snap);
       renderRbCapitalCrowns(snap);
-    }
-
-    if(layoutChanged){
-      beginBattlemapLayerTextFreeze();
-      endBattlemapLayerTextFreeze();
     }
 
     return true;
@@ -6349,12 +6713,9 @@
         }
 
         beginBattlemapLayerTextFreeze();
-        for(const j of jobs){
-          setLayerCellText(j.row, j.col, '…');
-        }
 
         // 文字レイヤーの非表示待機時間
-        const CONCURRENCY = 1;
+        const CONCURRENCY = 2;
         await mapLimit(jobs, CONCURRENCY, async (job) => {
           const { row, col } = job;
           try{
@@ -6442,12 +6803,14 @@
     if(mode === 'hc'){
       const sz = getEffectiveCellSizeForMode('hc', settings);
       applyCellSizeToGrid(sz.width, sz.height);
+      syncHcLMapContainerHeight();
       scheduleBattlemapLayerSync();
       return;
     }
     if(mode === 'l'){
       const sz = getEffectiveCellSizeForMode('l', settings);
       applyCellSizeToGrid(sz.width, sz.height);
+      syncHcLMapContainerHeight();
       scheduleBattlemapLayerSync();
       return;
     }
@@ -6794,15 +7157,20 @@
       return true;
     }
 
-    openRosterResultModalWithNode(`装備切替中…\n${nm}`, 'オート装備');
+    closeRosterResultModal();
+    openRosterProgressAlertModal(`装備切替中…\n${nm}`, 'オート装備');
     try{
       const result = await equipPresetByName(nm);
       if(result && result.missing){
+        closeRosterProgressAlertModal();
         return false;
       }
       saveAutoEquipLastPreset(nm);
+      await new Promise((resolve) => setTimeout(resolve, 300));
+      closeRosterProgressAlertModal();
       openRosterResultModalWithNode(`装備切替完了\n${nm}`, 'オート装備');
     }catch(_e){
+      closeRosterProgressAlertModal();
       openRosterResultModalWithNode(`装備切替に失敗しました\n${nm}`, 'オート装備');
       // 装備に失敗しても攻撃はしない（誤装備のまま突撃を防ぐ）
       return false;
@@ -6931,6 +7299,18 @@
     ttl2.className = 'dba-ae-pop-title';
     ttl2.textContent = key ? `装備候補：${key}` : '装備候補';
     pop.appendChild(ttl2);
+
+    const btnNoEquip = document.createElement('button');
+    btnNoEquip.type = 'button';
+    btnNoEquip.className = 'dba-ae-pop-btn';
+    btnNoEquip.textContent = '装備変更せずに攻撃する';
+    btnNoEquip.addEventListener('click', async (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      closeAutoEquipPopup(false);
+      await proceedAfterAutoEquip(row, col);
+    });
+    pop.appendChild(btnNoEquip);
 
     if(list.length === 0){
       const empty = document.createElement('div');
@@ -7182,6 +7562,11 @@
     saveRosterStore(store);
     // activeId 破損対策も兼ねて生成系を通す
     createRosterIfNeeded();
+    // 既存ロスターへ切り替えた直後は、切替先ロスター上で
+    // 「最後にオート装備で適用したプリセット」記録をクリアする。
+    // これにより、切替前ロスター時点の装備状態や記録を引きずって
+    // 次回オート装備が再装備を誤って省略することを防ぐ。
+    saveAutoEquipLastPreset('');
     return true;
   }
 
@@ -7213,6 +7598,11 @@
     store.activeId = id;
     saveRosterStore(store);
     createRosterIfNeeded();
+    // 新しい装備ロスターを作成して切り替えた直後も、
+    // 念のため「最後にオート装備で適用したプリセット」記録を明示的にクリアする。
+    // 新規ロスターは autoEquip.lastPreset='' で生成しているが、
+    // ここでも明示しておくことで、既存ロスター切替時と意図を揃える。
+    saveAutoEquipLastPreset('');
     return id;
   }
 
@@ -7393,6 +7783,350 @@
     saveRosterStore(store);
   }
 
+  function hasPresetName(name, excludeName){
+    const { roster } = getActiveRoster();
+    const presets = (roster && roster.presets && typeof roster.presets === 'object') ? roster.presets : {};
+    const target = sanitizeText(name);
+    const exclude = sanitizeText(excludeName);
+    if(!target) return false;
+    for(const raw of Object.keys(presets)){
+      const nm = sanitizeText(raw);
+      if(!nm) continue;
+      if(exclude && nm === exclude) continue;
+      if(nm === target) return true;
+    }
+    return false;
+  }
+
+  function assertPresetNameAvailable(name, excludeName){
+    const target = sanitizeText(name);
+    if(!target) throw new Error('プリセット名が空です');
+    if(hasPresetName(target, excludeName)){
+      throw new Error(`同名のプリセットが既に存在します: ${target}`);
+    }
+    return target;
+  }
+
+  function renamePreset(oldName, newName){
+    const { store, roster } = getActiveRoster();
+    const oldNm = sanitizeText(oldName);
+    const newNm = sanitizeText(newName);
+    if(!oldNm) throw new Error('変更前のプリセット名が不正です');
+    if(!newNm) throw new Error('変更後のプリセット名が空です');
+
+    roster.presets = (roster && roster.presets && typeof roster.presets === 'object') ? roster.presets : {};
+    roster.presetOrder = Array.isArray(roster.presetOrder) ? roster.presetOrder : [];
+
+    if(!Object.prototype.hasOwnProperty.call(roster.presets, oldNm)){
+      throw new Error(`プリセットが見つかりません: ${oldNm}`);
+    }
+
+    if(oldNm === newNm){
+      return false;
+    }
+
+    assertPresetNameAvailable(newNm, oldNm);
+
+    const triple = roster.presets[oldNm];
+    delete roster.presets[oldNm];
+    roster.presets[newNm] = Array.isArray(triple) ? triple.slice(0, 3) : [null, null, null];
+    roster.presetOrder = roster.presetOrder.map((nm) => (sanitizeText(nm) === oldNm ? newNm : nm));
+
+    try{
+      const ae = ensureRosterAutoEquipBlock(roster);
+      if(ae && ae.candidates && typeof ae.candidates === 'object'){
+        for(const k of Object.keys(ae.candidates)){
+          const arr0 = ae.candidates[k];
+          if(!Array.isArray(arr0)) continue;
+          ae.candidates[k] = arr0.map((x) => {
+            const nm = sanitizeText(x);
+            return (nm === oldNm) ? newNm : nm;
+          });
+        }
+      }
+      if(ae && sanitizeText(ae.lastPreset || '') === oldNm){
+        ae.lastPreset = newNm;
+      }
+      roster.autoEquip = ae;
+    }catch(_e){}
+
+    try{
+      if(sanitizeText(loadCurrentPresetName()) === oldNm){
+        saveCurrentPresetName(newNm);
+      }
+    }catch(_e){}
+
+    roster.updatedAt = nowIso();
+    store.rosters[store.activeId] = roster;
+    saveRosterStore(store);
+    return true;
+  }
+
+  function findDuplicatePresetNamesInBackupText(text){
+    const src = String(text || '');
+    const keyIdx = src.search(/"presets"\s*:/);
+    if(keyIdx < 0) return [];
+
+    let i = keyIdx;
+    while(i < src.length && src[i] !== ':') i++;
+    if(i >= src.length) return [];
+    i += 1;
+    while(i < src.length && /\s/.test(src[i])) i++;
+    if(src[i] !== '{') return [];
+
+    const readJsonString = (startIdx) => {
+      let j = startIdx + 1;
+      while(j < src.length){
+        const ch = src[j];
+        if(ch === '\\'){
+          j += 2;
+          continue;
+        }
+        if(ch === '"'){
+          return { end: j, raw: src.slice(startIdx, j + 1) };
+        }
+        j += 1;
+      }
+      throw new Error('Unterminated JSON string');
+    };
+
+    const seen = new Set();
+    const dup = new Set();
+
+    let depth = 1;
+    let inString = false;
+    let escape = false;
+    let expectKey = true;
+
+    for(let pos = i + 1; pos < src.length; pos++){
+      const ch = src[pos];
+
+      if(inString){
+        if(escape){
+          escape = false;
+          continue;
+        }
+        if(ch === '\\'){
+          escape = true;
+          continue;
+        }
+        if(ch === '"'){
+          inString = false;
+        }
+        continue;
+      }
+
+      if(ch === '"'){
+        if(depth === 1 && expectKey){
+          const parsed = readJsonString(pos);
+          let key = '';
+          try{ key = JSON.parse(parsed.raw); }catch(_e){ key = ''; }
+          const name = sanitizeText(key);
+          if(name){
+            if(seen.has(name)) dup.add(name);
+            else seen.add(name);
+          }
+          pos = parsed.end;
+          expectKey = false;
+          continue;
+        }
+        inString = true;
+        continue;
+      }
+
+      if(ch === '{'){
+        depth += 1;
+        continue;
+      }
+      if(ch === '}'){
+        depth -= 1;
+        if(depth <= 0) break;
+        if(depth === 1) expectKey = true;
+        continue;
+      }
+      if(depth !== 1) continue;
+      if(ch === ','){
+        expectKey = true;
+        continue;
+      }
+    }
+
+    return Array.from(dup);
+  }
+
+  function collectPresetKeyEntriesInBackupText(text){
+    const src = String(text || '');
+    const keyIdx = src.search(/"presets"\s*:/);
+    if(keyIdx < 0) return [];
+
+    let i = keyIdx;
+    while(i < src.length && src[i] !== ':') i++;
+    if(i >= src.length) return [];
+    i += 1;
+    while(i < src.length && /\s/.test(src[i])) i++;
+    if(src[i] !== '{') return [];
+
+    const readJsonString = (startIdx) => {
+      let j = startIdx + 1;
+      while(j < src.length){
+        const ch = src[j];
+        if(ch === '\\'){
+          j += 2;
+          continue;
+        }
+        if(ch === '"'){
+          return { end: j, raw: src.slice(startIdx, j + 1) };
+        }
+        j += 1;
+      }
+      throw new Error('Unterminated JSON string');
+    };
+
+    const entries = [];
+    const seenCount = new Map();
+
+    let depth = 1;
+    let inString = false;
+    let escape = false;
+    let expectKey = true;
+
+    for(let pos = i + 1; pos < src.length; pos++){
+      const ch = src[pos];
+
+      if(inString){
+        if(escape){
+          escape = false;
+          continue;
+        }
+        if(ch === '\\'){
+          escape = true;
+          continue;
+        }
+        if(ch === '"'){
+          inString = false;
+        }
+        continue;
+      }
+
+      if(ch === '"'){
+        if(depth === 1 && expectKey){
+          const parsed = readJsonString(pos);
+          let key = '';
+          try{ key = JSON.parse(parsed.raw); }catch(_e){ key = ''; }
+          const name = sanitizeText(key);
+          const occ = (seenCount.get(name) || 0) + 1;
+          seenCount.set(name, occ);
+          entries.push({
+            name,
+            occurrence: occ,
+            start: pos,
+            end: parsed.end
+          });
+          pos = parsed.end;
+          expectKey = false;
+          continue;
+        }
+        inString = true;
+        continue;
+      }
+
+      if(ch === '{'){
+        depth += 1;
+        continue;
+      }
+      if(ch === '}'){
+        depth -= 1;
+        if(depth <= 0) break;
+        if(depth === 1) expectKey = true;
+        continue;
+      }
+      if(depth !== 1) continue;
+      if(ch === ','){
+        expectKey = true;
+        continue;
+      }
+    }
+
+    return entries;
+  }
+
+  function findFirstDuplicatePresetEntryInBackupText(text){
+    const entries = collectPresetKeyEntriesInBackupText(text);
+    for(const ent of entries){
+      if(ent.name && ent.occurrence >= 2){
+        return ent;
+      }
+    }
+    return null;
+  }
+
+  function replacePresetKeyNameInBackupText(text, entry, newName){
+    const src = String(text || '');
+    const ent = entry || {};
+    const start = Number(ent.start);
+    const end = Number(ent.end);
+    if(!Number.isFinite(start) || !Number.isFinite(end) || start < 0 || end < start){
+      throw new Error('重複プリセット名の置換位置を特定できませんでした');
+    }
+    const newKeyRaw = JSON.stringify(String(newName || ''));
+    return src.slice(0, start) + newKeyRaw + src.slice(end + 1);
+  }
+
+  async function resolveDuplicatePresetNamesInBackupTextViaModal(text){
+    let current = String(text || '');
+
+    for(;;){
+      const dupEntry = findFirstDuplicatePresetEntryInBackupText(current);
+      if(!dupEntry) return current;
+
+      for(;;){
+        const candidate = await openPresetDuplicateRenameModal(dupEntry.name, dupEntry.occurrence);
+        if(candidate == null){
+          throw new Error('キャンセルしました。');
+        }
+
+        const nextName = sanitizeText(candidate);
+        if(!nextName){
+          alert('プリセット名を入力してください。');
+          continue;
+        }
+
+        const allEntries = collectPresetKeyEntriesInBackupText(current);
+        const used = new Set();
+        for(const ent of allEntries){
+          if(ent === dupEntry) continue;
+          const nm = sanitizeText(ent.name);
+          if(nm) used.add(nm);
+        }
+
+        if(used.has(nextName)){
+          alert(`同名のプリセットが既に存在します: ${nextName}`);
+          continue;
+        }
+
+        current = replacePresetKeyNameInBackupText(current, dupEntry, nextName);
+        break;
+      }
+    }
+  }
+
+  function validatePresetNamesFromPresetObject(presets){
+    const src = (presets && typeof presets === 'object') ? presets : {};
+    const seen = new Set();
+    const dup = new Set();
+
+    for(const raw of Object.keys(src)){
+      const name = sanitizeText(raw);
+      if(!name) continue;
+      if(seen.has(name)) dup.add(name);
+      else seen.add(name);
+    }
+
+    if(dup.size > 0){
+      throw new Error(`プリセット名が重複しています: ${Array.from(dup).join(', ')}`);
+    }
+  }
+
   function rebuildPresetMapByOrder(presets, presetOrder){
     const src = (presets && typeof presets === 'object') ? presets : {};
     const order = Array.isArray(presetOrder) ? presetOrder : [];
@@ -7433,6 +8167,8 @@
     const aeIn = (obj.autoEquip && typeof obj.autoEquip === 'object') ? obj.autoEquip : null;
     const aeCandidates = (aeIn && aeIn.candidates && typeof aeIn.candidates === 'object') ? aeIn.candidates : null;
     const aeLast = (aeIn && typeof aeIn.lastPreset === 'string') ? aeIn.lastPreset : null;
+    validatePresetNamesFromPresetObject(presets);
+
     const cleaned = {};
     const order = [];
     for(const k of Object.keys(presets)){
@@ -7484,19 +8220,32 @@
     if(ids.length > 0){
       store.activeId = ids[0];
       saveRosterStore(store);
-      return createRosterIfNeeded();
+      createRosterIfNeeded();
+      // ロスター削除後に既存の別ロスターへ自動切替した直後も、
+      // 切替先ロスター上で「最後にオート装備で適用したプリセット」記録をクリアする。
+      // これにより、削除前ロスター時点の装備状態や記録を引きずって
+      // 次回オート装備が再装備を誤って省略することを防ぐ。
+      saveAutoEquipLastPreset('');
+      return true;
     }
     // 1つも無ければ新規作成
     store.activeId = null;
     store.rosters = {};
     saveRosterStore(store);
-    return createRosterIfNeeded();
+    createRosterIfNeeded();
+    // 最後の1件を削除して新規ロスターへ切り替わった直後も、
+    // 念のため「最後にオート装備で適用したプリセット」記録を明示的にクリアする。
+    // 新規ロスター生成側でも空になる設計だが、
+    // ロスター削除後の自動切替経路として意図をここでも揃えておく。
+    saveAutoEquipLastPreset('');
+    return true;
   }
 
   function setPresetAt(name, triple, insertIndex){
     const { store, roster } = getActiveRoster();
     const n = sanitizeText(name);
     if(!n) throw new Error('プリセット名が空です');
+    assertPresetNameAvailable(n);
     if(!Array.isArray(triple) || triple.length !== 3) throw new Error('Invalid preset triple');
     roster.presets = roster.presets || {};
     roster.presetOrder = Array.isArray(roster.presetOrder) ? roster.presetOrder : [];
@@ -8006,14 +8755,24 @@
           // 通常：クリック＝選択 + 装備適用
           renderRosterModalState(nm);
           try{
-            // 装備ロスター専用の結果モーダルで表示
-            openRosterResultModalWithNode(`装備切替中…\n${nm}\n${presetMetaText(presets[nm])}`, '装備ロスター');
+            // 装備ロスター専用の進行中ダイアログはアラート（赤枠）で表示
+            closeRosterResultModal();
+            openRosterProgressAlertModal(`装備切替中…\n${nm}\n${presetMetaText(presets[nm])}`, '装備ロスター');
             const result = await equipPresetByName(nm);
             if(result && result.missing){
+              closeRosterProgressAlertModal();
               return;
             }
+            // 手動で装備ロスターから装備を変えた直後は、
+            // 「最後にオート装備で適用したプリセット」の記録を無効化する。
+            // これをしないと、後で別レギュレーションのセルを攻撃した際に
+            // オート装備が「同じプリセットは既に装備済み」と誤判定して
+            // 再装備を省略してしまうことがある。
+            saveAutoEquipLastPreset('');
+            closeRosterProgressAlertModal();
             openRosterResultModalWithNode(`装備切替完了\n${nm}`, '装備ロスター');
           }catch(_e2){
+            closeRosterProgressAlertModal();
             openRosterResultModalWithNode(`装備切替に失敗しました\n${nm}`, '装備ロスター');
           }
         });
@@ -8402,7 +9161,7 @@
 
     // (1) 「一番上の装備候補を常に優先する」
     const preferWrap = document.createElement('label');
-    preferWrap.className = 'dba-br-tail2-chk';
+    preferWrap.className = 'dba-ae-opt-row';
     preferWrap.id = 'dba-ae-opt-preferTop-wrap';
 
     const preferChk = document.createElement('input');
@@ -8410,7 +9169,7 @@
     preferChk.id = 'dba-ae-opt-preferTop';
 
     const preferText = document.createElement('span');
-    preferText.textContent = '一番上の装備候補を常に優先する';
+    preferText.innerText = '一番上のプリセットを最優先する。\n（装備を変更して戦闘したら、次回に自動で戻す）';
 
     preferWrap.appendChild(preferChk);
     preferWrap.appendChild(preferText);
@@ -8429,13 +9188,13 @@
 
     const acSec = document.createElement('input');
     acSec.type = 'number';
-    acSec.min = '1';
+    acSec.min = '0.1';
     acSec.max = '60';
-    acSec.step = '1';
+    acSec.step = '0.1';
     acSec.id = 'dba-ae-opt-autoclose-sec';
 
     const acText2 = document.createElement('span');
-    acText2.textContent = '秒で自動的に閉じる';
+    acText2.textContent = '秒で自動的に閉じる。';
 
     acRow.appendChild(acChk);
     acRow.appendChild(acText1);
@@ -8476,11 +9235,53 @@
       saveAutoEquipNotifyAutoCloseEnabled(!!acChk.checked);
     });
 
-    acSec.value = String(loadAutoEquipNotifyAutoCloseSec());
+    acSec.value = formatAutoEquipNotifyAutoCloseSec(loadAutoEquipNotifyAutoCloseSec());
+
+    function commitAutoEquipNotifyAutoCloseSecValue(normalizeDisplay){
+      const raw = String(acSec.value || '').trim();
+
+      if(raw === ''){
+        if(normalizeDisplay){
+          acSec.value = formatAutoEquipNotifyAutoCloseSec(loadAutoEquipNotifyAutoCloseSec());
+        }
+        return;
+      }
+
+      if(!/^\d+(?:\.\d*)?$/.test(raw)){
+        if(normalizeDisplay){
+          acSec.value = formatAutoEquipNotifyAutoCloseSec(loadAutoEquipNotifyAutoCloseSec());
+        }
+        return;
+      }
+
+      const num = Number(raw);
+      if(!Number.isFinite(num)){
+        if(normalizeDisplay){
+          acSec.value = formatAutoEquipNotifyAutoCloseSec(loadAutoEquipNotifyAutoCloseSec());
+        }
+        return;
+      }
+
+      saveAutoEquipNotifyAutoCloseSec(num);
+
+      if(normalizeDisplay){
+        acSec.value = formatAutoEquipNotifyAutoCloseSec(loadAutoEquipNotifyAutoCloseSec());
+      }
+    }
+
+    acSec.addEventListener('input', (e) => {
+      e.stopPropagation();
+      commitAutoEquipNotifyAutoCloseSecValue(false);
+    });
+
     acSec.addEventListener('change', (e) => {
       e.stopPropagation();
-      saveAutoEquipNotifyAutoCloseSec(acSec.value);
-      acSec.value = String(loadAutoEquipNotifyAutoCloseSec());
+      commitAutoEquipNotifyAutoCloseSecValue(true);
+    });
+
+    acSec.addEventListener('blur', (e) => {
+      e.stopPropagation();
+      commitAutoEquipNotifyAutoCloseSecValue(true);
     });
   }
 
@@ -9079,6 +9880,7 @@
     const aeIn = (obj.autoEquip && typeof obj.autoEquip === 'object') ? obj.autoEquip : null;
     const aeCandidates = (aeIn && aeIn.candidates && typeof aeIn.candidates === 'object') ? aeIn.candidates : {};
     const aeLast = (aeIn && typeof aeIn.lastPreset === 'string') ? aeIn.lastPreset : '';
+    validatePresetNamesFromPresetObject(presets);
 
     const cleaned = {};
     const order = [];
@@ -9190,17 +9992,25 @@
 
       const save = dlg.querySelector('.dba-btn-apply');
       if(save){
-        save.onclick = (e) => {
+        save.onclick = async (e) => {
           e.preventDefault();
           e.stopPropagation();
-          const text = document.getElementById('dba-roster-backup-editor-ta')?.value || '';
+          let text = document.getElementById('dba-roster-backup-editor-ta')?.value || '';
           try{
+            if(findDuplicatePresetNamesInBackupText(text).length > 0){
+              text = await resolveDuplicatePresetNamesInBackupTextViaModal(text);
+              const ta2 = document.getElementById('dba-roster-backup-editor-ta');
+              if(ta2) ta2.value = text;
+            }
             const parsed = parseRosterBackupObject(text);
             overwriteRosterFromObject(parsed);
             try{ onDone && onDone(); }catch(_e2){}
             closeDialogById('dba-m-roster-backup-editor');
           }catch(_e2){
-            alert('JSONの解析に失敗しました。');
+            const msg = String(_e2 && _e2.message ? _e2.message : 'JSONの解析に失敗しました。');
+            if(msg !== 'キャンセルしました。'){
+              alert(msg);
+            }
           }
         };
       }
@@ -9509,9 +10319,16 @@
 
     let importedObj;
     try{
-      importedObj = parseRosterBackupObject(picked.text);
+      let text = String(picked.text || '');
+      if(findDuplicatePresetNamesInBackupText(text).length > 0){
+        text = await resolveDuplicatePresetNamesInBackupTextViaModal(text);
+      }
+      importedObj = parseRosterBackupObject(text);
     }catch(_e){
-      alert('JSONの解析に失敗しました。');
+      const msg = String(_e && _e.message ? _e.message : 'JSONの解析に失敗しました。');
+      if(msg !== 'キャンセルしました。'){
+        alert(msg);
+      }
       return;
     }
 
@@ -9565,22 +10382,27 @@
     rememberTitle.textContent = '表示オプション';
     rememberSection.appendChild(rememberTitle);
 
+    const rememberBody = document.createElement('div');
+    rememberBody.className = 'dba-roster-opt-section__body';
+
     const rememberLabel = document.createElement('label');
-    rememberLabel.className = 'dba-setting-checkline';
+    rememberLabel.className = 'dba-roster-opt-row';
     const rememberChk = document.createElement('input');
     rememberChk.type = 'checkbox';
     rememberChk.id = 'dba-roster-option-scroll-remember';
     const rememberText = document.createElement('span');
-    rememberText.className = 'dba-setting-checktext';
+    rememberText.className = 'dba-roster-opt-rowtext';
     rememberText.textContent = 'プリセットリストのスクロール位置を記憶する。';
     rememberLabel.appendChild(rememberChk);
     rememberLabel.appendChild(rememberText);
-    rememberSection.appendChild(rememberLabel);
+    rememberBody.appendChild(rememberLabel);
 
     const rememberNote = document.createElement('p');
     rememberNote.className = 'dba-roster-opt-note';
     rememberNote.textContent = '次に「装備ロスター」を開いた時、プリセットリストのスクロール位置を復元します。';
-    rememberSection.appendChild(rememberNote);
+    rememberBody.appendChild(rememberNote);
+
+    rememberSection.appendChild(rememberBody);
 
     mid.appendChild(rememberSection);
 
@@ -9592,10 +10414,13 @@
     backupTitle.textContent = 'バックアップ';
     backupSection.appendChild(backupTitle);
 
+    const backupBody = document.createElement('div');
+    backupBody.className = 'dba-roster-opt-section__body';
+
     const backupNote = document.createElement('p');
     backupNote.className = 'dba-roster-opt-note';
     backupNote.textContent = '現在の装備ロスターを保存・復元したり、JSON を直接編集したりできます。';
-    backupSection.appendChild(backupNote);
+    backupBody.appendChild(backupNote);
 
     const backupWrap = document.createElement('div');
     backupWrap.className = 'dba-roster-opt-btngrid';
@@ -9621,7 +10446,9 @@
     backupWrap.appendChild(btnExport);
     backupWrap.appendChild(btnImport);
     backupWrap.appendChild(btnEdit);
-    backupSection.appendChild(backupWrap);
+    backupBody.appendChild(backupWrap);
+    backupBody.appendChild(backupWrap);
+    backupSection.appendChild(backupBody);
     mid.appendChild(backupSection);
 
     const bot = document.createElement('div');
@@ -10005,8 +10832,8 @@
     name.className = 'dba-add-name';
     name.id = 'dba-edit-preset-name';
     name.placeholder = 'プリセット名';
-    // 再編集では「選んだプリセット名」を固定（※名前変更はこのモーダルでは扱わない）
-    name.disabled = true;
+    // 再編集ではプリセット名の変更も許可する
+    name.disabled = false;
     mid.appendChild(name);
 
     const botRow = document.createElement('div');
@@ -10116,11 +10943,12 @@
             return;
           }
           try{
+            assertPresetNameAvailable(pn);
             setPresetAt(pn, [st.weaponId, st.armorId, st.necklaceId], insertIndex);
             try{ onDone && onDone(); }catch(_e2){}
             try{ dlg.close(); }catch(_e2){ dlg.removeAttribute('open'); }
           }catch(_e2){
-            alert('登録に失敗しました。');
+            alert(String(_e2 && _e2.message ? _e2.message : '登録に失敗しました。'));
           }
         };
       }
@@ -10270,13 +11098,20 @@
       if(btnDone){
         btnDone.onclick = (e) => {
           e.preventDefault(); e.stopPropagation();
+          const nextName = sanitizeText(name && name.value ? name.value : '');
+          if(!nextName){
+            alert('プリセット名を入力してください。');
+            return;
+          }
           try{
-            // setPreset は「既存上書きなら順序維持」の実装なので、名前を変えずに上書きする
-            setPreset(nm, [st.weaponId, st.armorId, st.necklaceId]);
+            if(nextName !== nm){
+              renamePreset(nm, nextName);
+            }
+            setPreset(nextName, [st.weaponId, st.armorId, st.necklaceId]);
             try{ onDone && onDone(); }catch(_e2){}
             try{ dlg.close(); }catch(_e2){ dlg.removeAttribute('open'); }
           }catch(_e2){
-            alert('再編集の反映に失敗しました。');
+            alert(String(_e2 && _e2.message ? _e2.message : '再編集の反映に失敗しました。'));
           }
         };
       }
@@ -11965,10 +12800,39 @@
             terrain: !!it.terrain,
             color: !!it.color,
             building: !!it.building,
-            capital: !!it.capital
+            capital: !!it.capital,
+            avatar: !!it.avatar
           };
         }
         return out;
+      }
+
+      function dbaReplaceAvatarTiles(nextTiles){
+        try{
+          for(const k in avatarsByTile){
+            if(Object.prototype.hasOwnProperty.call(avatarsByTile, k)){
+              delete avatarsByTile[k];
+            }
+          }
+          const src = (nextTiles && typeof nextTiles === 'object') ? nextTiles : Object.create(null);
+          for(const k of Object.keys(src)){
+            const arr = Array.isArray(src[k]) ? src[k] : [];
+            avatarsByTile[k] = arr.map((it) => ({
+              row: Number((k.split('-')[0])) || 0,
+              col: Number((k.split('-')[1])) || 0,
+              team: Number(it && it.team || 0),
+              armor: null,
+              key: String(it && it.key || 'ac'),
+              isSelf: !!(it && it.isSelf)
+            }));
+          }
+          if(typeof sortAvatarsForDraw === 'function'){
+            sortAvatarsForDraw();
+          }
+          return true;
+        }catch(_e){
+          return false;
+        }
       }
 
       function dbaApplySnapshot(nextSnap, changedCells, changedMeta){
@@ -11984,6 +12848,7 @@
           dbaReplaceSet(capitalSet, Array.isArray(nextSnap.capitalKeys) ? nextSnap.capitalKeys : []);
           dbaReplacePlainObject(terrainMap, nextSnap.terrainMap || Object.create(null));
           dbaReplacePlainObject(buildingsMap, nextSnap.buildingsMap || Object.create(null));
+          dbaReplaceAvatarTiles(nextSnap.avatarsMap || Object.create(null));
           dbaReplaceSet(visibleSet, Array.isArray(nextSnap.visibleKeys) ? nextSnap.visibleKeys : []);
           dbaReplaceSet(exploredSet, Array.isArray(nextSnap.exploredKeys) ? nextSnap.exploredKeys : []);
 
@@ -11991,6 +12856,36 @@
             fow.hasCapital = !!nextSnap.hasCapital;
             fow.visible = Array.isArray(nextSnap.visibleList) ? nextSnap.visibleList.slice() : [];
             fow.explored = Array.isArray(nextSnap.exploredList) ? nextSnap.exploredList.slice() : [];
+          }
+
+          if(avatarsPayload && typeof avatarsPayload === 'object'){
+            const nextRows = [];
+            const amap = (nextSnap && nextSnap.avatarsMap && typeof nextSnap.avatarsMap === 'object') ? nextSnap.avatarsMap : Object.create(null);
+            for(const kk of Object.keys(amap)){
+              const parts = String(kk).split('-');
+              const rr = Number(parts[0]);
+              const cc = Number(parts[1]);
+              if(!Number.isFinite(rr) || !Number.isFinite(cc)) continue;
+              const arr = Array.isArray(amap[kk]) ? amap[kk] : [];
+              for(const av of arr){
+                nextRows.push({
+                  row: rr,
+                  col: cc,
+                  team: Number(av && av.team || 0) === 1 ? 'red' : (Number(av && av.team || 0) === 2 ? 'blue' : ''),
+                  armor: String(av && av.key || 'ac'),
+                  isSelf: !!(av && av.isSelf)
+                });
+              }
+            }
+            avatarsPayload.avatars = nextRows;
+            if(nextSnap.selfAvatar && typeof nextSnap.selfAvatar === 'object'){
+              avatarsPayload.myAvatar = {
+                row: Number(nextSnap.selfAvatar.row),
+                col: Number(nextSnap.selfAvatar.col),
+                team: Number(nextSnap.selfAvatar.team || 0) === 1 ? 'red' : (Number(nextSnap.selfAvatar.team || 0) === 2 ? 'blue' : ''),
+                armor: String(nextSnap.selfAvatar.key || 'ac')
+              };
+            }
           }
 
           HAS_CAPITAL = !!nextSnap.hasCapital;
@@ -12033,7 +12928,8 @@
               terrain:false,
               color:false,
               building:false,
-              capital:true
+              capital:true,
+              avatar:false
             };
 
             const doBase = !!meta.base;
@@ -12091,7 +12987,8 @@
                 terrain:false,
                 color:false,
                 building:false,
-                capital:true
+                capital:true,
+                avatar:false
               };
 
               if(meta.base){
@@ -12128,7 +13025,7 @@
       }
 
       window.__DBA_RB_API = {
-        version: 2,
+        version: 3,
         applySnapshot: dbaApplySnapshot,
         redrawOverlay: function(){
           try{
@@ -12295,6 +13192,7 @@
       const v = validateBattlemapAfterRefresh();
       const dt = Math.round(performance.now() - t0);
       if(v.ok){
+        setBattlemapSnapshotCache(meta?.snapshot || getBattlemapSnapshotFromDoc(doc), 'refreshBattlemapFromFetchedDoc');
         dbgLog('battlemapRefresh', 'info', 'REFRESH(pre-fetched) success', { mode, topUrl, ms: dt, ...v.detail });
       }else{
         dbgLog('battlemapRefresh', 'warn', 'REFRESH(pre-fetched) failed: validation NG', { mode, topUrl, ms: dt, ...v.detail });
@@ -12370,6 +13268,7 @@
       const v = validateBattlemapAfterRefresh();
       const dt = Math.round(performance.now() - t0);
       if(v.ok){
+        setBattlemapSnapshotCache(getBattlemapSnapshotFromDoc(doc), 'refreshBattlemapFromTopPage');
         dbgLog('battlemapRefresh', 'info', 'REFRESH success', { mode, topUrl, ms: dt, ...v.detail });
       }else{
         dbgLog('battlemapRefresh', 'warn', 'REFRESH failed: validation NG', { mode, topUrl, ms: dt, ...v.detail });
@@ -12597,6 +13496,68 @@
   function clearLayerTexts(){
     for(const el of dbaLayerCellContentMap.values()){
       el.textContent = '';
+    }
+  }
+
+  function snapshotLayerTexts(){
+    const out = Object.create(null);
+    for(const [key, el] of dbaLayerCellContentMap.entries()){
+      out[key] = String(el && el.textContent ? el.textContent : '');
+    }
+    return out;
+  }
+
+  function buildAllCellJobsFromSnapshot(snapshot){
+    const out = [];
+    if(!snapshot || typeof snapshot !== 'object') return out;
+
+    if(mode === 'rb'){
+      const known = new Set();
+      for(const k of Array.from(snapshot.visibleSet || [])) known.add(k);
+      for(const k of Array.from(snapshot.exploredSet || [])) known.add(k);
+      for(const k of known){
+        const m = String(k).match(/^(\d+)-(\d+)$/);
+        if(!m) continue;
+        out.push({ row: Number(m[1]), col: Number(m[2]) });
+      }
+      out.sort((a,b) => (a.row - b.row) || (a.col - b.col));
+      return out;
+    }
+
+    const rows = Math.max(0, Number(snapshot.rows || 0));
+    const cols = Math.max(0, Number(snapshot.cols || 0));
+    for(let r = 0; r < rows; r++){
+      for(let c = 0; c < cols; c++){
+        out.push({ row:r, col:c });
+      }
+    }
+    return out;
+  }
+
+  function buildAllowedLayerTextKeySet(snapshot){
+    const set = new Set();
+    for(const job of buildAllCellJobsFromSnapshot(snapshot)){
+      if(!job) continue;
+      set.add(`${job.row},${job.col}`);
+    }
+    return set;
+  }
+
+  function restoreLayerTextsFromSnapshot(textSnapshot, allowedKeys){
+    const snap = (textSnapshot && typeof textSnapshot === 'object') ? textSnapshot : Object.create(null);
+    const allow = (allowedKeys instanceof Set) ? allowedKeys : null;
+
+    for(const [key, el] of dbaLayerCellContentMap.entries()){
+      if(!(el instanceof HTMLElement)) continue;
+
+      if(allow && !allow.has(key)){
+        el.textContent = '';
+        continue;
+      }
+
+      el.textContent = Object.prototype.hasOwnProperty.call(snap, key)
+        ? String(snap[key] || '')
+        : '';
     }
   }
 
@@ -12868,6 +13829,213 @@
     }
   }
 
+// =========================
+// RB専用：トップページHTML内の window.__AVATARS からアバターpayloadを抽出
+//  - 元ページでは
+//      const avatarsPayload = (window.__AVATARS && typeof window.__AVATARS === 'object') ? window.__AVATARS : null;
+//    という参照式で使われているため、
+//      window.__AVATARS = {...};
+//    側を直接読む
+// =========================
+function extractRbAvatarsPayloadFromDoc(doc){
+  try{
+    if(mode !== 'rb') return null;
+    if(!doc) return null;
+
+    const scripts = Array.from(doc.querySelectorAll('script'));
+    let src = '';
+    for(const s of scripts){
+      const t = (s && s.textContent) ? String(s.textContent) : '';
+      if(!t) continue;
+      if(t.includes('window.__AVATARS') && (t.includes('"avatars"') || t.includes('"myAvatar"') || t.includes('"selfAvatar"'))){
+        src = t;
+        break;
+      }
+    }
+    if(!src) return null;
+
+    const m = src.match(/window\.__AVATARS\s*=\s*(\{[\s\S]*?\})\s*;?/);
+    if(!m || !m[1]) return null;
+
+    const obj = JSON.parse(m[1]);
+    return (obj && typeof obj === 'object') ? obj : null;
+  }catch(_e){
+    return null;
+  }
+}
+
+function rbAvatarRowOf(av){
+  if(!av || typeof av !== 'object') return null;
+  const r = av.bapRow ?? av.row ?? av.r;
+  return Number.isFinite(r) ? Number(r) : null;
+}
+
+function rbAvatarColOf(av){
+  if(!av || typeof av !== 'object') return null;
+  const c = av.bapCol ?? av.col ?? av.c;
+  return Number.isFinite(c) ? Number(c) : null;
+}
+
+function rbAvatarTeamCodeOf(av){
+  if(!av || typeof av !== 'object') return 0;
+  const raw = av.bapTeam ?? av.team ?? av.t;
+  if(typeof raw === 'string'){
+    const s = raw.trim().toLowerCase();
+    if(s === 'red') return 1;
+    if(s === 'blue') return 2;
+    return 0;
+  }
+  if(raw === 1 || raw === 2) return Number(raw);
+  if(raw && typeof raw === 'object'){
+    const s = raw.tag ?? raw.team ?? raw.name ?? null;
+    if(typeof s === 'string'){
+      const x = s.trim().toLowerCase();
+      if(x === 'red') return 1;
+      if(x === 'blue') return 2;
+    }
+  }
+  return 0;
+}
+
+function rbAvatarArmorOf(av){
+  if(!av || typeof av !== 'object') return null;
+  return av.bapArmor ?? av.armor ?? av.a ?? null;
+}
+
+function rbAvatarKeyFromArmor(armor){
+  if(armor == null) return 'ac';
+  if(typeof armor === 'string') return armor;
+  if(typeof armor !== 'object') return 'ac';
+  const t0 = armor.armorType ?? armor._armorType ?? armor.at ?? armor.type ?? null;
+  if(typeof t0 === 'string') return t0;
+  if(t0 && typeof t0 === 'object'){
+    const t1 = t0.tag ?? t0.value ?? t0.contents ?? t0.name ?? null;
+    if(typeof t1 === 'string') return t1;
+  }
+  return 'ac';
+}
+
+function normalizeAvatarsPayload(payload){
+  try{
+    if(!payload || typeof payload !== 'object') return '';
+
+    const rows = [];
+    const avatars = Array.isArray(payload.avatars) ? payload.avatars : [];
+    for(const av of avatars){
+      if(!av || typeof av !== 'object') continue;
+      const r = rbAvatarRowOf(av);
+      const c = rbAvatarColOf(av);
+      if(!Number.isFinite(r) || !Number.isFinite(c)) continue;
+      rows.push({
+        r,
+        c,
+        team: rbAvatarTeamCodeOf(av),
+        key: String(rbAvatarKeyFromArmor(rbAvatarArmorOf(av)) || 'ac'),
+        isSelf: !!(av.isSelf === true || av.self === true || av.mine === true)
+      });
+    }
+
+    rows.sort((a, b) =>
+      (a.r - b.r) ||
+      (a.c - b.c) ||
+      (a.team - b.team) ||
+      (a.key < b.key ? -1 : (a.key > b.key ? 1 : 0)) ||
+      (Number(a.isSelf) - Number(b.isSelf))
+    );
+
+    let self = null;
+    const selfSrc =
+      (payload.myAvatar && typeof payload.myAvatar === 'object') ? payload.myAvatar :
+      (payload.selfAvatar && typeof payload.selfAvatar === 'object') ? payload.selfAvatar :
+      null;
+
+    if(selfSrc){
+      const r = rbAvatarRowOf(selfSrc);
+      const c = rbAvatarColOf(selfSrc);
+      if(Number.isFinite(r) && Number.isFinite(c)){
+        self = {
+          r,
+          c,
+          team: rbAvatarTeamCodeOf(selfSrc),
+          key: String(rbAvatarKeyFromArmor(rbAvatarArmorOf(selfSrc)) || 'ac')
+        };
+      }
+    }else{
+      const tagged = rows.find((it) => !!it.isSelf);
+      if(tagged){
+        self = {
+          r: tagged.r,
+          c: tagged.c,
+          team: tagged.team,
+          key: tagged.key
+        };
+      }
+    }
+
+    return JSON.stringify({
+      avatars: rows,
+      self
+    });
+  }catch(_e){
+    return '';
+  }
+}
+
+function avatarsKeyToMap(avatarsKey){
+  const map = Object.create(null);
+  const keys = new Set();
+  let selfKey = '';
+  let selfAvatar = null;
+  try{
+    const s = String(avatarsKey || '');
+    if(!s) return { map, keys, selfKey, selfAvatar };
+
+    const obj = JSON.parse(s);
+    const rows = Array.isArray(obj?.avatars) ? obj.avatars : [];
+    for(const it of rows){
+      if(!it) continue;
+      const r = Number(it.r);
+      const c = Number(it.c);
+      if(!Number.isFinite(r) || !Number.isFinite(c)) continue;
+      const k = `${r}-${c}`;
+      if(!Array.isArray(map[k])) map[k] = [];
+      map[k].push({
+        team: Number(it.team || 0),
+        key: String(it.key || 'ac'),
+        isSelf: !!it.isSelf
+      });
+      keys.add(k);
+    }
+
+    for(const k of keys){
+      map[k].sort((a, b) =>
+        (a.team - b.team) ||
+        (a.key < b.key ? -1 : (a.key > b.key ? 1 : 0)) ||
+        (Number(a.isSelf) - Number(b.isSelf))
+      );
+      map[k] = JSON.stringify(map[k]);
+    }
+
+    if(obj && obj.self && typeof obj.self === 'object'){
+      const r = Number(obj.self.r);
+      const c = Number(obj.self.c);
+      if(Number.isFinite(r) && Number.isFinite(c)){
+        selfKey = `${r}-${c}`;
+        selfAvatar = {
+          row: r,
+          col: c,
+          team: Number(obj.self.team || 0),
+          key: String(obj.self.key || 'ac')
+        };
+      }
+    }
+
+    return { map, keys, selfKey, selfAvatar };
+  }catch(_e){
+    return { map, keys, selfKey, selfAvatar };
+  }
+}
+
   function extractRbKnownCoordsFromDoc(doc){
     try{
       if(mode !== 'rb') return [];
@@ -12973,79 +14141,62 @@
     }
   }
 
-  async function scanAllCellsAndRender(){
+  async function scanAllCellsAndRenderFromFetchedDoc(doc, meta){
     const btn = document.getElementById('dba-btn-battleinfo');
+    const showAlertOnError = (meta && Object.prototype.hasOwnProperty.call(meta, 'showAlertOnError'))
+      ? !!meta.showAlertOnError
+      : true;
     if(btn){
       btn.disabled = true;
       btn.dataset.dbaBusy = '1';
       btn.textContent = 'マップ更新中…';
     }
 
-    // まずローカルのバトルマップ表示データ（レイヤー文字）をクリア（初期化）
-    // ※要件：RB長押し時は「ローカルをクリア→サーバーHTMLの explored のみ対象」を徹底する
-    clearLayerTexts();
-
+    const topUrl = meta?.topUrl || makeTeambattleUrl({ m: mode });
     let refreshed = false;
-    let rbKnownJobs = null; // RB時のみ [{row,col}, ...]（visible + explored の union）
+    let newSnap = meta?.snapshot || null;
+    let jobs = [];
 
-    if(mode === 'rb'){
-      // RBは「サーバーから返ってきたHTML」を調べ、visible + explored（既知領域）だけを対象にする
-      const topUrl = makeTeambattleUrl({ m: mode });
-      try{
-        const res = await fetch(topUrl, { method:'GET', credentials:'include', cache:'no-store' });
-        if(!res.ok) throw new Error(`HTTP ${res.status}`);
-        const html = await res.text();
-        const doc = new DOMParser().parseFromString(html, 'text/html');
-
-        // 既知領域 座標抽出（visible + explored の union）
-        rbKnownJobs = extractRbKnownCoordsFromDoc(doc);
-
-        // マップ本体は「取得済み doc」を使って差し替え（余計な再fetchを避ける）
-        refreshed = await refreshBattlemapFromFetchedDoc(doc, { topUrl });
-      }catch(_e){
-        refreshed = false;
-        rbKnownJobs = rbKnownJobs || [];
+    try{
+      if(!doc) throw new Error('doc is null');
+      if(!newSnap){
+        newSnap = getBattlemapSnapshotFromDoc(doc);
       }
-    }else{
-      // hc / l は従来通り：トップページからバトルマップだけ更新（スクロール/ちらつき抑制）
-      // 失敗しても戦況取得自体は続行（ただし debug ON 時に成否ログが出る）
-      refreshed = await refreshBattlemapFromTopPage();
+      jobs = buildAllCellJobsFromSnapshot(newSnap);
+
+      refreshed = await refreshBattlemapFromFetchedDoc(doc, {
+        topUrl,
+        snapshot: newSnap
+      });
+      if(!refreshed){
+        throw new Error('battlemap refresh failed');
+      }
+    }catch(_e){
+      refreshed = false;
     }
 
     if(btn){
       btn.textContent = refreshed ? '戦況取得中…' : '戦況取得中…(マップ更新失敗)';
     }
 
-    // レイヤーが未生成なら生成＆同期（マップ更新後にやる：セル数変動に追従させる）
+    if(!refreshed || !newSnap){
+      if(btn){
+        btn.disabled = false;
+        btn.dataset.dbaBusy = '0';
+        btn.textContent = '戦況情報';
+      }
+      if(showAlertOnError){
+        alert('戦況情報の取得に失敗しました。');
+      }
+      return;
+    }
+
     initBattlemapLayer();
     resetBattlemapLayerRectStabilizer();
     scheduleBattlemapLayerSync();
-    await raf2(); // cells が rebuild されるのを待つ
+    await raf2();
 
-    // まずプレースホルダ
-    // - RB: 既知領域（visible + explored）のセルだけ「…」を出す
-    // - hc/l: 従来通り全セル
-    const cells = Array.from(document.querySelectorAll('#dba-battlemap-layer-grid .dba-layer-cell'));
-    if(mode === 'rb'){
-      // rbKnownJobs が取れなかった時は “安全側” として全セルにフォールバック
-      const jobs = (rbKnownJobs && rbKnownJobs.length > 0)
-        ? rbKnownJobs
-        : cells.map((c) => ({ row: Number(c.dataset.row), col: Number(c.dataset.col) }));
-      for(const j of jobs){
-        setLayerCellText(j.row, j.col, '…');
-      }
-    }else{
-      for(const c of cells){
-        setLayerCellText(c.dataset.row, c.dataset.col, '…');
-      }
-    }
-
-    // 戦況情報（全セル更新）の fetch 並行処理数（多すぎると重いので抑制）
     const CONCURRENCY = 16;
-
-    const jobs = (mode === 'rb' && rbKnownJobs && rbKnownJobs.length > 0)
-      ? rbKnownJobs
-      : cells.map((c) => ({ row: Number(c.dataset.row), col: Number(c.dataset.col) }));
     await mapLimit(jobs, CONCURRENCY, async (job) => {
       const { row, col } = job;
       try{
@@ -13058,7 +14209,7 @@
     });
 
     {
-      const snap = getBattlemapSnapshotFromDoc(document);
+      const snap = getCurrentBattlemapSnapshot();
       renderRbOriginalBorders(snap);
       renderRbCapitalCrowns(snap);
       endBattlemapLayerTextFreeze();
@@ -13069,6 +14220,16 @@
       btn.dataset.dbaBusy = '0';
       btn.textContent = '戦況情報';
     }
+  }
+
+  async function scanAllCellsAndRender(){
+    const { topUrl, doc } = await fetchLatestTopPageDoc();
+    const newSnap = getBattlemapSnapshotFromDoc(doc);
+    return scanAllCellsAndRenderFromFetchedDoc(doc, {
+      topUrl,
+      snapshot: newSnap,
+      showAlertOnError: true
+    });
   }
 
   // =========================
@@ -13219,6 +14380,53 @@
     return { rows: spec.rows, cols: spec.cols };
   }
 
+  // =========================
+  // 現在のバトルマップ比較元スナップショット
+  //  - 差分更新の「部分描画成功後」は document 内の script が古いまま残るため、
+  //    比較元を別キャッシュでも保持する
+  //  - 全体差し替え成功時 / 部分更新成功時にこのキャッシュを更新する
+  // =========================
+  const DBA_BATTLEMAP_SNAPSHOT_CACHE = {
+    snapshot: null,
+    source: ''
+  };
+
+  function cloneBattlemapSnapshotForCache(snap){
+    if(!snap || typeof snap !== 'object') return null;
+    return {
+      mode: String(snap.mode || mode),
+      rows: Number(snap.rows || 0),
+      cols: Number(snap.cols || 0),
+      cellColors: Object.assign(Object.create(null), snap.cellColors || {}),
+      capitalSet: new Set(Array.from(snap.capitalSet || [])),
+      terrainsKey: String(snap.terrainsKey || ''),
+      visibleList: Array.isArray(snap.visibleList) ? snap.visibleList.map((rc) => [Number(rc[0]), Number(rc[1])]) : [],
+      exploredList: Array.isArray(snap.exploredList) ? snap.exploredList.map((rc) => [Number(rc[0]), Number(rc[1])]) : [],
+      visibleSet: new Set(Array.from(snap.visibleSet || [])),
+      exploredSet: new Set(Array.from(snap.exploredSet || [])),
+      hasCapital: !!snap.hasCapital,
+      buildingsKey: String(snap.buildingsKey || ''),
+      avatarsKey: String(snap.avatarsKey || '')
+    };
+  }
+
+  function setBattlemapSnapshotCache(snap, source){
+    const cloned = cloneBattlemapSnapshotForCache(snap);
+    if(!cloned) return false;
+    DBA_BATTLEMAP_SNAPSHOT_CACHE.snapshot = cloned;
+    DBA_BATTLEMAP_SNAPSHOT_CACHE.source = String(source || '');
+    return true;
+  }
+
+  function getCurrentBattlemapSnapshot(){
+    if(DBA_BATTLEMAP_SNAPSHOT_CACHE.snapshot){
+      return cloneBattlemapSnapshotForCache(DBA_BATTLEMAP_SNAPSHOT_CACHE.snapshot);
+    }
+    const snap = getBattlemapSnapshotFromDoc(document);
+    setBattlemapSnapshotCache(snap, 'document');
+    return snap;
+  }
+
   function getBattlemapSnapshotFromDoc(doc){
     const out = {
       mode,
@@ -13232,7 +14440,8 @@
       visibleSet: new Set(),
       exploredSet: new Set(),
       hasCapital: false,
-      buildingsKey: ''
+      buildingsKey: '',
+      avatarsKey: ''
     };
 
     if(mode === 'rb'){
@@ -13243,6 +14452,7 @@
       const litTerr = extractConstLiteral(t, 'terrainsPayload');
       const fowState = extractRbFowStateFromDoc(doc);
       const buildingsPayloadObj = extractRbBuildingsPayloadFromDoc(doc);
+      const avatarsPayloadObj = extractRbAvatarsPayloadFromDoc(doc);
 
       let size = 0;
       try{ size = Number(parseJsValueLiteral(litSize)); }catch(_e){ size = 0; }
@@ -13254,6 +14464,7 @@
       try{ out.capitalSet = normalizeCapitalSet(parseJsValueLiteral(litCap)); }catch(_e){ out.capitalSet = new Set(); }
       try{ out.terrainsKey = normalizeTerrainsPayload(parseJsValueLiteral(litTerr)); }catch(_e){ out.terrainsKey = ''; }
       try{ out.buildingsKey = normalizeBuildingsPayload(buildingsPayloadObj); }catch(_e){ out.buildingsKey = ''; }
+      try{ out.avatarsKey = normalizeAvatarsPayload(avatarsPayloadObj); }catch(_e){ out.avatarsKey = ''; }
       out.visibleList = normalizeRcList(fowState.visible);
       out.exploredList = normalizeRcList(fowState.explored);
       out.visibleSet = new Set(out.visibleList.map((rc) => `${rc[0]}-${rc[1]}`));
@@ -13395,6 +14606,16 @@
       };
     }
 
+  const avatarObj = Object.create(null);
+  const av = avatarsKeyToMap(snap?.avatarsKey || '');
+  for(const k of av.keys){
+    try{
+      avatarObj[k] = JSON.parse(String(av.map[k] || '[]'));
+    }catch(_e){
+      avatarObj[k] = [];
+    }
+  }
+
     return {
       rows: Number(snap?.rows || 0),
       cols: Number(snap?.cols || 0),
@@ -13403,6 +14624,13 @@
       capitalKeys: Array.from(snap?.capitalSet || []).sort(),
       terrainMap: terrainObj,
       buildingsMap: buildingObj,
+      avatarsMap: avatarObj,
+      selfAvatar: av.selfAvatar ? {
+        row: Number(av.selfAvatar.row),
+        col: Number(av.selfAvatar.col),
+        team: Number(av.selfAvatar.team || 0),
+        key: String(av.selfAvatar.key || 'ac')
+      } : null,
       visibleKeys: Array.from(snap?.visibleSet || []).sort(),
       exploredKeys: Array.from(snap?.exploredSet || []).sort(),
       visibleList: Array.isArray(snap?.visibleList) ? snap.visibleList.map((rc) => [Number(rc[0]), Number(rc[1])]) : [],
@@ -13428,7 +14656,10 @@
     try{
       if(mode === 'rb') return false;
       if(!newSnap || typeof newSnap !== 'object') return false;
-      if(!Array.isArray(changed) || changed.length === 0) return true;
+      if(!Array.isArray(changed) || changed.length === 0){
+        setBattlemapSnapshotCache(newSnap, 'applyHcLBattlemapPartialUpdate(empty)');
+        return true;
+      }
 
       let okCount = 0;
       for(const rc of changed){
@@ -13448,7 +14679,11 @@
         }
       }
 
-      return okCount === changed.length;
+      const ok = (okCount === changed.length);
+      if(ok){
+        setBattlemapSnapshotCache(newSnap, 'applyHcLBattlemapPartialUpdate');
+      }
+      return ok;
     }catch(_e){
       return false;
     }
@@ -13462,6 +14697,8 @@
     const newTerr = terrainsKeyToMap(newSnap?.terrainsKey || '');
     const curBld  = buildingsKeyToMap(curSnap?.buildingsKey || '');
     const newBld  = buildingsKeyToMap(newSnap?.buildingsKey || '');
+    const curAv   = avatarsKeyToMap(curSnap?.avatarsKey || '');
+    const newAv   = avatarsKeyToMap(newSnap?.avatarsKey || '');
 
     const curCap = (curSnap?.capitalSet instanceof Set)
       ? curSnap.capitalSet
@@ -13495,13 +14732,14 @@
       const colorChanged = String((curSnap?.cellColors && curSnap.cellColors[key]) || '') !== String((newSnap?.cellColors && newSnap.cellColors[key]) || '');
       const terrainChanged = Number(curTerr.map[key] ?? -1) !== Number(newTerr.map[key] ?? -1);
       const buildingChanged = String(curBld.map[key] || '') !== String(newBld.map[key] || '');
+      const avatarChanged = String(curAv.map[key] || '') !== String(newAv.map[key] || '');
       const capitalChanged = curCap.has(key) !== newCap.has(key);
       const visibleChanged = curVis.has(key) !== newVis.has(key);
       const exploredChanged = curExp.has(key) !== newExp.has(key);
 
       const needBase = !!(colorChanged || terrainChanged || buildingChanged || capitalChanged);
       const needFog = !!(visibleChanged || exploredChanged || capitalChanged);
-      const needOverlay = !!colorChanged;
+      const needOverlay = !!(colorChanged || avatarChanged);
 
       out.push({
         row,
@@ -13512,7 +14750,8 @@
         terrain: terrainChanged,
         color: colorChanged,
         building: buildingChanged,
-        capital: capitalChanged
+        capital: capitalChanged,
+        avatar: avatarChanged
       });
     }
 
@@ -13524,13 +14763,17 @@
       if(mode !== 'rb') return false;
       const api = window.__DBA_RB_API;
       if(!api || typeof api.applySnapshot !== 'function') return false;
-      const curSnap = getBattlemapSnapshotFromDoc(document);
+      const curSnap = getCurrentBattlemapSnapshot();
       const changedMeta = buildRbChangedCellMeta(curSnap, newSnap, changed);
-      return !!api.applySnapshot(
+      const ok = !!api.applySnapshot(
         buildRbPatchedApiSnapshot(newSnap),
         Array.isArray(changed) ? changed : [],
         changedMeta
       );
+      if(ok){
+        setBattlemapSnapshotCache(newSnap, 'applyRbBattlemapPartialUpdate');
+      }
+      return ok;
     }catch(_e){
       return false;
     }
@@ -13540,20 +14783,6 @@
     const list = Array.isArray(changed) ? changed : [];
     if(list.length === 0) return [];
 
-    // HC / L は changed がそのまま detail 更新対象
-    if(mode !== 'rb'){
-      return list.slice();
-    }
-
-    // RB は base / fog / overlay を見て、detail を取りに行く必要があるセルだけに絞る
-    // （base の内訳として terrain / color / building / capital も保持される）
-    const metaList = buildRbChangedCellMeta(curSnap, newSnap, list);
-    const metaMap = new Map();
-    for(const it of metaList){
-      if(!it) continue;
-      metaMap.set(`${it.row}-${it.col}`, it);
-    }
-
     const out = [];
     for(const job of list){
       if(!job) continue;
@@ -13562,15 +14791,19 @@
       if(!Number.isFinite(row) || !Number.isFinite(col)) continue;
 
       const key = `${row}-${col}`;
-      const meta = metaMap.get(key) || { base:true, fog:true, overlay:true };
-      const currentText = sanitizeText(getLayerCellText(row, col));
-      const textEmpty = !currentText;
+      const c1 = (curSnap?.cellColors && Object.prototype.hasOwnProperty.call(curSnap.cellColors, key))
+        ? String(curSnap.cellColors[key] || '')
+        : '';
+      const c2 = (newSnap?.cellColors && Object.prototype.hasOwnProperty.call(newSnap.cellColors, key))
+        ? String(newSnap.cellColors[key] || '')
+        : '';
 
-      // detail 取得が必要な条件
-      // - overlay変化: 文字表示そのものの変化候補
-      // - base変化   : regulation / holder に関わる可能性
-      // - 現在の文字が空: fog変化だけでも、新規表示のため取得する
-      if(meta.overlay || meta.base || textEmpty){
+      // 再設計方針：
+      // - マップ本体は常に server HTML を正として丸ごと差し替える
+      // - 文字レイヤーだけを detail で補完する
+      // - 差分更新で detail を取りに行くのは「チームカラーが変わったセル」のみ
+      //   （= 無色→有色 / 有色→無色 / 有色A→有色B を含む）
+      if(c1 !== c2){
         out.push({ row, col });
       }
     }
@@ -13578,25 +14811,24 @@
     return out;
   }
 
-  async function updateOnlyChangedCellsFromTopPage(){
+  async function updateOnlyChangedCellsFromFetchedDoc(doc, meta){
     const btn = document.getElementById('dba-btn-battleinfo');
+    const showAlertOnError = (meta && Object.prototype.hasOwnProperty.call(meta, 'showAlertOnError'))
+      ? !!meta.showAlertOnError
+      : true;
     if(btn){
       btn.disabled = true;
       btn.dataset.dbaBusy = '1';
       btn.textContent = '差分確認中…';
     }
 
-    const topUrl = makeTeambattleUrl({ m: mode });
+    const topUrl = meta?.topUrl || makeTeambattleUrl({ m: mode });
     try{
-      // (1) 最新ページを取得
-      const res = await fetch(topUrl, { method:'GET', credentials:'include', cache:'no-store' });
-      if(!res.ok) throw new Error(`HTTP ${res.status}`);
-      const html = await res.text();
-      const doc = new DOMParser().parseFromString(html, 'text/html');
+      if(!doc) throw new Error('doc is null');
 
       // (2) 現在と最新を比較
-      const curSnap = getBattlemapSnapshotFromDoc(document);
-      const newSnap = getBattlemapSnapshotFromDoc(doc);
+      const curSnap = getCurrentBattlemapSnapshot();
+      const newSnap = meta?.snapshot || getBattlemapSnapshotFromDoc(doc);
 
       // ★追加：クリック（短押し）でも header + チーム情報2テーブル を最新化
       // （差分セルが0でも、上部の情報は更新したい）
@@ -13605,195 +14837,42 @@
         snapshot: newSnap
       });
 
-      // (3) 比較結果に応じて更新
       if(curSnap.rows !== newSnap.rows || curSnap.cols !== newSnap.cols){
         if(btn) btn.textContent = '全更新（サイズ差）…';
-        await scanAllCellsAndRender();
+        await scanAllCellsAndRenderFromFetchedDoc(doc, {
+          topUrl,
+          snapshot: newSnap,
+          showAlertOnError
+        });
         return;
       }
 
-      // ============================================================
-      // RBクリック専用：サーバーとローカルを比較して (1)〜(7) で分岐
-      //  - (1)〜(3) なら「長押し処理（全セル更新）」へ引き継ぐ
-      //  - (4)〜(7) なら「クリック処理（差分セルだけ更新）」を実施
-      // ============================================================
-      let jobs = null; // [{row,col}, ...]
+      const changed = diffChangedCells(curSnap, newSnap);
+      const oldTexts = snapshotLayerTexts();
 
-      if(mode === 'rb'){
-        // (A) __FOW（visible+explored union）＝「既知領域」
-        const fowLocal = extractRbKnownCoordsFromDoc(document);
-        const fowServer = extractRbKnownCoordsFromDoc(doc);
-        const fowLocalSet = new Set((fowLocal||[]).map(rc => `${rc.row}-${rc.col}`));
-        const fowServerSet = new Set((fowServer||[]).map(rc => `${rc.row}-${rc.col}`));
-
-        // (B) terrainsPayload（既知地形）
-        const terrLocal = terrainsKeyToMap(curSnap.terrainsKey || '');
-        const terrServer = terrainsKeyToMap(newSnap.terrainsKey || '');
-
-        // (B-2) buildingsPayload
-        const bldLocal = buildingsKeyToMap(curSnap.buildingsKey || '');
-        const bldServer = buildingsKeyToMap(newSnap.buildingsKey || '');
-
-        // -----------------------
-        // (2) GRID_SIZE 同じ かつ terrainsPayload の「既知座標数」が
-        //     ローカル > サーバー なら長押しへ
-        // -----------------------
-        if(terrLocal.keys.size > terrServer.keys.size){
-          if(btn) btn.textContent = '全更新（地形既知数:ローカル>サーバ）…';
-          await scanAllCellsAndRender();
-          return;
-        }
-
-        // -----------------------
-        // (3) GRID_SIZE 同じ かつ terrainsPayload の「共通既知座標」で
-        //     地形が食い違う座標があれば長押しへ
-        // -----------------------
-        for(const k of terrLocal.keys){
-          if(!terrServer.keys.has(k)) continue; // 共通既知のみ
-          const t1 = terrLocal.map[k];
-          const t2 = terrServer.map[k];
-          if(t1 !== t2){
-            if(btn) btn.textContent = '全更新（地形食い違い）…';
-            await scanAllCellsAndRender();
-            return;
-          }
-        }
-
-        // -----------------------
-        // (3-2) hasCapital が変化した場合は、Fog の意味が全体で変わりうるため安全側で全更新
-        // -----------------------
-        if(!!curSnap.hasCapital !== !!newSnap.hasCapital){
-          if(btn) btn.textContent = '全更新（hasCapital変化）…';
-          await scanAllCellsAndRender();
-          return;
-        }
-
-        // -----------------------
-        // (4) __FOW：visible/explored の差分座標を更新
-        // -----------------------
-        const need = new Set(); // k='r-c'
-        for(const k of fowLocalSet){
-          if(!fowServerSet.has(k)) need.add(k);
-        }
-        for(const k of fowServerSet){
-          if(!fowLocalSet.has(k)) need.add(k);
-        }
-        for(const k of new Set([
-          ...Array.from(curSnap.visibleSet || []),
-          ...Array.from(newSnap.visibleSet || [])
-        ])){
-          const v1 = curSnap.visibleSet ? curSnap.visibleSet.has(k) : false;
-          const v2 = newSnap.visibleSet ? newSnap.visibleSet.has(k) : false;
-          if(v1 !== v2) need.add(k);
-        }
-        for(const k of new Set([
-          ...Array.from(curSnap.exploredSet || []),
-          ...Array.from(newSnap.exploredSet || [])
-        ])){
-          const e1 = curSnap.exploredSet ? curSnap.exploredSet.has(k) : false;
-          const e2 = newSnap.exploredSet ? newSnap.exploredSet.has(k) : false;
-          if(e1 !== e2) need.add(k);
-        }
-
-        // -----------------------
-        // (5) terrainsPayload：サーバー既知 & ローカル未知 → その座標だけ更新
-        // -----------------------
-        for(const k of terrLocal.keys){
-          if(!terrServer.keys.has(k)) need.add(k);
-        }
-        for(const k of terrServer.keys){
-          if(!terrLocal.keys.has(k)) need.add(k);
-        }
-
-        // -----------------------
-        // (6) capitalList：片方にしか無い座標 → その座標だけ更新（共通座標は更新しない）
-        // -----------------------
-        const capLocal = curSnap.capitalSet || new Set();
-        const capServer = newSnap.capitalSet || new Set();
-        for(const k of capLocal){
-          if(!capServer.has(k)) need.add(k);
-        }
-        for(const k of capServer){
-          if(!capLocal.has(k)) need.add(k);
-        }
-
-        // -----------------------
-        // (7) cellColors：サーバーとローカルで色が異なる座標 → その座標だけ更新
-        //     （同じ座標は更新しない）
-        // -----------------------
-        const colorKeys = new Set();
-        for(const k of Object.keys(curSnap.cellColors||{})) colorKeys.add(k);
-        for(const k of Object.keys(newSnap.cellColors||{})) colorKeys.add(k);
-        for(const k of colorKeys){
-          const c1 = (curSnap.cellColors && (k in curSnap.cellColors)) ? curSnap.cellColors[k] : null;
-          const c2 = (newSnap.cellColors && (k in newSnap.cellColors)) ? newSnap.cellColors[k] : null;
-          if(c1 !== c2) need.add(k);
-        }
-
-        // -----------------------
-        // (8) buildings：建物の追加/削除/種類変更/所有者変更
-        //     → 地形/チームカラー/首都に差分が無くても、建造物差分だけで更新対象に含める
-        // -----------------------
-        const buildingKeys = new Set();
-        for(const k of bldLocal.keys) buildingKeys.add(k);
-        for(const k of bldServer.keys) buildingKeys.add(k);
-        for(const k of buildingKeys){
-          const b1 = (k in bldLocal.map) ? bldLocal.map[k] : null;
-          const b2 = (k in bldServer.map) ? bldServer.map[k] : null;
-          if(b1 !== b2) need.add(k);
-        }
-
-        // jobs へ変換（安定化ソート）
-        jobs = [];
-        for(const k of need){
-          const m = String(k).match(/^(\d+)-(\d+)$/);
-          if(!m) continue;
-          jobs.push({ row: Number(m[1]), col: Number(m[2]) });
-        }
-        jobs.sort((a,b) => (a.row - b.row) || (a.col - b.col));
-      }else{
-        // RB以外：従来通り（色/首都の差分）
-        jobs = diffChangedCells(curSnap, newSnap);
+      if(btn) btn.textContent = 'マップ差し替え中…';
+      const refreshed = await refreshBattlemapFromFetchedDoc(doc, {
+        topUrl,
+        snapshot: newSnap
+      });
+      if(!refreshed){
+        throw new Error('battlemap refresh failed');
       }
 
-      const changed = jobs || [];
-
-      if(changed.length > 0){
-        let refreshed = false;
-
-        // RB は 2回目以降、注入済み API があれば変更セルだけ canvas を再描画
-        // API 未注入時は従来どおり全体差し替えし、その差し替えの中で API も埋め込む
-        if(mode === 'rb'){
-          refreshed = applyRbBattlemapPartialUpdate(newSnap, changed);
-          if(!refreshed){
-            if(btn) btn.textContent = 'マップ差し替え中…';
-            refreshed = await refreshBattlemapFromFetchedDoc(doc, { topUrl });
-          }
-        }else{
-          // HC / L は DOM セル構造なので、
-          // 差分セルの backgroundColor / outline だけを書き換えて全体差し替えを避ける。
-          refreshed = applyHcLBattlemapPartialUpdate(newSnap, changed);
-          if(!refreshed){
-            if(btn) btn.textContent = 'マップ差し替え中…';
-            refreshed = await refreshBattlemapFromFetchedDoc(doc, { topUrl });
-          }
-        }
-
-        if(btn){
-          btn.textContent = refreshed
-            ? `差分更新中…(${changed.length})`
-            : `差分更新中…(${changed.length}) (マップ更新失敗)`;
-        }
-      }
-
-      // レイヤーが未生成なら生成＆同期
       initBattlemapLayer();
       resetBattlemapLayerRectStabilizer();
       scheduleBattlemapLayerSync();
       await raf2();
 
+      restoreLayerTextsFromSnapshot(oldTexts, buildAllowedLayerTextKeySet(newSnap));
+
       if(changed.length === 0){
-        // 差分なし：現状維持（レイヤー表示も触らず、ボタン表示も通常に戻して操作待ち）
+        {
+          const snap = getCurrentBattlemapSnapshot();
+          renderRbOriginalBorders(snap);
+          renderRbCapitalCrowns(snap);
+          endBattlemapLayerTextFreeze();
+        }
         if(btn){
           btn.disabled = false;
           btn.dataset.dbaBusy = '0';
@@ -13801,14 +14880,16 @@
         }
         return;
       }
-
-      // 上でマップ差し替えが走った場合も、ここで改めて表示を揃える
-      if(btn && btn.textContent.indexOf('差分更新中…') !== 0)
-        btn.textContent = `差分更新中…(${changed.length})`;
 
       const detailJobs = buildDetailFetchJobsForChangedCells(curSnap, newSnap, changed);
 
       if(detailJobs.length === 0){
+        {
+          const snap = getCurrentBattlemapSnapshot();
+          renderRbOriginalBorders(snap);
+          renderRbCapitalCrowns(snap);
+          endBattlemapLayerTextFreeze();
+        }
         if(btn){
           btn.disabled = false;
           btn.dataset.dbaBusy = '0';
@@ -13817,7 +14898,8 @@
         return;
       }
 
-      // 戦況情報（差分更新）の fetch 並行処理数（多すぎると重いので抑制）
+      if(btn) btn.textContent = `差分更新中…(${detailJobs.length})`;
+
       const CONCURRENCY = 12;
       await mapLimit(detailJobs, CONCURRENCY, async (job, idx) => {
         const { row, col } = job;
@@ -13835,7 +14917,7 @@
       });
 
       {
-        const snap = getBattlemapSnapshotFromDoc(document);
+        const snap = getCurrentBattlemapSnapshot();
         renderRbOriginalBorders(snap);
         renderRbCapitalCrowns(snap);
         endBattlemapLayerTextFreeze();
@@ -13853,8 +14935,20 @@
         btn.dataset.dbaBusy = '0';
         btn.textContent = '戦況情報';
       }
-      alert('戦況情報の取得に失敗しました。');
+      if(showAlertOnError){
+        alert('戦況情報の取得に失敗しました。');
+      }
     }
+  }
+
+  async function updateOnlyChangedCellsFromTopPage(){
+    const { topUrl, doc } = await fetchLatestTopPageDoc();
+    const newSnap = getBattlemapSnapshotFromDoc(doc);
+    return updateOnlyChangedCellsFromFetchedDoc(doc, {
+      topUrl,
+      snapshot: newSnap,
+      showAlertOnError: true
+    });
   }
 
   function waitAndApplyScale(){
@@ -13870,6 +14964,7 @@
       }else{
         const sz = getEffectiveCellSizeForMode(mode, settings);
         if(applyCellSizeToGrid(sz.width, sz.height)){
+          syncHcLMapContainerHeight();
           scheduleBattlemapLayerSync();
           return true;
         }
@@ -13934,6 +15029,7 @@
       const sz = getEffectiveCellSizeForMode(modeKey, settings);
 
       const wInput = document.createElement('input');
+      wInput.style.margin = '0 1px';
       wInput.type = 'number';
       wInput.min = '8';
       wInput.max = '256';
@@ -13948,13 +15044,17 @@
 
       const sep = document.createElement('span');
       sep.className = 'dba-setting-cellsize-sep';
-      sep.textContent = '／';
+      sep.style.fontSize = '1.1em';
+      sep.style.lineHeight = '1.1em';
+      sep.style.verticalAlign = 'text-top';
+      sep.textContent = '¦';
 
       const heightLabel = document.createElement('span');
       heightLabel.className = 'dba-setting-cellsize-unit';
       heightLabel.textContent = 'height';
 
       const hInput = document.createElement('input');
+      hInput.style.margin = '0 1px';
       hInput.type = 'number';
       hInput.min = '8';
       hInput.max = '256';
@@ -13992,6 +15092,27 @@
       return line;
     }
 
+    // 設定全体に対する注意説明
+    (function mkSettingsNoticeBlock(){
+      const box = document.createElement('div');
+      box.className = 'dba-setting-row';
+      box.style.background = '#fff8e6';
+      box.style.border = '1px solid #e0b84a';
+
+      const note = document.createElement('div');
+      note.style.fontSize = '0.95em';
+      note.style.fontWeight = '700';
+      note.style.textAlign = 'left';
+      note.style.lineHeight = '1.2';
+      note.style.whiteSpace = 'normal';
+      note.style.overflowWrap = 'anywhere';
+      note.style.wordBreak = 'break-word';
+      note.textContent = '【 案内 】⚠️項目は設定後に、全セル更新（「戦況情報」長押し）か、ブラウザによるページ再読み込みが必要なときもあります。';
+
+      box.appendChild(note);
+      mid.appendChild(box);
+    })();
+
     // ショートカット
     (function mkShortcutBlock(){
       const box = document.createElement('div');
@@ -14002,7 +15123,7 @@
       t.style.fontWeight = '700';
       t.style.textAlign = 'left';
       t.style.marginBottom = '8px';
-      t.textContent = 'ショートカット';
+      t.textContent = '各「オプション」画面へのショートカット';
       box.appendChild(t);
 
       const row = document.createElement('div');
@@ -14015,17 +15136,27 @@
       const btnBrOpt = document.createElement('button');
       btnBrOpt.type = 'button';
       btnBrOpt.className = 'dba-btn-mini';
-      btnBrOpt.textContent = '「戦闘結果」のオプションを開く';
+      btnBrOpt.textContent = '戦闘結果';
+
+      const btnRosterOpt = document.createElement('button');
+      btnRosterOpt.type = 'button';
+      btnRosterOpt.className = 'dba-btn-mini';
+      btnRosterOpt.textContent = '装備ロスター';
 
       const btnAeOpt = document.createElement('button');
       btnAeOpt.type = 'button';
       btnAeOpt.className = 'dba-btn-mini';
-      btnAeOpt.textContent = '「オート装備設定」のオプションを開く';
+      btnAeOpt.textContent = 'オート装備設定';
 
       btnBrOpt.addEventListener('click', (e) => {
         e.preventDefault();
         e.stopPropagation();
         openBattleResultOptionsModal(); // dba-m-battle-result-opt
+      });
+      btnRosterOpt.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        openRosterOptionsModal(); // dba-m-roster-option
       });
       btnAeOpt.addEventListener('click', (e) => {
         e.preventDefault();
@@ -14034,6 +15165,7 @@
       });
 
       row.appendChild(btnBrOpt);
+      row.appendChild(btnRosterOpt);
       row.appendChild(btnAeOpt);
       box.appendChild(row);
       mid.appendChild(box);
@@ -14070,36 +15202,15 @@
       const lab = document.createElement('label');
       lab.className = 'dba-setting-checkline';
 
-      const mark = document.createElement('span');
-      mark.textContent = '▽';
-      mark.setAttribute('aria-hidden', 'true');
-
       const txt = document.createElement('span');
       txt.className = 'dba-setting-checktext';
       txt.textContent = '表示オプション　※現在「レッドvsブルーモード」限定';
 
-      lab.appendChild(mark);
       lab.appendChild(txt);
       row.appendChild(lab);
 
       const sub = document.createElement('div');
       sub.className = 'dba-setting-subgroup';
-
-      const labStopAnim = document.createElement('label');
-      labStopAnim.className = 'dba-setting-checkline';
-
-      const inputStopAnim = document.createElement('input');
-      inputStopAnim.type = 'checkbox';
-      inputStopAnim.checked = !!settings?.rbLayer?.stopAnimation;
-      inputStopAnim.dataset.rbStopAnimation = '1';
-
-      const txtStopAnim = document.createElement('span');
-      txtStopAnim.className = 'dba-setting-checktext';
-      txtStopAnim.textContent = '境界線やアバターのアニメーションを停止する。（動作の軽量化）';
-
-      labStopAnim.appendChild(inputStopAnim);
-      labStopAnim.appendChild(txtStopAnim);
-      sub.appendChild(labStopAnim);
 
       const labBorder = document.createElement('label');
       labBorder.className = 'dba-setting-checkline';
@@ -14177,7 +15288,7 @@
 
       const txtReg = document.createElement('span');
       txtReg.className = 'dba-setting-checktext';
-      txtReg.textContent = '各セルごとのレギュレーションを表示する。';
+      txtReg.textContent = '⚠️各セルごとのレギュレーションを表示する。';
 
       labReg.appendChild(inputReg);
       labReg.appendChild(txtReg);
@@ -14193,7 +15304,7 @@
 
       const txtNobody = document.createElement('span');
       txtNobody.className = 'dba-setting-checktext';
-      txtNobody.textContent = '未占領セルと占領不可地形セルの「誰もいない」を表示する。';
+      txtNobody.textContent = '⚠️未占領セルと占領不可地形セルの「誰もいない」を表示する。';
 
       labNobody.appendChild(inputNobody);
       labNobody.appendChild(txtNobody);
@@ -14203,11 +15314,38 @@
       mid.appendChild(row);
     })();
 
-    // 一定回数ごとの軽量化再読込
     (function mkLightRefreshBlock(){
       const row = document.createElement('div');
       row.className = 'dba-setting-row';
 
+      const title = document.createElement('div');
+      title.style.fontSize = '1.05em';
+      title.style.fontWeight = '700';
+      title.style.textAlign = 'left';
+      title.style.margin = '0 0 8px 0';
+      title.textContent = '軽量化措置';
+      row.appendChild(title);
+
+      const sub = document.createElement('div');
+      sub.className = 'dba-setting-subgroup';
+
+      const labStopAnim = document.createElement('label');
+      labStopAnim.className = 'dba-setting-checkline';
+
+      const inputStopAnim = document.createElement('input');
+      inputStopAnim.type = 'checkbox';
+      inputStopAnim.checked = !!settings?.rbLayer?.stopAnimation;
+      inputStopAnim.dataset.rbStopAnimation = '1';
+
+      const txtStopAnim = document.createElement('span');
+      txtStopAnim.className = 'dba-setting-checktext';
+      txtStopAnim.textContent = '⚠️境界線やアバターのアニメーションを停止する。';
+
+      labStopAnim.appendChild(inputStopAnim);
+      labStopAnim.appendChild(txtStopAnim);
+      sub.appendChild(labStopAnim);
+
+      // 一定回数ごとの軽量化再読込
       const lab = document.createElement('label');
       lab.className = 'dba-setting-checkline';
 
@@ -14218,23 +15356,23 @@
 
       const txt = document.createElement('span');
       txt.className = 'dba-setting-checktext';
-      txt.textContent = 'セル攻撃の戦闘ログを一定回数受信するごとに、ページを再読込して軽量化する。';
+      txt.textContent = '⚠️「戦闘ログ」を指定回数受信するごとにページを再読み込み。';
 
       lab.appendChild(input);
       lab.appendChild(txt);
-      row.appendChild(lab);
+      sub.appendChild(lab);
 
-      const sub = document.createElement('div');
-      sub.style.marginTop = '8px';
-      sub.style.display = 'flex';
-      sub.style.alignItems = 'center';
-      sub.style.justifyContent = 'flex-start';
-      sub.style.gap = '6px';
-      sub.style.flexWrap = 'wrap';
-      sub.style.textAlign = 'left';
+      const subline = document.createElement('div');
+      subline.style.margin = '0 0 0 50px';
+      subline.style.display = 'flex';
+      subline.style.alignItems = 'center';
+      subline.style.justifyContent = 'flex-start';
+      subline.style.gap = '6px';
+      subline.style.flexWrap = 'wrap';
+      subline.style.textAlign = 'left';
 
       const pre = document.createElement('span');
-      pre.textContent = '戦闘ログ';
+      pre.textContent = '「戦闘ログ」受信';
 
       const cnt = document.createElement('input');
       cnt.type = 'number';
@@ -14245,19 +15383,20 @@
       cnt.dataset.lightRefreshBattleCount = '1';
 
       const suf = document.createElement('span');
-      suf.textContent = '回ごとに自動でページの再読込を行う。';
+      suf.textContent = '回ごと。';
 
       const note = document.createElement('div');
       note.style.width = '100%';
       note.style.fontSize = '0.92em';
       note.style.lineHeight = '1.35';
       note.style.opacity = '0.9';
-      note.textContent = '※拡張機能のようにブラウザの Cache を直接消すのではなく、ページの再読込で掃除するという代替策です。';
+      note.textContent = '※拡張機能のようにブラウザの Cache を直接消すのではなく、ページの再読み込みによって処理をリフレッシュするという代替策です。';
 
-      sub.appendChild(pre);
-      sub.appendChild(cnt);
-      sub.appendChild(suf);
-      sub.appendChild(note);
+      subline.appendChild(pre);
+      subline.appendChild(cnt);
+      subline.appendChild(suf);
+      subline.appendChild(note);
+      sub.appendChild(subline);
 
       row.appendChild(sub);
       mid.appendChild(row);
@@ -14268,12 +15407,18 @@
       row.className = 'dba-setting-row';
 
       const title = document.createElement('div');
-      title.className = 'dba-setting-block-title';
-      title.appendChild(document.createTextNode('セルサイズ調整'));
-      const sub = document.createElement('span');
-      sub.style.fontWeight = '400';
-      sub.textContent = '：各モードのバトルマップのセル width ／ height を px で設定できます。';
-      title.appendChild(sub);
+      title.style.fontSize = '1.05em';
+      title.style.fontWeight = '700';
+      title.style.textAlign = 'left';
+      title.style.margin = '0 0 8px 0';
+      title.textContent = 'セルサイズ調整';
+
+      const note = document.createElement('div');
+      note.style.fontSize = '1em';
+      note.style.fontWeight = '400';
+      note.style.textAlign = 'left';
+      note.style.margin = '0 0 12px 30px';
+      note.textContent = 'バトルマップの セル の大きさを設定できます。';
 
       const list = document.createElement('div');
       list.className = 'dba-setting-cellsize-list';
@@ -14282,6 +15427,7 @@
       list.appendChild(mkCellSizeLine('hc'));
 
       row.appendChild(title);
+      row.appendChild(note);
       row.appendChild(list);
       mid.appendChild(row);
     })();
@@ -14295,12 +15441,14 @@
       lab.textContent = 'レイヤー文字濃度（100〜0）';
 
       const wrap = document.createElement('div');
+      wrap.style.margin = '0 0 0 60px';
       wrap.style.display = 'grid';
-      wrap.style.gridTemplateColumns = '1fr 52px';
+      wrap.style.gridTemplateColumns = '1fr 36px';
       wrap.style.gap = '8px';
       wrap.style.alignItems = 'center';
 
       const input = document.createElement('input');
+      input.style.margin = '0';
       input.type = 'range';
       input.min = '0';
       input.max = '100';
@@ -14333,11 +15481,7 @@
       row.className = 'dba-setting-row';
 
       const lab = document.createElement('label');
-      lab.style.display = 'inline-flex';
-      lab.style.alignItems = 'center';
-      lab.style.justifyContent = 'flex-start';
-      lab.style.gap = '8px';
-      lab.style.cursor = 'pointer';
+      lab.className = 'dba-setting-checkline';
 
       const input = document.createElement('input');
       input.type = 'checkbox';
@@ -14345,6 +15489,7 @@
       input.dataset.showOriginalHeader = '1';
 
       const txt = document.createElement('span');
+      txt.className = 'dba-setting-checktext';
       txt.textContent = 'HTMLソースの<header>要素を表示する';
 
       lab.appendChild(input);
