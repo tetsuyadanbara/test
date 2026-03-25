@@ -1908,6 +1908,9 @@
       const rows = gridSizeMatch ? Number(gridSizeMatch[1]) : 5;
       const cols = rows;
 
+      const avatarMatch = allScripts.match(/window\.__AVATARS\s*=\s*({[\s\S]*?});/);
+      const myAvatar = avatarMatch ? JSON.parse(avatarMatch[1]).myAvatar : null;
+
       const terrainData = {};
       try {
         const terrainMatch = allScripts.match(/const terrainsPayload\s*=\s*({.+?});/s);
@@ -1964,6 +1967,9 @@
               cell.style.outline = 'black solid 2px';
               cell.style.borderColor = 'gold';
             }
+            if (myAvatar && Number(myAvatar.row) === i && Number(myAvatar.col) === j) {
+              cell.style.outline = '3px solid yellow';
+            }
             grid.appendChild(cell);
             refreshedCells.push(cell);
           }
@@ -1987,6 +1993,9 @@
             refreshedCells.push(cell);
           }
           cell.style.outline = includesCoord(capitalMap, row, col) ? 'black solid 2px' : '';
+          if (myAvatar && Number(myAvatar.row) === Number(row) && Number(myAvatar.col) === Number(col)) {
+            cell.style.outline = '3px solid yellow';
+          }
         });
       }
 
@@ -2791,18 +2800,18 @@
             }
 
             if (success) {
-              if (currentProgress < 7) {
-                nextProgress = Math.floor(Math.random() * 4) + 20;//20～23±1
-               } else if (currentProgress < 24) {
-                nextProgress = Math.floor(Math.random() * 4) + 37;//37～40±1
-               } else if (currentProgress < 41) {
-                nextProgress = Math.floor(Math.random() * 4) + 53;//53～56±1
-               } else if (currentProgress < 57) {
-                nextProgress = Math.floor(Math.random() * 4) + 70;//70～73±1
-               } else if (currentProgress < 74) {
-                nextProgress = Math.floor(Math.random() * 4) + 86;//86～89±1
+              if (currentProgress < 16) {
+                nextProgress = Math.floor(Math.random() * 4) + 18;//23～29±1
+               } else if (currentProgress < 33) {
+                nextProgress = Math.floor(Math.random() * 4) + 35;//40～46±1
+               } else if (currentProgress < 50) {
+                nextProgress = Math.floor(Math.random() * 4) + 52;//56～62±1
+               } else if (currentProgress < 66) {
+                nextProgress = Math.floor(Math.random() * 4) + 68;//73～79±1
+               } else if (currentProgress < 83) {
+                nextProgress = Math.floor(Math.random() * 4) + 85;//90～96±1
                } else {
-                nextProgress = Math.floor(Math.random() * 4) + 3;//3～6±1
+                nextProgress = Math.floor(Math.random() * 4) + 2;//6～12±1
                }
               next = `→ ${nextProgress}±1%`;
               isAutoJoinRunning = false;
@@ -2865,18 +2874,18 @@
           }
         }
         if (!success && regions[cellType].length === 0) {
-              if (currentProgress < 7) {
-                nextProgress = Math.floor(Math.random() * 4) + 20;//20～23±1
-               } else if (currentProgress < 24) {
-                nextProgress = Math.floor(Math.random() * 4) + 37;//37～40±1
-               } else if (currentProgress < 41) {
-                nextProgress = Math.floor(Math.random() * 4) + 53;//53～56±1
-               } else if (currentProgress < 57) {
-                nextProgress = Math.floor(Math.random() * 4) + 70;//70～73±1
-               } else if (currentProgress < 74) {
-                nextProgress = Math.floor(Math.random() * 4) + 86;//86～89±1
+              if (currentProgress < 16) {
+                nextProgress = Math.floor(Math.random() * 4) + 18;//23～29±1
+               } else if (currentProgress < 33) {
+                nextProgress = Math.floor(Math.random() * 4) + 35;//40～46±1
+               } else if (currentProgress < 50) {
+                nextProgress = Math.floor(Math.random() * 4) + 52;//56～62±1
+               } else if (currentProgress < 66) {
+                nextProgress = Math.floor(Math.random() * 4) + 68;//73～79±1
+               } else if (currentProgress < 83) {
+                nextProgress = Math.floor(Math.random() * 4) + 85;//90～96±1
                } else {
-                nextProgress = Math.floor(Math.random() * 4) + 3;//3～6±1
+                nextProgress = Math.floor(Math.random() * 4) + 2;//6～12±1
                }
           const next = `→ ${nextProgress}±1%`;
           isAutoJoinRunning = false;
@@ -3123,18 +3132,20 @@
           margin = 10;
         } else {
           if (location.href.includes('/teambattle?m=rb')) {
-             if (currentProgress <= 7) {
-               totalSec = (7 - currentProgress) * 600 / 16.6;
-             } else if (currentProgress <= 24) {
-               totalSec = (24 - currentProgress) * 600 / 16.6;
-             } else if (currentProgress <= 41) {
-               totalSec = (41 - currentProgress) * 600 / 16.6;
-             } else if (currentProgress <= 57) {
-               totalSec = (57 - currentProgress) * 600 / 16.6;
-             } else if (currentProgress <= 74) {
-               totalSec = (74 - currentProgress) * 600 / 16.6;
+             if (currentProgress <= 16) {
+               totalSec = (18 - currentProgress) * 600 / 16.6;
+             } else if (currentProgress <= 33) {
+               totalSec = (35 - currentProgress) * 600 / 16.6;
+             } else if (currentProgress <= 50) {
+               totalSec = (52 - currentProgress) * 600 / 16.6;
+             } else if (currentProgress <= 66) {
+               totalSec = (68 - currentProgress) * 600 / 16.6;
+             } else if (currentProgress <= 83) {
+               totalSec = (85 - currentProgress) * 600 / 16.6;
              } else if (currentProgress <= 100) {
-               totalSec = (100 - currentProgress) * 600 / 16.6;
+               totalSec = (102 - currentProgress) * 600 / 16.6;
+             } else {
+               totalSec = 20 + (2 * 600 / 16.6);
              }
           } else {
           totalSec = (currentProgress < 50) ? (50 - currentProgress) * 36 : (100 - currentProgress) * 36 + 10;
