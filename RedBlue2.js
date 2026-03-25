@@ -1897,6 +1897,13 @@
   })();
   //-- ここまで --//
   //-- ここまで --//
+
+  function normalizeEquipIds(ids) {
+    return (Array.isArray(ids) ? ids : [])
+      .filter(id => id !== undefined && id !== null)
+      .map(id => String(id));
+  }
+
   async function setPresetItems (presetName, options = {}) {
     const { force = false } = options;
     const stat = document.querySelector('.equip-preset-stat');
