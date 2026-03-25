@@ -1890,8 +1890,6 @@
     }
   }
 
-  function fetchAreaInfo(withCellData) {
-
   function scaleContentsToFit(container, contents){
     const containerWidth = container.clientWidth;
     const contentsWidth = contents.scrollWidth;
@@ -2793,11 +2791,35 @@
     }
 
     function collectCapitalCollapseEmptyCells(state, capitalCoord) {
-      return orthNeighbors(state, capitalCoord)
-        .filter(n => isExplorable(state, n.r, n.c))
-        .filter(n => !isWater(state, n.r, n.c))
-        .filter(n => isEmpty(state, n.r, n.c))
-        .map(n => ({ r: n.r, c: n.c }));
+      const q = [{ r: capitalCoord.r, c: capitalCoord.c }];
+      const seen = new Set([keyOf(capitalCoord.r, capitalCoord.c)]);
+      const out = [];
+      const outSet = new Set();
+
+      while (q.length > 0) {
+        const cur = q.shift();
+
+        for (const nxt of orthNeighbors(state, cur)) {
+          const nk = keyOf(nxt.r, nxt.c);
+          if (seen.has(nk)) continue;
+          seen.add(nk);
+
+          if (!isExplorable(state, nxt.r, nxt.c)) continue;
+          if (isWater(state, nxt.r, nxt.c)) continue;
+          if (isEnemy(state, nxt.r, nxt.c)) continue;
+
+          if (isEmpty(state, nxt.r, nxt.c)) {
+            if (!outSet.has(nk)) {
+              outSet.add(nk);
+              out.push({ r: nxt.r, c: nxt.c });
+            }
+          }
+
+          q.push(nxt);
+        }
+      }
+
+      return out;
     }
 
     function reconstructPath(parentMap, goalKey) {
@@ -3457,6 +3479,31 @@
         }
 
         if (isCapitalTarget && result.ok) {
+          let latestPos = currentPos(latestState);
+
+          if (!latestPos || latestPos.r !== step.r || latestPos.c !== step.c) {
+            const moveToCapitalResult = await executeStep([step.r, step.c], { isEnemyStep: false });
+            logMessage(`${step.r},${step.c}`, '[首都制圧後移動] ' + moveToCapitalResult.message, '');
+
+            if (moveToCapitalResult.stop) {
+              return { moved: false, stop: true, keepWatching: false, waitSeconds: 0, message: moveToCapitalResult.message, state: latestState };
+            }
+            if (moveToCapitalResult.retry) {
+              return {
+                moved: true,
+                stop: false,
+                keepWatching: true,
+                waitSeconds: moveToCapitalResult.waitSeconds || 2,
+                message: moveToCapitalResult.message,
+                state: latestState
+              };
+            }
+
+            await sleep(900);
+            latestState = await fetchBattleState();
+            latestPos = currentPos(latestState);
+          }
+
           const priorityEmptyCells = collectCapitalCollapseEmptyCells(latestState, { r: step.r, c: step.c });
 
           if (priorityEmptyCells.length > 0) {
