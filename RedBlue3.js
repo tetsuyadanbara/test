@@ -3193,8 +3193,6 @@
 
     let nextProgress;
 
-    let nextProgress;
-
     function getRBStagePresetCandidates() {
       const stage = getCurrentRBStage();
       if (!stage) return [];
