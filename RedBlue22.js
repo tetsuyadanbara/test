@@ -394,7 +394,7 @@
 
         // RedBlue47 と同じ幅制限
         // 目安: 60vw、ただし最大 980px まで
-        const preferredWidthPx = Math.min(Math.floor(window.innerWidth * 0.10), 980);
+        const preferredWidthPx = Math.min(Math.floor(window.innerWidth * 0.20), 980);
 
         const heightPx = Math.max(240, window.innerHeight - topPx - bottomMargin);
 
