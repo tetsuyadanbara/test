@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Donguri Battle Assistant
 // @namespace    https://donguri.5ch.io/
-// @version      5.3.12.0
+// @version      5.3.15.6
 // @description  5ちゃんねるのどんぐりシステムから派生したゲームの操作性を改善するためのユーザースクリプト
 // @author       福呼び草
 // @assistant    ChatGPT (OpenAI)
@@ -22,7 +22,7 @@
   // =========================
   // スクリプト自身のバージョン（スクリプト情報表示用）
   // =========================
-  const DBA_VERSION = '5.3.12.0';
+  const DBA_VERSION = '5.3.15.6';
 
   console.log('[DBA] BOOT', 'ver=', DBA_VERSION, 'href=', location.href);
 
@@ -939,7 +939,8 @@
       left: 0;
       right: 0;
       font-size: var(--dba-base-font-size);
-      width: min(700px, 97svw);
+      width: min(700px, calc(100svw - 8px));
+      max-width: calc(100svw - 8px);
       height: auto;                 /* ★2段構造になるので固定高をやめる（高さはJSで追従） */
       display: flex;
       flex-direction: column;       /* ★縦積み（上=progress / 下=ボタン群） */
@@ -955,7 +956,8 @@
       box-shadow: 0 2px 8px var(--dba-fn-shadow);
       z-index: 999999;
       max-height: min(60svh, calc(100svh - 8px)); /* ★大きくなりすぎたらfnbar内で収める */
-      overflow: auto;                              /* ★あふれはfnbar内でスクロール */
+      overflow-y: auto;                            /* ★縦方向のみfnbar内でスクロール */
+      overflow-x: clip;                            /* ★横方向へはみ出してページ全体を広げない */
       scrollbar-gutter: stable both-edges;
     }
 
@@ -984,13 +986,17 @@
       align-items: center;
       justify-content: flex-start;
       gap: 10px;
+      row-gap: 4px;
       min-width: 0;
     }
     .dba-fn-header-info__title {
       font-size: 1.1em;
       font-weight: 900;
       line-height: 1.2;
-      white-space: nowrap;
+      min-width: 0;
+      white-space: normal;
+      overflow-wrap: anywhere;
+      word-break: break-word;
     }
     .dba-fn-header-info__mode {
       display: inline-flex;
@@ -1002,7 +1008,9 @@
       font-size: 1.1em;
       font-weight: 800;
       line-height: 1.2;
-      white-space: nowrap;
+      white-space: normal;
+      overflow-wrap: anywhere;
+      word-break: break-word;
     }
     .dba-fn-header-info__reg {
       display: inline-flex;
@@ -1037,7 +1045,10 @@
     }
     .dba-fn-header-info__team-name {
       margin-right: 6px;
-      white-space: nowrap;
+      min-width: 0;
+      white-space: normal;
+      overflow-wrap: anywhere;
+      word-break: break-word;
     }
     .dba-fn-header-info__team-dot {
       display: inline-block;
@@ -1062,6 +1073,7 @@
       gap: 6px;
       margin-left: 8px;
       min-width: 0;
+      flex-wrap: wrap;
       font-size: 1em;
       font-weight: 700;
       line-height: 1.2;
@@ -1163,6 +1175,7 @@
       align-items: center;
       justify-content: flex-start;
       gap: 20px;
+      row-gap: 4px;
       min-width: 0;
       margin: 0 0 2px 0;
       font-weight: 900;
@@ -1171,13 +1184,17 @@
     #dba-top-progress .dba-top-progress__metaTerm,
     #dba-top-progress .dba-top-progress__metaMatch,
     #dba-top-progress .dba-top-progress__metaTime {
-      white-space: nowrap;
+      min-width: 0;
+      white-space: normal;
+      overflow-wrap: anywhere;
+      word-break: break-word;
     }
     #dba-top-progress .dba-top-progress__barRow {
       display: flex;
       align-items: center;
       justify-content: flex-start;
       gap: 10px;
+      flex-wrap: wrap;
       min-width: 0;
     }
     /* 「同期」ボタン */
@@ -1199,7 +1216,8 @@
       overflow: hidden;
       margin-top: 0;
       flex: 1 1 auto;
-      min-width: 140px;
+      min-width: 0;
+      width: auto;
       cursor: pointer;
       position: relative;
     }
@@ -1433,86 +1451,140 @@
         0 0 8px rgba(0,0,0,0.8);
     }
 
-    /* ===== バトルマップ直下の情報テーブル（2連table）の縦伸び抑制 + 狭幅時の折り返し ===== */
-    div[style*="display:inline-flex"] {
-      align-items: flex-start !important;
-      gap: 4px;
+    /* ===== バトルマップ直下の情報テーブル（2連table）の共通化
+       RB / HC / ラダーで、マップ直下の2表ブロックだけを狙って
+       レイアウト・余白・文字サイズ・見た目を統一する ===== */
+    .gridCanvasOuter + div[style*="display:inline-flex"],
+    div[style*="display: flex"][style*="justify-content: center"][style*="align-items: center"][style*="background-color: #f0f0f0"] + div[style*="display:inline-flex"] {
+      display: flex !important;
+      align-items: stretch !important;
+      justify-content: center !important;
+      gap: 10px;
       flex-wrap: wrap !important;
-      justify-content: center;
-      width: 100%;
+      width: min(100%, 680px);
       max-width: 100%;
+      margin: 8px auto 0 !important;
+      padding: 0 6px;
       box-sizing: border-box;
     }
-    div[style*="display:inline-flex"] > table {
-      align-self: flex-start !important;
-      flex: 0 1 auto !important;
-      height: auto !important;
-      min-height: 0 !important;
-      max-height: none !important;
-      min-width: 0;
+    .gridCanvasOuter + div[style*="display:inline-flex"] > table,
+    div[style*="display: flex"][style*="justify-content: center"][style*="align-items: center"][style*="background-color: #f0f0f0"] + div[style*="display:inline-flex"] > table {
+      align-self: stretch !important;
+      flex: 1 1 320px !important;
+      width: min(100%, 330px);
+      min-width: 0 !important;
       max-width: 100%;
-      box-sizing: border-box;
+      margin: 0 !important;
+      border-collapse: separate !important;
+      border-spacing: 0 !important;
+      table-layout: fixed;
+      background: #ffffff;
+      border: 1px solid #cfcfcf !important;
+      border-radius: 10px;
+      overflow: hidden;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+      font-size: 0.95em;
+      line-height: 1.35;
     }
 
-    /* 1つ目の「保有地域数」テーブルを、表示領域内に納まりやすいよう固定レイアウト化 */
-    div[style*="display:inline-flex"] > table:first-child {
-      width: min(100%, 300px);
-      table-layout: fixed;
+    .gridCanvasOuter + div[style*="display:inline-flex"] > table thead tr,
+    div[style*="display: flex"][style*="justify-content: center"][style*="align-items: center"][style*="background-color: #f0f0f0"] + div[style*="display:inline-flex"] > table thead tr {
+      background: #f7f7f7 !important;
     }
-    div[style*="display:inline-flex"] > table:first-child th,
-    div[style*="display:inline-flex"] > table:first-child td {
-      min-width: 0 !important;          /* 元ページ側の min-width:150px を打ち消す */
-      padding: 4px !important;      /* 余白を少し詰める */
+    .gridCanvasOuter + div[style*="display:inline-flex"] > table tbody tr:nth-child(even),
+    div[style*="display: flex"][style*="justify-content: center"][style*="align-items: center"][style*="background-color: #f0f0f0"] + div[style*="display:inline-flex"] > table tbody tr:nth-child(even) {
+      background: #fcfcfc !important;
+    }
+
+    .gridCanvasOuter + div[style*="display:inline-flex"] > table th,
+    .gridCanvasOuter + div[style*="display:inline-flex"] > table td,
+    div[style*="display: flex"][style*="justify-content: center"][style*="align-items: center"][style*="background-color: #f0f0f0"] + div[style*="display:inline-flex"] > table th,
+    div[style*="display: flex"][style*="justify-content: center"][style*="align-items: center"][style*="background-color: #f0f0f0"] + div[style*="display:inline-flex"] > table td {
+      min-width: 0 !important;
+      padding: 6px 8px !important;
       box-sizing: border-box;
       overflow-wrap: anywhere;
       word-break: break-word;
-    }
-    div[style*="display:inline-flex"] > table:first-child th:nth-child(1),
-    div[style*="display:inline-flex"] > table:first-child td:nth-child(1) {
-      width: 4em;
-      max-width: 4em;
-      white-space: nowrap;
+      text-align: center !important;
       font-size: 0.95em;
+      line-height: 1.35;
+      border: 0 !important;
+      border-bottom: 1px solid #e7e7e7 !important;
+      background-clip: padding-box;
     }
-    div[style*="display:inline-flex"] > table:first-child th:nth-child(2),
-    div[style*="display:inline-flex"] > table:first-child td:nth-child(2) {
-      width: auto;
-      font-size: 0.95em;
-      white-space: wrap !important;
+    .gridCanvasOuter + div[style*="display:inline-flex"] > table tr:last-child td,
+    div[style*="display: flex"][style*="justify-content: center"][style*="align-items: center"][style*="background-color: #f0f0f0"] + div[style*="display:inline-flex"] > table tr:last-child td {
+      border-bottom: 0 !important;
     }
-    div[style*="display:inline-flex"] > table:first-child th:nth-child(3),
-    div[style*="display:inline-flex"] > table:first-child td:nth-child(3) {
-      width: 8em;
-      max-width: 8em;
-      font-size: 0.95em;
-      white-space: nowrap;
+    .gridCanvasOuter + div[style*="display:inline-flex"] > table th,
+    div[style*="display: flex"][style*="justify-content: center"][style*="align-items: center"][style*="background-color: #f0f0f0"] + div[style*="display:inline-flex"] > table th {
+      font-weight: 800;
+      color: #222;
+      background: #f7f7f7 !important;
+      white-space: normal !important;
     }
 
-    /* 2つ目の「戦闘強度」テーブルを、表示領域内に納まりやすいよう固定レイアウト化 */
-    div[style*="display:inline-flex"] > table:last-child {
-      width: min(100%, 300px);
-      table-layout: fixed;
+    /* 1つ目の「保有地域数」テーブル */
+    .gridCanvasOuter + div[style*="display:inline-flex"] > table:first-child th:nth-child(1),
+    .gridCanvasOuter + div[style*="display:inline-flex"] > table:first-child td:nth-child(1),
+    div[style*="display: flex"][style*="justify-content: center"][style*="align-items: center"][style*="background-color: #f0f0f0"] + div[style*="display:inline-flex"] > table:first-child th:nth-child(1),
+    div[style*="display: flex"][style*="justify-content: center"][style*="align-items: center"][style*="background-color: #f0f0f0"] + div[style*="display:inline-flex"] > table:first-child td:nth-child(1) {
+      width: 4.4em;
+      max-width: 4.4em;
+      white-space: nowrap !important;
     }
-    div[style*="display:inline-flex"] > table:last-child th,
-    div[style*="display:inline-flex"] > table:last-child td {
-      min-width: 0 !important;          /* 元ページ側の min-width:150px を打ち消す */
-      padding: 4px !important;      /* 余白を少し詰める */
-      box-sizing: border-box;
-      overflow-wrap: anywhere;
-      word-break: break-word;
-    }
-    div[style*="display:inline-flex"] > table:last-child th:nth-child(1),
-    div[style*="display:inline-flex"] > table:last-child td:nth-child(1) {
+    .gridCanvasOuter + div[style*="display:inline-flex"] > table:first-child th:nth-child(2),
+    .gridCanvasOuter + div[style*="display:inline-flex"] > table:first-child td:nth-child(2),
+    div[style*="display: flex"][style*="justify-content: center"][style*="align-items: center"][style*="background-color: #f0f0f0"] + div[style*="display:inline-flex"] > table:first-child th:nth-child(2),
+    div[style*="display: flex"][style*="justify-content: center"][style*="align-items: center"][style*="background-color: #f0f0f0"] + div[style*="display:inline-flex"] > table:first-child td:nth-child(2) {
       width: auto;
-      white-space: wrap !important;
-      font-size: 0.95em;
+      white-space: normal !important;
     }
-    div[style*="display:inline-flex"] > table:last-child th:nth-child(2),
-    div[style*="display:inline-flex"] > table:last-child td:nth-child(2) {
-      width: 5.5em;
-      max-width: 5.5em;
-      font-size: 0.95em;
-      white-space: nowrap;
+    .gridCanvasOuter + div[style*="display:inline-flex"] > table:first-child th:nth-child(3),
+    .gridCanvasOuter + div[style*="display:inline-flex"] > table:first-child td:nth-child(3),
+    div[style*="display: flex"][style*="justify-content: center"][style*="align-items: center"][style*="background-color: #f0f0f0"] + div[style*="display:inline-flex"] > table:first-child th:nth-child(3),
+    div[style*="display: flex"][style*="justify-content: center"][style*="align-items: center"][style*="background-color: #f0f0f0"] + div[style*="display:inline-flex"] > table:first-child td:nth-child(3) {
+      width: 8.4em;
+      max-width: 8.4em;
+      white-space: nowrap !important;
+    }
+
+    /* 2つ目の「戦闘強度」テーブル */
+    .gridCanvasOuter + div[style*="display:inline-flex"] > table:last-child th:nth-child(1),
+    .gridCanvasOuter + div[style*="display:inline-flex"] > table:last-child td:nth-child(1),
+    div[style*="display: flex"][style*="justify-content: center"][style*="align-items: center"][style*="background-color: #f0f0f0"] + div[style*="display:inline-flex"] > table:last-child th:nth-child(1),
+    div[style*="display: flex"][style*="justify-content: center"][style*="align-items: center"][style*="background-color: #f0f0f0"] + div[style*="display:inline-flex"] > table:last-child td:nth-child(1) {
+      width: auto;
+      white-space: normal !important;
+    }
+    .gridCanvasOuter + div[style*="display:inline-flex"] > table:last-child th:nth-child(2),
+    .gridCanvasOuter + div[style*="display:inline-flex"] > table:last-child td:nth-child(2),
+    div[style*="display: flex"][style*="justify-content: center"][style*="align-items: center"][style*="background-color: #f0f0f0"] + div[style*="display:inline-flex"] > table:last-child th:nth-child(2),
+    div[style*="display: flex"][style*="justify-content: center"][style*="align-items: center"][style*="background-color: #f0f0f0"] + div[style*="display:inline-flex"] > table:last-child td:nth-child(2) {
+      width: 6em;
+      max-width: 6em;
+      white-space: nowrap !important;
+    }
+
+    @media (max-width: 640px) {
+      .gridCanvasOuter + div[style*="display:inline-flex"],
+      div[style*="display: flex"][style*="justify-content: center"][style*="align-items: center"][style*="background-color: #f0f0f0"] + div[style*="display:inline-flex"] {
+        width: 100%;
+        gap: 8px;
+        padding: 0 4px;
+      }
+      .gridCanvasOuter + div[style*="display:inline-flex"] > table,
+      div[style*="display: flex"][style*="justify-content: center"][style*="align-items: center"][style*="background-color: #f0f0f0"] + div[style*="display:inline-flex"] > table {
+        flex-basis: 100% !important;
+        width: 100%;
+      }
+      .gridCanvasOuter + div[style*="display:inline-flex"] > table th,
+      .gridCanvasOuter + div[style*="display:inline-flex"] > table td,
+      div[style*="display: flex"][style*="justify-content: center"][style*="align-items: center"][style*="background-color: #f0f0f0"] + div[style*="display:inline-flex"] > table th,
+      div[style*="display: flex"][style*="justify-content: center"][style*="align-items: center"][style*="background-color: #f0f0f0"] + div[style*="display:inline-flex"] > table td {
+        padding: 5px 6px !important;
+        font-size: 0.92em;
+      }
     }
 
     /* ===== ハードコア / ラダー：巨大マップが上下の領域へ潜り込む問題の抑制 =====
@@ -1541,9 +1613,11 @@
       flex: 0 0 auto;
       margin: 0 auto;
     }
-    p[style*="text-align:center"][style*="margin:0 auto;"] > div[style*="display:inline-flex"] {
-      flex-wrap: wrap;
-      justify-content: center;
+    p[style*="text-align:center"][style*="margin:0 auto;"] > div[style*="display:inline-flex"],
+    div[style*="display: flex"][style*="justify-content: center"][style*="align-items: center"][style*="background-color: #f0f0f0"] + div[style*="display:inline-flex"] {
+      flex-wrap: wrap !important;
+      justify-content: center !important;
+      align-items: flex-start !important;
       max-width: 100%;
       margin-top: 0 !important;
     }
@@ -3069,6 +3143,61 @@
       mask: radial-gradient(farthest-side, transparent calc(100% - 9px), #000 calc(100% - 9px));
       filter: drop-shadow(0 2px 6px rgba(0,0,0,0.25));
     }
+    @media (max-width: 600px) {
+      #dba-function-section {
+        width: calc(100svw - 4px);
+        max-width: calc(100svw - 4px);
+        padding: 2px 4px 4px 4px;
+      }
+      .dba-fn-header-info__title {
+        display: none;
+      }
+      .dba-fn-header-info__line1 {
+        gap: 6px;
+      }
+      .dba-fn-header-info__title,
+      .dba-fn-header-info__mode,
+      .dba-fn-header-info__reg,
+      .dba-fn-header-info__team,
+      .dba-fn-header-info__prevmenu {
+        font-size: 0.98em;
+        line-height: 1.2;
+      }
+      .dba-fn-header-info__team-dot {
+        display: inline-block;
+        width: 12px;
+        height: 12px;
+        min-width: 12px;
+        min-height: 12px;
+        border-radius: 999px;
+        border: 1px solid #00000022;
+        vertical-align: middle;
+        box-sizing: border-box;
+        flex: 0 0 auto;
+      }
+      #dba-top-progress .dba-top-progress__metaRow {
+        gap: 8px;
+      }
+      #dba-top-progress .dba-top-progress__barRow {
+        gap: 6px;
+      }
+      /* プログレスバー */
+      #dba-top-progress .dba-top-progress__matchBar {
+        flex: 1 1 100%;
+        max-width: 140px
+      }
+      #dba-top-progress-sync-now {
+        flex: 0 0 auto;
+      }
+      #dba-fn-buttons-row {
+        justify-content: center;
+      }
+      .dba-btn-fn {
+        margin: 3px;
+        padding: 4px 5px;
+        font-size: 0.96em;
+      }
+    }
   `;
   // ============================================================
   // △ここまで△ CSS 定義ゾーン（集中管理）
@@ -4416,6 +4545,16 @@
     inner.textContent = '0%';
     bar.appendChild(inner);
 
+    bindFnButtonTooltip(
+      bar,
+      '「同期」ボタンで同期を取ると良いタイミング\n' +
+      '・プログレスバーが100％になる前に、次の試合が始まった時。\n' +
+      '・しばらく放置した後や、別タブや別アプリから戻った時。\n' +
+      '・通信が不安定になり、その後に回復した時。\n' +
+      '・プログレスバーが動かない等の異常時。',
+      'below'
+    );
+
     barRow.appendChild(bar);
     barRow.appendChild(btnSync);
 
@@ -5315,6 +5454,30 @@
     header: { showOriginalHeader: false }
   };
 
+  function isSmallViewportCellSizePreset(){
+    try{
+      return !!(window.matchMedia && window.matchMedia('(max-width: 600px)').matches);
+    }catch(_e){
+      return window.innerWidth <= 600;
+    }
+  }
+
+  function getResponsiveDefaultCellSize(modeKey){
+    if(isSmallViewportCellSizePreset()){
+      if(modeKey === 'rb'){
+        return { width: 32, height: 32 };
+      }
+      if(modeKey === 'hc' || modeKey === 'l'){
+        return { width: 36, height: 32 };
+      }
+    }
+
+    return {
+      width: DEFAULT_SETTINGS.cellSize[modeKey]?.width ?? DEFAULT_SETTINGS.cellSize.rb.width,
+      height: DEFAULT_SETTINGS.cellSize[modeKey]?.height ?? DEFAULT_SETTINGS.cellSize.rb.height
+    };
+  }
+
   function loadBattleResultTail2Enabled(){
     try{
       const raw = localStorage.getItem(LS_BR_TAIL2_KEY);
@@ -6163,11 +6326,11 @@
   }
 
   function sanitizeBaseFontPx(v, fallback){
-    const fb = (fallback === 14 || fallback === 16 || fallback === 17)   // 基準文字サイズ
+    const fb = (fallback === 12 || fallback === 14 || fallback === 16 || fallback === 17)   // 基準文字サイズ
       ? fallback
       : getDefaultBaseFontPxForDevice();
-    const x = Number.parseInt(v, 10);
-    if(x === 14 || x === 16 || x === 17) return x;   // 基準文字サイズ
+    const x = Number(v);
+    if(x === 12 || x === 14 || x === 16 || x === 17) return x;   // 基準文字サイズ
     return fb;
   }
 
@@ -6195,12 +6358,20 @@
   function loadSettings(){
     try{
       const raw = localStorage.getItem(LS_KEY);
-      if(!raw) return JSON.parse(JSON.stringify(DEFAULT_SETTINGS));
+      if(!raw){
+        const out = JSON.parse(JSON.stringify(DEFAULT_SETTINGS));
+        for(const k of ['rb','hc','l']){
+          const def = getResponsiveDefaultCellSize(k);
+          out.cellSize[k].width = def.width;
+          out.cellSize[k].height = def.height;
+        }
+        return out;
+      }
       const obj = JSON.parse(raw);
       const out = JSON.parse(JSON.stringify(DEFAULT_SETTINGS));
       if(obj && obj.cellSize){
         for(const k of ['rb','hc','l']){
-          const base = DEFAULT_SETTINGS.cellSize[k];
+          const base = getResponsiveDefaultCellSize(k);
           const src = obj.cellSize[k] || {};
           out.cellSize[k].width  = sanitizeCellPx(src.width,  base.width);
           out.cellSize[k].height = sanitizeCellPx(src.height, base.height);
@@ -6262,7 +6433,13 @@
       }
       return out;
     }catch(_e){
-      return JSON.parse(JSON.stringify(DEFAULT_SETTINGS));
+      const out = JSON.parse(JSON.stringify(DEFAULT_SETTINGS));
+      for(const k of ['rb','hc','l']){
+        const def = getResponsiveDefaultCellSize(k);
+        out.cellSize[k].width = def.width;
+        out.cellSize[k].height = def.height;
+      }
+      return out;
     }
   }
 
@@ -6326,6 +6503,8 @@
   }
 
   function getDefaultCellSizeForMode(modeKey){
+    const responsiveDef = getResponsiveDefaultCellSize(modeKey);
+
     if(modeKey === 'rb'){
       const gridSize = getRbGridSizeFromPageScript() || 14;
       const wrap = document.getElementById('gridWrap');
@@ -6334,13 +6513,13 @@
         const w = Math.round(rect.width / gridSize);
         const h = Math.round(rect.height / gridSize);
         return {
-          width: sanitizeCellPx(w, DEFAULT_SETTINGS.cellSize.rb.width),
-          height: sanitizeCellPx(h, DEFAULT_SETTINGS.cellSize.rb.height)
+          width: sanitizeCellPx(w, responsiveDef.width),
+          height: sanitizeCellPx(h, responsiveDef.height)
         };
       }
       return {
-        width: DEFAULT_SETTINGS.cellSize.rb.width,
-        height: DEFAULT_SETTINGS.cellSize.rb.height
+        width: responsiveDef.width,
+        height: responsiveDef.height
       };
     }
 
@@ -6395,15 +6574,15 @@
 
       if(w > 0 || h > 0){
         return {
-          width: sanitizeCellPx(w, DEFAULT_SETTINGS.cellSize[modeKey].width),
-          height: sanitizeCellPx(h, DEFAULT_SETTINGS.cellSize[modeKey].height)
+          width: sanitizeCellPx(w, responsiveDef.width),
+          height: sanitizeCellPx(h, responsiveDef.height)
         };
       }
     }
 
     return {
-      width: DEFAULT_SETTINGS.cellSize[modeKey].width,
-      height: DEFAULT_SETTINGS.cellSize[modeKey].height
+      width: responsiveDef.width,
+      height: responsiveDef.height
     };
   }
 
@@ -18890,7 +19069,7 @@ function avatarsKeyToMap(avatarsKey){
       resetBtn.addEventListener('click', (e) => {
         e.preventDefault();
         e.stopPropagation();
-        const def = DEFAULT_SETTINGS.cellSize[modeKey] || DEFAULT_SETTINGS.cellSize.rb;
+        const def = getResponsiveDefaultCellSize(modeKey);
         wInput.value = String(def.width);
         hInput.value = String(def.height);
         dirty = true;
@@ -19485,6 +19664,7 @@ function avatarsKeyToMap(avatarsKey){
       group.appendChild(mkRadio(17));
       group.appendChild(mkRadio(16));
       group.appendChild(mkRadio(14));
+      group.appendChild(mkRadio(12));
 
       row.appendChild(title);
       row.appendChild(group);
