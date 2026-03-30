@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Donguri Battle Assistant
 // @namespace    https://donguri.5ch.io/
-// @version      4.3.5.7
+// @version      5.3.12.0
 // @description  5ちゃんねるのどんぐりシステムから派生したゲームの操作性を改善するためのユーザースクリプト
 // @author       福呼び草
 // @assistant    ChatGPT (OpenAI)
@@ -9,6 +9,9 @@
 // @match        https://donguri.5ch.io/teambattle*
 // @match        https://donguri.5ch.io/bag
 // @match        https://donguri.5ch.io/
+// @match        https://donguri.world/teambattle*
+// @match        https://donguri.world/bag
+// @match        https://donguri.world/
 // @run-at       document-start
 // @grant        GM_addStyle
 // ==/UserScript==
@@ -19,15 +22,839 @@
   // =========================
   // スクリプト自身のバージョン（スクリプト情報表示用）
   // =========================
-  const DBA_VERSION = '4.3.5.7';
+  const DBA_VERSION = '5.3.12.0';
 
   console.log('[DBA] BOOT', 'ver=', DBA_VERSION, 'href=', location.href);
+
+  // =========================
+  // 現在地セル 調査用デバッグ
+  //  - 通常運用では不要なため既定OFF
+  //  - 再調査が必要になった時だけ enabled を true に戻す
+  //  - console 出力タグ: [DBA-RTDBG]
+  // =========================
+  const DBA_RT_COORD_DEBUG = {
+    enabled: false,
+    installed: false,
+    tickTimer: 0,
+    lastProbeSig: '',
+    lastResolveSig: '',
+    lastFetchSig: '',
+    lastRenderSig: '',
+    windowKeysLogged: false
+  };
+
+  function isRtCoordDebugEnabled(){
+    return !!DBA_RT_COORD_DEBUG.enabled;
+  }
+
+  // =========================
+  // マーカー再描画を遅延させる
+  // =========================
+  const DBA_CURRENT_MARKER_REFRESH = {
+    timer: 0,
+    raf1: 0,
+    raf2: 0
+  };
+
+  function cancelDeferredCurrentCellMarkerRefresh(){
+    if(DBA_CURRENT_MARKER_REFRESH.timer){
+      clearTimeout(DBA_CURRENT_MARKER_REFRESH.timer);
+      DBA_CURRENT_MARKER_REFRESH.timer = 0;
+    }
+    if(DBA_CURRENT_MARKER_REFRESH.raf1){
+      cancelAnimationFrame(DBA_CURRENT_MARKER_REFRESH.raf1);
+      DBA_CURRENT_MARKER_REFRESH.raf1 = 0;
+    }
+    if(DBA_CURRENT_MARKER_REFRESH.raf2){
+      cancelAnimationFrame(DBA_CURRENT_MARKER_REFRESH.raf2);
+      DBA_CURRENT_MARKER_REFRESH.raf2 = 0;
+    }
+  }
+
+  function cancelDeferredCurrentCellMarkerRefreshFramesOnly(){
+    if(DBA_CURRENT_MARKER_REFRESH.raf1){
+      cancelAnimationFrame(DBA_CURRENT_MARKER_REFRESH.raf1);
+      DBA_CURRENT_MARKER_REFRESH.raf1 = 0;
+    }
+    if(DBA_CURRENT_MARKER_REFRESH.raf2){
+      cancelAnimationFrame(DBA_CURRENT_MARKER_REFRESH.raf2);
+      DBA_CURRENT_MARKER_REFRESH.raf2 = 0;
+    }
+  }
+
+  function sanitizeCurrentMarkerDelayMs(v){
+    const n = Number(v);
+    if(!Number.isFinite(n)) return 500;
+    const clamped = Math.max(0, Math.min(5000, n));
+    return Math.round(clamped);
+  }
+
+  function sanitizeCurrentMarkerDelaySec(v){
+    const n = Number(v);
+    if(!Number.isFinite(n)) return 0.5;
+    const clamped = Math.max(0, Math.min(5, n));
+    return Math.round(clamped * 10) / 10;
+  }
+
+  function markerDelaySecToMs(sec){
+    return sanitizeCurrentMarkerDelayMs(sanitizeCurrentMarkerDelaySec(sec) * 1000);
+  }
+
+  function markerDelayMsToSec(ms){
+    return sanitizeCurrentMarkerDelaySec(sanitizeCurrentMarkerDelayMs(ms) / 1000);
+  }
+
+  function sanitizeCurrentMarkerColorName(v){
+    const s = String(v || '').trim().toLowerCase();
+    switch(s){
+      case 'silver':
+      case 'gold':
+      case 'purple':
+      case 'crimson':
+      case 'cyan':
+        return s;
+      default:
+        return 'silver';
+    }
+  }
+
+  function buildCurrentMarkerSvgDataUri(palette){
+    const body0 = String(palette?.body0 || '#585e66');
+    const body1 = String(palette?.body1 || '#f8fbff');
+    const body2 = String(palette?.body2 || '#8d97a2');
+    const body3 = String(palette?.body3 || '#ffffff');
+    const body4 = String(palette?.body4 || '#858e99');
+    const body5 = String(palette?.body5 || '#e8edf3');
+    const body6 = String(palette?.body6 || '#4a515a');
+    const rim0  = String(palette?.rim0  || '#ffffff');
+    const rim1  = String(palette?.rim1  || '#858e98');
+    const stroke = String(palette?.stroke || '#313a44');
+    const tip = String(palette?.tip || '#656d77');
+    const topGlow = String(palette?.topGlow || 'rgba(255,255,255,0.58)');
+    const shineMid = String(palette?.shineMid || 'rgba(255,255,255,0.22)');
+    const tipOpacity = String(palette?.tipOpacity || '0.82');
+
+    const svg =
+      `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 180">` +
+        `<defs>` +
+          `<linearGradient id="body" x1="0%" y1="0%" x2="100%" y2="0%">` +
+            `<stop offset="0%" stop-color="${body0}"/>` +
+            `<stop offset="14%" stop-color="${body1}"/>` +
+            `<stop offset="31%" stop-color="${body2}"/>` +
+            `<stop offset="50%" stop-color="${body3}"/>` +
+            `<stop offset="67%" stop-color="${body4}"/>` +
+            `<stop offset="84%" stop-color="${body5}"/>` +
+            `<stop offset="100%" stop-color="${body6}"/>` +
+          `</linearGradient>` +
+          `<linearGradient id="rim" x1="0%" y1="0%" x2="0%" y2="100%">` +
+            `<stop offset="0%" stop-color="${rim0}"/>` +
+            `<stop offset="100%" stop-color="${rim1}"/>` +
+          `</linearGradient>` +
+          `<radialGradient id="shine" cx="38%" cy="24%" r="48%">` +
+            `<stop offset="0%" stop-color="rgba(255,255,255,1)"/>` +
+            `<stop offset="58%" stop-color="${shineMid}"/>` +
+            `<stop offset="100%" stop-color="rgba(255,255,255,0)"/>` +
+          `</radialGradient>` +
+        `</defs>` +
+        `<ellipse cx="60" cy="24" rx="34" ry="14" fill="url(#rim)" stroke="${stroke}" stroke-width="3.4"/>` +
+        `<path d="M28 26 L60 154 L92 26 Z" fill="url(#body)" stroke="${stroke}" stroke-width="3.4" stroke-linejoin="round"/>` +
+        `<path d="M41 28 L60 140 L72 28 Z" fill="url(#shine)" opacity="0.98"/>` +
+        `<ellipse cx="60" cy="24" rx="22" ry="8" fill="${topGlow}"/>` +
+        `<ellipse cx="60" cy="155" rx="9" ry="4.5" fill="${tip}" opacity="${tipOpacity}"/>` +
+      `</svg>`;
+
+    return `data:image/svg+xml,${encodeURIComponent(svg)}`;
+  }
+
+  function getCurrentMarkerThemePreset(colorName){
+    const name = sanitizeCurrentMarkerColorName(colorName);
+    switch(name){
+      case 'gold':
+        return {
+          image: buildCurrentMarkerSvgDataUri({
+            body0: '#7a5a00',
+            body1: '#fff7c2',
+            body2: '#d0a42c',
+            body3: '#fff3a0',
+            body4: '#c58c10',
+            body5: '#ffe082',
+            body6: '#6c4d00',
+            rim0: '#fffbe2',
+            rim1: '#c99816',
+            stroke: '#5f4300',
+            tip: '#8a6508',
+            topGlow: 'rgba(255,248,190,0.62)',
+            shineMid: 'rgba(255,245,180,0.24)',
+            tipOpacity: '0.86'
+          }),
+          filter: 'drop-shadow(0 0 2px rgba(255,255,220,0.98)) drop-shadow(0 0 6px rgba(255,220,80,1)) drop-shadow(0 2px 2px rgba(255,190,0,0.98)) drop-shadow(0 5px 8px rgba(40,20,0,0.9))'
+        };
+      case 'purple':
+        return {
+          image: buildCurrentMarkerSvgDataUri({
+            body0: '#4e2a78',
+            body1: '#f3e7ff',
+            body2: '#9b73c9',
+            body3: '#f7f0ff',
+            body4: '#7b51ab',
+            body5: '#dbc7ff',
+            body6: '#3d1f63',
+            rim0: '#fff7ff',
+            rim1: '#9d78c8',
+            stroke: '#2f194a',
+            tip: '#5b3688',
+            topGlow: 'rgba(246,232,255,0.64)',
+            shineMid: 'rgba(234,210,255,0.25)',
+            tipOpacity: '0.86'
+          }),
+          filter: 'drop-shadow(0 0 2px rgba(255,245,255,0.98)) drop-shadow(0 0 6px rgba(200,120,255,0.98)) drop-shadow(0 2px 2px rgba(155,80,230,0.95)) drop-shadow(0 5px 8px rgba(25,0,45,0.9))'
+        };
+      case 'crimson':
+        return {
+          image: buildCurrentMarkerSvgDataUri({
+            body0: '#7a1f30',
+            body1: '#ffe4ea',
+            body2: '#d36a83',
+            body3: '#fff3f6',
+            body4: '#b94662',
+            body5: '#ffc4d1',
+            body6: '#651828',
+            rim0: '#fff6f8',
+            rim1: '#cc6b85',
+            stroke: '#4f1320',
+            tip: '#8c2941',
+            topGlow: 'rgba(255,232,238,0.62)',
+            shineMid: 'rgba(255,205,220,0.24)',
+            tipOpacity: '0.86'
+          }),
+          filter: 'drop-shadow(0 0 2px rgba(255,245,247,0.98)) drop-shadow(0 0 6px rgba(255,120,160,0.98)) drop-shadow(0 2px 2px rgba(235,70,110,0.95)) drop-shadow(0 5px 8px rgba(45,0,10,0.9))'
+        };
+      case 'cyan':
+        return {
+          image: buildCurrentMarkerSvgDataUri({
+            body0: '#1f5d73',
+            body1: '#e7fcff',
+            body2: '#74c7dd',
+            body3: '#f3feff',
+            body4: '#4aa6bf',
+            body5: '#c8f4ff',
+            body6: '#18495b',
+            rim0: '#f2ffff',
+            rim1: '#79c7d8',
+            stroke: '#123948',
+            tip: '#2b7287',
+            topGlow: 'rgba(232,251,255,0.64)',
+            shineMid: 'rgba(190,245,255,0.24)',
+            tipOpacity: '0.86'
+          }),
+          filter: 'drop-shadow(0 0 2px rgba(245,255,255,0.98)) drop-shadow(0 0 6px rgba(110,235,255,0.98)) drop-shadow(0 2px 2px rgba(70,205,235,0.95)) drop-shadow(0 5px 8px rgba(0,30,40,0.9))'
+        };
+      case 'silver':
+      default:
+        return {
+          image: buildCurrentMarkerSvgDataUri({
+            body0: '#585e66',
+            body1: '#f8fbff',
+            body2: '#8d97a2',
+            body3: '#ffffff',
+            body4: '#858e99',
+            body5: '#e8edf3',
+            body6: '#4a515a',
+            rim0: '#ffffff',
+            rim1: '#858e98',
+            stroke: '#313a44',
+            tip: '#656d77',
+            topGlow: 'rgba(255,255,255,0.58)',
+            shineMid: 'rgba(255,255,255,0.22)',
+            tipOpacity: '0.82'
+          }),
+          filter: 'drop-shadow(0 0 2px rgba(255,255,255,0.95)) drop-shadow(0 0 6px rgba(255,255,180,0.95)) drop-shadow(0 2px 2px rgba(255,220,0,0.95)) drop-shadow(0 5px 8px rgba(20,0,0,0.88))'
+        };
+    }
+  }
+
+  function applyCurrentCellMarkerThemeFromSettings(settings){
+    try{
+      const theme = getCurrentMarkerThemePreset(settings?.rbLayer?.currentCellMarkerColor);
+      document.documentElement.style.setProperty('--dba-current-marker-image', `url("${theme.image}")`);
+      document.documentElement.style.setProperty('--dba-current-marker-filter', String(theme.filter || 'none'));
+    }catch(_e){}
+  }
+
+  function scheduleDeferredCurrentCellMarkerRefresh(){
+    cancelDeferredCurrentCellMarkerRefresh();
+
+    const settings = loadSettings();
+    const delayMs = sanitizeCurrentMarkerDelayMs(settings?.rbLayer?.currentCellMarkerDelayMs);
+
+    DBA_CURRENT_MARKER_REFRESH.timer = setTimeout(() => {
+      DBA_CURRENT_MARKER_REFRESH.timer = 0;
+      try{
+        flushPendingCurrentCellMarkerCache(true);
+        scheduleBattlemapLayerSync();
+      }catch(_e){}
+    }, delayMs);
+  }
+
+  function dbaRtDbg(){
+    if(!isRtCoordDebugEnabled()) return;
+    try{
+      console.log('[DBA-RTDBG]', ...arguments);
+    }catch(_e){}
+  }
+
+  function dbaRtDbgWarn(){
+    if(!isRtCoordDebugEnabled()) return;
+    try{
+      console.warn('[DBA-RTDBG]', ...arguments);
+    }catch(_e){}
+  }
+
+  function dbaCoordFromMaybe(obj){
+    if(!obj || typeof obj !== 'object') return null;
+    const r = Number(obj.row ?? obj.r ?? obj.bapRow);
+    const c = Number(obj.col ?? obj.c ?? obj.bapCol);
+    if(!Number.isFinite(r) || !Number.isFinite(c)) return null;
+    return { row: r, col: c };
+  }
+
+  function dbaCoordKey(coord){
+    if(!coord) return 'null';
+    const r = Number(coord.row);
+    const c = Number(coord.col);
+    if(!Number.isFinite(r) || !Number.isFinite(c)) return 'null';
+    return `${r},${c}`;
+  }
+
+  function dbaSummarizeWindowAvatars(root){
+    if(!root || typeof root !== 'object'){
+      return {
+        hasRoot: false,
+        direct: null,
+        selfMarked: [],
+        avatarCount: 0
+      };
+    }
+
+    const direct = dbaCoordFromMaybe(
+      (root.myAvatar && typeof root.myAvatar === 'object')
+        ? root.myAvatar
+        : ((root.selfAvatar && typeof root.selfAvatar === 'object') ? root.selfAvatar : null)
+    );
+
+    const avatars = Array.isArray(root.avatars) ? root.avatars : [];
+    const selfMarked = [];
+    for(const av of avatars){
+      if(!av || typeof av !== 'object') continue;
+      if(!(av.isSelf === true || av.self === true || av.mine === true)) continue;
+      const rc = dbaCoordFromMaybe(av);
+      if(!rc) continue;
+      selfMarked.push({
+        row: rc.row,
+        col: rc.col,
+        flags: {
+          isSelf: av.isSelf === true,
+          self: av.self === true,
+          mine: av.mine === true
+        }
+      });
+      if(selfMarked.length >= 6) break;
+    }
+
+    return {
+      hasRoot: true,
+      direct,
+      selfMarked,
+      avatarCount: avatars.length
+    };
+  }
+
+  function dbaListInterestingWindowKeys(){
+    try{
+      const keys = Object.getOwnPropertyNames(window);
+      return keys
+        .filter((k) => /avatar|coord|tile|battle|fow|grid|self/i.test(String(k || '')))
+        .sort()
+        .slice(0, 120);
+    }catch(_e){
+      return [];
+    }
+  }
+
+  function dbaExtractCoordCandidatesFromText(text){
+    const src = String(text || '');
+    if(!src) return [];
+
+    const out = [];
+    const seen = new Set();
+    const push = (label, row, col) => {
+      const r = Number(row);
+      const c = Number(col);
+      if(!Number.isFinite(r) || !Number.isFinite(c)) return;
+      const key = `${label}:${r},${c}`;
+      if(seen.has(key)) return;
+      seen.add(key);
+      out.push({ label, row: r, col: c });
+    };
+
+    {
+      const re = /"myAvatar"\s*:\s*\{[\s\S]{0,400}?"(?:row|r|bapRow)"\s*:\s*(\d+)[\s\S]{0,200}?"(?:col|c|bapCol)"\s*:\s*(\d+)/g;
+      let m;
+      while((m = re.exec(src)) !== null){
+        push('myAvatar', m[1], m[2]);
+        if(out.length >= 8) break;
+      }
+    }
+
+    {
+      const re = /"selfAvatar"\s*:\s*\{[\s\S]{0,400}?"(?:row|r|bapRow)"\s*:\s*(\d+)[\s\S]{0,200}?"(?:col|c|bapCol)"\s*:\s*(\d+)/g;
+      let m;
+      while((m = re.exec(src)) !== null){
+        push('selfAvatar', m[1], m[2]);
+        if(out.length >= 8) break;
+      }
+    }
+
+    {
+      const re = /"isSelf"\s*:\s*true[\s\S]{0,400}?"(?:row|r|bapRow)"\s*:\s*(\d+)[\s\S]{0,200}?"(?:col|c|bapCol)"\s*:\s*(\d+)/g;
+      let m;
+      while((m = re.exec(src)) !== null){
+        push('isSelf', m[1], m[2]);
+        if(out.length >= 8) break;
+      }
+    }
+
+    {
+      const re = /"currentAvatarCoord"[\s\S]{0,200}?"r"\s*:\s*(\d+)[\s\S]{0,120}?"c"\s*:\s*(\d+)/g;
+      let m;
+      while((m = re.exec(src)) !== null){
+        push('currentAvatarCoord', m[1], m[2]);
+        if(out.length >= 8) break;
+      }
+    }
+
+    return out;
+  }
+
+  function dbaBuildInterestingPreview(text){
+    const src = String(text || '').replace(/\s+/g, ' ').trim();
+    if(!src) return '';
+    const hit = src.match(/(.{0,120}(?:myAvatar|selfAvatar|isSelf|currentAvatarCoord|avatarsByTile).{0,220})/i);
+    return hit ? String(hit[1] || '') : src.slice(0, 240);
+  }
+
+  function dbaShouldInspectDebugUrl(url){
+    const u = String(url || '');
+    if(!u) return false;
+    return /teambattle|teamchallenge|avatar|battle|map|fow/i.test(u);
+  }
+
+  function dbaProbeRuntimeCurrentCell(reason){
+    if(!isRtCoordDebugEnabled()) return;
+    if(mode !== 'rb') return;
+
+    let live = null;
+    let fromDoc = null;
+    let snapSelf = null;
+    let urlCoord = null;
+    let cache = null;
+    let currentAvatarCoordValue = null;
+    let avatarsByTileSelf = [];
+    let winSummary = null;
+
+    try{ live = readCurrentBattleCellCoordFromLiveWindow(); }catch(_e){}
+    try{ fromDoc = readCurrentBattleCellCoordFromDocument(document); }catch(_e){}
+    try{
+      const snap = getBattlemapSnapshotFromDoc(document);
+      const cands = [
+        (snap && snap.selfAvatar && typeof snap.selfAvatar === 'object') ? snap.selfAvatar : null,
+        (snap && snap.myAvatar && typeof snap.myAvatar === 'object') ? snap.myAvatar : null,
+        (snap && snap.self && typeof snap.self === 'object') ? snap.self : null
+      ];
+      for(const self of cands){
+        const rc = dbaCoordFromMaybe(self);
+        if(rc){
+          snapSelf = rc;
+          break;
+        }
+      }
+    }catch(_e){}
+    try{
+      const u = new URL(location.href);
+      const r = Number(u.searchParams.get('r'));
+      const c = Number(u.searchParams.get('c'));
+      if(Number.isFinite(r) && Number.isFinite(c)){
+        urlCoord = { row: r, col: c };
+      }
+    }catch(_e){}
+    try{ cache = getCurrentCellMarkerCache(); }catch(_e){}
+    try{
+      if(typeof window.currentAvatarCoord === 'function'){
+        currentAvatarCoordValue = dbaCoordFromMaybe(window.currentAvatarCoord());
+      }
+    }catch(_e){}
+    try{
+      const src = window.avatarsByTile;
+      if(src && typeof src === 'object'){
+        const keys = Object.keys(src);
+        for(const k of keys){
+          const arr = Array.isArray(src[k]) ? src[k] : [];
+          for(const av of arr){
+            if(!av || typeof av !== 'object') continue;
+            if(!(av.isSelf === true || av.self === true || av.mine === true)) continue;
+            const rc = dbaCoordFromMaybe(av);
+            if(!rc) continue;
+            avatarsByTileSelf.push({
+              tile: String(k),
+              row: rc.row,
+              col: rc.col
+            });
+            if(avatarsByTileSelf.length >= 6) break;
+          }
+          if(avatarsByTileSelf.length >= 6) break;
+        }
+      }
+    }catch(_e){}
+    try{
+      winSummary = dbaSummarizeWindowAvatars(window.__AVATARS);
+    }catch(_e){
+      winSummary = null;
+    }
+
+    const payload = {
+      reason: String(reason || ''),
+      href: location.href,
+      live,
+      fromDoc,
+      snapSelf,
+      urlCoord,
+      cache,
+      currentAvatarCoord: currentAvatarCoordValue,
+      windowAvatars: winSummary,
+      avatarsByTileSelf
+    };
+    const sig = JSON.stringify(payload);
+    if(sig === DBA_RT_COORD_DEBUG.lastProbeSig && reason !== 'install'){
+      return;
+    }
+    DBA_RT_COORD_DEBUG.lastProbeSig = sig;
+
+    if(!DBA_RT_COORD_DEBUG.windowKeysLogged){
+      DBA_RT_COORD_DEBUG.windowKeysLogged = true;
+      dbaRtDbg('WINDOW_KEYS', dbaListInterestingWindowKeys());
+    }
+
+    dbaRtDbg('PROBE', payload);
+  }
+
+  function dbaLogCurrentCellResolved(source, coord){
+    if(!isRtCoordDebugEnabled()) return;
+    if(mode !== 'rb') return;
+
+    const sig = `${String(source || '')}|${dbaCoordKey(coord)}`;
+    if(sig === DBA_RT_COORD_DEBUG.lastResolveSig) return;
+    DBA_RT_COORD_DEBUG.lastResolveSig = sig;
+    dbaRtDbg('RESOLVE', {
+      source: String(source || ''),
+      coord: coord || null
+    });
+  }
+
+  function dbaInspectDebugResponseText(kind, url, text){
+    if(!isRtCoordDebugEnabled()) return;
+    if(mode !== 'rb') return;
+
+    const src = String(text || '');
+    if(!src) return;
+
+    const responseCoord = updateCurrentCellMarkerCacheFromResponseText(
+      src,
+      `${String(kind || 'response')}:myAvatar`
+    );
+
+    const candidates = dbaExtractCoordCandidatesFromText(src);
+    const preview = dbaBuildInterestingPreview(src);
+    const interesting =
+      !!responseCoord ||
+      candidates.length > 0 ||
+      /myAvatar|selfAvatar|isSelf|currentAvatarCoord|avatarsByTile/i.test(src);
+
+    if(!interesting) return;
+
+    const sig = JSON.stringify({
+      kind: String(kind || ''),
+      url: String(url || ''),
+      responseCoord,
+      candidates,
+      preview
+    });
+    if(sig === DBA_RT_COORD_DEBUG.lastFetchSig) return;
+    DBA_RT_COORD_DEBUG.lastFetchSig = sig;
+
+    dbaRtDbg(`${String(kind || '').toUpperCase()}_HIT`, {
+      url: String(url || ''),
+      responseCoord,
+      candidates,
+      preview
+    });
+
+    setTimeout(() => {
+      dbaProbeRuntimeCurrentCell(`${String(kind || '')}:after-response`);
+    }, 60);
+  }
+
+  function installRuntimeCurrentCellDebugProbes(){
+    if(!isRtCoordDebugEnabled()) return false;
+    if(mode !== 'rb') return false;
+    if(DBA_RT_COORD_DEBUG.installed) return true;
+    DBA_RT_COORD_DEBUG.installed = true;
+
+    dbaRtDbg('INSTALL', { mode, href: location.href });
+
+    if(!DBA_RT_COORD_DEBUG.tickTimer){
+      DBA_RT_COORD_DEBUG.tickTimer = window.setInterval(() => {
+        dbaProbeRuntimeCurrentCell('interval');
+      }, 1200);
+    }
+
+    const queueProbe = (reason, delay) => {
+      setTimeout(() => {
+        dbaProbeRuntimeCurrentCell(reason);
+      }, Math.max(0, Number(delay || 0)));
+    };
+
+    document.addEventListener('click', () => queueProbe('click', 80), true);
+    document.addEventListener('pointerup', () => queueProbe('pointerup', 80), true);
+    window.addEventListener('popstate', () => queueProbe('popstate', 50));
+
+    queueProbe('install', 0);
+    queueProbe('install+500ms', 500);
+    return true;
+  }
+
+  // =========================
+  // fetch レスポンス監視フック（実働用）
+  // =========================
+  const DBA_CURRENT_CELL_RESPONSE_HOOK = {
+    installed: false
+  };
+
+  function installCurrentCellResponseHooks(){
+    if(mode !== 'rb') return false;
+    if(DBA_CURRENT_CELL_RESPONSE_HOOK.installed) return true;
+    DBA_CURRENT_CELL_RESPONSE_HOOK.installed = true;
+
+    try{
+      const rawFetch = (typeof window.fetch === 'function') ? window.fetch.bind(window) : null;
+      if(rawFetch){
+        window.fetch = async function(){
+          const resp = await rawFetch(...arguments);
+          try{
+            const req0 = arguments[0];
+            const reqUrl = (resp && resp.url)
+              ? String(resp.url)
+              : (typeof req0 === 'string'
+                  ? req0
+                  : ((req0 && typeof req0.url === 'string') ? req0.url : ''));
+
+            if(dbaShouldInspectDebugUrl(reqUrl) && resp && typeof resp.clone === 'function'){
+              resp.clone().text().then((text) => {
+                try{
+                  updateCurrentCellMarkerCacheFromResponseText(
+                    text,
+                    'fetch:myAvatar'
+                  );
+                }catch(_e){}
+
+                try{
+                  if(isRtCoordDebugEnabled()){
+                    dbaInspectDebugResponseText('fetch', reqUrl, text);
+                  }
+                }catch(_e){}
+              }).catch(() => {});
+            }
+          }catch(_e){}
+          return resp;
+        };
+      }
+    }catch(e){
+      dbaRtDbgWarn('FETCH_HOOK_FAILED', String(e && e.message ? e.message : e));
+    }
+
+    try{
+      if(window.XMLHttpRequest && window.XMLHttpRequest.prototype){
+        const proto = window.XMLHttpRequest.prototype;
+        const rawOpen = proto.open;
+        const rawSend = proto.send;
+
+        proto.open = function(method, url){
+          try{
+            this.__dbaCurrentCellHookMethod = String(method || '');
+            this.__dbaCurrentCellHookUrl = String(url || '');
+          }catch(_e){}
+          return rawOpen.apply(this, arguments);
+        };
+
+        proto.send = function(){
+          try{
+            const xhr = this;
+            const url = String(xhr.__dbaCurrentCellHookUrl || '');
+            if(dbaShouldInspectDebugUrl(url)){
+              xhr.addEventListener('load', function(){
+                try{
+                  const finalUrl = String(xhr.responseURL || url || '');
+                  const text = (typeof xhr.responseText === 'string') ? xhr.responseText : '';
+
+                  try{
+                    updateCurrentCellMarkerCacheFromResponseText(
+                      text,
+                      'xhr:myAvatar'
+                    );
+                  }catch(_e){}
+
+                  try{
+                    if(isRtCoordDebugEnabled()){
+                      dbaInspectDebugResponseText('xhr', finalUrl, text);
+                    }
+                  }catch(_e){}
+                }catch(_e){}
+              }, { once:true });
+            }
+          }catch(_e){}
+          return rawSend.apply(this, arguments);
+        };
+      }
+    }catch(e){
+      dbaRtDbgWarn('XHR_HOOK_FAILED', String(e && e.message ? e.message : e));
+    }
+
+    return true;
+  }
+
+  // =========================
+  // fetch レスポンス中の myAvatar から現在地座標を読む
+  // =========================
+  function dbaExtractObjectLiteralTextByProp(srcText, propName){
+    const src = String(srcText || '');
+    const prop = String(propName || '');
+    if(!src || !prop) return '';
+
+    const re = new RegExp(`"${prop}"\\s*:\\s*\\{`, 'g');
+    const m = re.exec(src);
+    if(!m) return '';
+
+    const openIdx = src.indexOf('{', m.index);
+    if(openIdx < 0) return '';
+
+    let depth = 0;
+    let inString = false;
+    let escaped = false;
+
+    for(let i = openIdx; i < src.length; i++){
+      const ch = src[i];
+
+      if(inString){
+        if(escaped){
+          escaped = false;
+          continue;
+        }
+        if(ch === '\\'){
+          escaped = true;
+          continue;
+        }
+        if(ch === '"'){
+          inString = false;
+        }
+        continue;
+      }
+
+      if(ch === '"'){
+        inString = true;
+        continue;
+      }
+      if(ch === '{'){
+        depth += 1;
+        continue;
+      }
+      if(ch === '}'){
+        depth -= 1;
+        if(depth === 0){
+          return src.slice(openIdx, i + 1);
+        }
+      }
+    }
+
+    return '';
+  }
+
+  function dbaParseCoordFromObjectLiteralText(objText){
+    const src = String(objText || '');
+    if(!src) return null;
+
+    const rowMatch =
+      src.match(/"(?:row|r|bapRow)"\s*:\s*(-?\d+)/) ||
+      src.match(/(?:^|[,{]\s*)(?:row|r|bapRow)\s*:\s*(-?\d+)/);
+    const colMatch =
+      src.match(/"(?:col|c|bapCol)"\s*:\s*(-?\d+)/) ||
+      src.match(/(?:^|[,{]\s*)(?:col|c|bapCol)\s*:\s*(-?\d+)/);
+
+    if(!rowMatch || !colMatch) return null;
+
+    const row = Number(rowMatch[1]);
+    const col = Number(colMatch[1]);
+    if(!Number.isFinite(row) || !Number.isFinite(col)) return null;
+    return { row, col };
+  }
+
+  function readCurrentBattleCellCoordFromResponseText(text){
+    if(mode !== 'rb') return null;
+
+    const src = String(text || '');
+    if(!src) return null;
+
+    const directKeys = ['myAvatar', 'selfAvatar'];
+    for(const key of directKeys){
+      const objText = dbaExtractObjectLiteralTextByProp(src, key);
+      const rc = dbaParseCoordFromObjectLiteralText(objText);
+      if(rc) return rc;
+    }
+
+    return null;
+  }
+
+  function updateCurrentCellMarkerCacheFromResponseText(text, source){
+    if(mode !== 'rb') return null;
+
+    const rc = readCurrentBattleCellCoordFromResponseText(text);
+    if(!rc) return null;
+
+    const settings = loadSettings();
+    const delayMs = sanitizeCurrentMarkerDelayMs(settings?.rbLayer?.currentCellMarkerDelayMs);
+
+    setPendingCurrentCellMarkerCache(rc.row, rc.col, delayMs);
+    dbaLogCurrentCellResolved(String(source || 'response-text-pending'), {
+      row: rc.row,
+      col: rc.col
+    });
+
+    try{
+      scheduleDeferredCurrentCellMarkerRefresh();
+    }catch(_e){}
+
+    return rc;
+  }
 
   // =========================
   // URL / ドメイン集中管理
   //  今後ドメインが変わった場合は、まずここを直す
   // =========================
-  const DBA_BASE_ORIGIN = 'https://donguri.5ch.io';
+  const DBA_ALLOWED_ORIGINS = new Set([
+    'https://donguri.5ch.io',
+    'https://donguri.world'
+  ]);
+  const DBA_BASE_ORIGIN = DBA_ALLOWED_ORIGINS.has(location.origin)
+    ? location.origin
+    : 'https://donguri.world';
 
   function makeSiteUrl(path){
     const p = String(path || '');
@@ -91,7 +918,10 @@
       --dba-fn-border: #000;
       --dba-fn-shadow: rgba(0,0,0,0.15);
       --dba-fn-height: 50px; /* ファンクションセクションの高さ（JSで実測値に更新） */
+      --dba-base-font-size: 17px; /* DBA全体の基準文字サイズ */
       --dba-layer-text-opacity: 1; /* 0.0 - 1.0（レイヤー上の文字濃度） */
+      --dba-current-marker-filter: drop-shadow(0 0 2px rgba(255,255,255,0.95)) drop-shadow(0 0 6px rgba(255,255,180,0.95)) drop-shadow(0 2px 2px rgba(255,220,0,0.95)) drop-shadow(0 5px 8px rgba(20,0,0,0.88));
+      --dba-current-marker-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 120 180'%3E%3Cdefs%3E%3ClinearGradient id='body' x1='0%25' y1='0%25' x2='100%25' y2='0%25'%3E%3Cstop offset='0%25' stop-color='%23585e66'/%3E%3Cstop offset='14%25' stop-color='%23f8fbff'/%3E%3Cstop offset='31%25' stop-color='%238d97a2'/%3E%3Cstop offset='50%25' stop-color='%23ffffff'/%3E%3Cstop offset='67%25' stop-color='%23858e99'/%3E%3Cstop offset='84%25' stop-color='%23e8edf3'/%3E%3Cstop offset='100%25' stop-color='%234a515a'/%3E%3C/linearGradient%3E%3ClinearGradient id='rim' x1='0%25' y1='0%25' x2='0%25' y2='100%25'%3E%3Cstop offset='0%25' stop-color='%23ffffff'/%3E%3Cstop offset='100%25' stop-color='%23858e98'/%3E%3C/linearGradient%3E%3CradialGradient id='shine' cx='38%25' cy='24%25' r='48%25'%3E%3Cstop offset='0%25' stop-color='rgba(255,255,255,1)'/%3E%3Cstop offset='58%25' stop-color='rgba(255,255,255,0.22)'/%3E%3Cstop offset='100%25' stop-color='rgba(255,255,255,0)'/%3E%3C/radialGradient%3E%3C/defs%3E%3Cellipse cx='60' cy='24' rx='34' ry='14' fill='url(%23rim)' stroke='%23313a44' stroke-width='3.4'/%3E%3Cpath d='M28 26 L60 154 L92 26 Z' fill='url(%23body)' stroke='%23313a44' stroke-width='3.4' stroke-linejoin='round'/%3E%3Cpath d='M41 28 L60 140 L72 28 Z' fill='url(%23shine)' opacity='0.98'/%3E%3Cellipse cx='60' cy='24' rx='22' ry='8' fill='rgba(255,255,255,0.58)'/%3E%3Cellipse cx='60' cy='155' rx='9' ry='4.5' fill='%23656d77' opacity='0.82'/%3E%3C/svg%3E");
     }
 
     input[type="checkbox"] {
@@ -108,21 +938,23 @@
       top: 0;
       left: 0;
       right: 0;
+      font-size: var(--dba-base-font-size);
+      width: min(700px, 97svw);
       height: auto;                 /* ★2段構造になるので固定高をやめる（高さはJSで追従） */
       display: flex;
       flex-direction: column;       /* ★縦積み（上=progress / 下=ボタン群） */
       align-items: stretch;
       justify-content: flex-start;
-      gap: 2px;
-      margin: 0;
-      padding: 6px 8px;             /* ★内側余白を少し確保 */
+      gap: 0;
+      margin: 0 auto;
+      padding: 2px 8px 4px 8px;             /* ★内側余白を少し確保 */
       box-sizing: border-box;
       background: var(--dba-fn-bg);
       color: var(--dba-fn-fg);
       border-bottom: 1px solid var(--dba-fn-border);
       box-shadow: 0 2px 8px var(--dba-fn-shadow);
       z-index: 999999;
-      max-height: min(60vh, calc(100vh - 8px)); /* ★大きくなりすぎたらfnbar内で収める */
+      max-height: min(60svh, calc(100svh - 8px)); /* ★大きくなりすぎたらfnbar内で収める */
       overflow: auto;                              /* ★あふれはfnbar内でスクロール */
       scrollbar-gutter: stable both-edges;
     }
@@ -136,15 +968,23 @@
       width: 100%;
       min-width: 0;
       display: flex;
-      flex-wrap: wrap;
-      align-items: center;
+      flex-direction: column;
+      align-items: stretch;
       justify-content: flex-start;
-      gap: 10px;
+      gap: 4px;
       margin: 0;
       padding: 0;
       box-sizing: border-box;
       border: 0 none #000;
       background: transparent;
+    }
+    .dba-fn-header-info__line1 {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: flex-start;
+      gap: 10px;
+      min-width: 0;
     }
     .dba-fn-header-info__title {
       font-size: 1.1em;
@@ -214,25 +1054,76 @@
     .dba-fn-header-info__anim-bracket {
       white-space: nowrap;
     }
-    .dba-fn-header-info__links {
+    .dba-fn-header-info__prevmenu {
+      position: relative;
       display: inline-flex;
       align-items: center;
       justify-content: flex-start;
       gap: 6px;
-      flex-wrap: wrap;
       margin-left: 8px;
       min-width: 0;
       font-size: 1em;
       font-weight: 700;
       line-height: 1.2;
     }
-    .dba-fn-header-info__links a {
+    .dba-fn-header-info__prevmenu-bracket {
+      white-space: nowrap;
+      user-select: none;
+    }
+    .dba-fn-header-info__prevmenu-btn {
+      appearance: none;
+      border: none;
+      background: transparent;
+      padding: 0;
+      margin: 0;
       color: #0040c0;
       text-decoration: underline;
       text-underline-offset: 2px;
+      font: inherit;
+      font-weight: 700;
+      line-height: 1.2;
+      cursor: pointer;
       white-space: nowrap;
     }
-    .dba-fn-header-info__links a:hover {
+    .dba-fn-header-info__prevmenu-btn:hover {
+      color: #0000e0;
+    }
+    /* 前回のチームバトルの結果 */
+    .dba-fn-header-info__prevmenu-panel {
+      position: absolute;
+      top: calc(100% + 6px);
+      left: -70px;
+      min-width: 240px;
+      max-width: min(360px, calc(100vw - 24px));
+      padding: 6px;
+      border: 2px solid #000;
+      border-radius: 12px;
+      background: rgba(255,255,255,0.98);
+      box-shadow: 0 10px 24px rgba(0,0,0,0.24);
+      z-index: 1000000;
+      display: none;
+      box-sizing: border-box;
+    }
+    .dba-fn-header-info__prevmenu-panel[data-open="1"] {
+      display: block;
+    }
+    .dba-fn-header-info__prevmenu-row {
+      display: block;
+      margin: 0;
+      padding: 0;
+    }
+    .dba-fn-header-info__prevmenu-link {
+      display: block;
+      padding: 8px 10px;
+      border-radius: 10px;
+      color: #0040c0;
+      text-decoration: underline;
+      text-underline-offset: 2px;
+      white-space: normal;
+      overflow-wrap: anywhere;
+    }
+    .dba-fn-header-info__prevmenu-link:hover {
+      background: #f3f6ff;
       color: #0000e0;
     }
 
@@ -240,11 +1131,13 @@
       width: 100%;
       min-width: 0;
     }
+
+    /* 設定・オート装備・ラピッド攻撃などのボタン群 */
     #dba-fn-buttons-row {
       display: flex;
       align-items: center;
       justify-content: flex-start;
-      gap: 8px;
+      gap: 0;   /* ボタン自体に padding が設定されているため */
       flex-wrap: wrap;   /* ボタンが多い場合は折り返し */
       min-width: 0;
     }
@@ -254,117 +1147,63 @@
       padding-top: calc(var(--dba-fn-height) + 4px) !important;
     }
 
-    /* ===== トップページ「経過時間」プログレス表示（teambattle側へ移植） ===== */
+    /* ===== トップページ「経過時間」プログレスバー表示（teambattle側へ移植） ===== */
     #dba-top-progress {
       margin: 0;                /* ★fnbar内に入るので外側マージンは0 */
-      padding: 6px 8px;         /* ★fnbar内向けに少し圧縮 */
+      padding: 2px 0 0 0;
       border: 0 none #000;
       background: transparent;
-      width: 100%;
+      min-width: 100px;
+      width: auto;
       box-sizing: border-box;
     }
-    /* 3ペイン（左：進捗 / 中央：ボタン / 右：同期情報） */
-    #dba-top-progress .dba-top-progress__panes {
+    #dba-top-progress .dba-top-progress__metaRow {
       display: flex;
-      gap: 8px;
-      align-items: stretch;
-      justify-content: space-between;
-      min-width: 0; /* はみ出し抑止 */
-    }
-    #dba-top-progress .dba-top-progress__paneM {
-      flex: 0 0 auto;
-      min-width: 130px;
-      max-width: 180px;
-      border-left: 1px solid #00000022;
-      border-right: 1px solid #00000022;
-      padding: 0 12px;
-      display: flex;
-      flex-direction: row;
+      flex-wrap: wrap;
       align-items: center;
-      justify-content: center;
-      gap: 6px;
-    }
-    #dba-top-progress .dba-top-progress__paneL {
-      flex: 1 1 auto;
-      min-width: 0; /* はみ出し抑止 */
-    }
-    #dba-top-progress .dba-top-progress__paneR {
-      flex: 0 0 auto;
-      min-width: 240px;
-      max-width: 420px;
-      /* ★中央ペインが境界線を持つので、右ペインは余白だけにする */
-      border-left: none;
-      padding-left: 0;
-      display: none; /* 通常は非表示 */
-    }
-    /* 同期情報ONで右ペイン表示 */
-    #dba-top-progress[data-showinfo="1"] .dba-top-progress__paneR {
-      display: block;
-    }
-    /* ★中央ペイン：横並びボタン（右のマージン系は無効化） */
-    #dba-top-progress .dba-top-progress__paneM #dba-top-progress-sync-info,
-    #dba-top-progress .dba-top-progress__paneM #dba-top-progress-sync-now {
-      margin-left: 0;
-      width: calc(50% - 4px);
-      border-radius: 10px;
-      padding: 6px 10px;
-      line-height: 1.15;
-      white-space: normal;
-      text-align: center;
-    }
-    #dba-top-progress .dba-top-progress__paneM #dba-top-progress-sync-now[disabled] {
-      opacity: 0.6;
-      cursor: not-allowed;
-    }
-    /* ★「第xx期」＋プログレスバー＋ボタンを1行にまとめる */
-    #dba-top-progress .dba-top-progress__termRow {
+      justify-content: flex-start;
+      gap: 20px;
+      min-width: 0;
+      margin: 0 0 2px 0;
       font-weight: 900;
-      margin: 0 0 6px 0;
-      text-align: left;
-      line-height: 1.2em;
+      line-height: 1.2;
+    }
+    #dba-top-progress .dba-top-progress__metaTerm,
+    #dba-top-progress .dba-top-progress__metaMatch,
+    #dba-top-progress .dba-top-progress__metaTime {
+      white-space: nowrap;
+    }
+    #dba-top-progress .dba-top-progress__barRow {
       display: flex;
       align-items: center;
       justify-content: flex-start;
       gap: 10px;
-      min-width: 0; /* 子要素（term/bar）が縮められるように */
+      min-width: 0;
     }
-    /* 「第xx期」テキストが長い時は省略（はみ出し抑止） */
-    #dba-top-progress-title {
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-      max-width: 12em; /* ★バー領域を確保 */
-      display: inline-block;
-    }
-    /* 「今すぐ同期」ボタン（第xx期の右） */
+    /* 「同期」ボタン */
     #dba-top-progress-sync-now {
-      margin-left: 1.2em; /* 1～2em 程度 */
+      margin-left: 0;
+      flex: 0 0 auto;
     }
     #dba-top-progress-sync-now[disabled] {
       opacity: 0.6;
       cursor: not-allowed;
     }
-    /* 「同期情報」ボタン（スイッチ） */
-    #dba-top-progress-sync-info {
-      margin-left: 0.6em;
-    }
-    #dba-top-progress-sync-info[data-on="1"] {
-      background: #33a033;
-      color: #fff;
-    }
-    /* ★termRow内で横に伸びるバー */
-    #dba-top-progress .progress-bar {
-      height: 18px;
+    /* プログレスバー */
+    #dba-top-progress .dba-top-progress__matchBar {
+      height: 20px;
       background: #ccc;
       border-radius: 10px;
       font-size: 15px;
       line-height: 17px;
       overflow: hidden;
-      margin-top: 0;     /* ★同一行なので上マージン不要 */
-      flex: 1 1 auto;    /* ★横に伸びる */
-      min-width: 140px;  /* ★極端に潰れないよう最低幅 */
+      margin-top: 0;
+      flex: 1 1 auto;
+      min-width: 140px;
+      cursor: pointer;
+      position: relative;
     }
-    #dba-top-progress .progress-bar > div {
+    #dba-top-progress .dba-top-progress__matchBar > div {
       height: 100%;
       background: #428bca;
       width: 0%;
@@ -374,51 +1213,59 @@
       color: white;
       font-weight: 800;
     }
-    /* ===== 期の下：試合進捗（第n試合/総数 + 1試合内バー） ===== */
-    #dba-top-progress .dba-top-progress__matchRow {
-      display: flex;
-      align-items: center;
-      justify-content: flex-start;
-      gap: 1.1em; /* テキストと進捗バーの間隔 */
-      margin-top: 6px;
-      min-width: 0;
+    #dba-top-progress-pop {
+      position: fixed;
+      left: 0;
+      top: 0;
+      z-index: 1000000;
+      display: none;
+      width: min(420px, calc(100vw - 24px));
+      padding: 12px 14px;
+      border: 2px solid #000;
+      border-radius: 14px;
+      background: rgba(255,255,255,0.98);
+      color: #111;
+      box-shadow: 0 10px 24px rgba(0,0,0,0.24);
+      box-sizing: border-box;
     }
-    #dba-top-progress .dba-top-progress__matchLabel {
+    #dba-top-progress-pop[data-open="1"] {
+      display: block;
+    }
+    .dba-top-progress-pop__title {
+      font-size: 1.05em;
       font-weight: 900;
-      white-space: nowrap;
-      flex: 0 0 auto;
-    }
-    #dba-top-progress .dba-top-progress__matchRight {
-      display: flex;
-      flex-direction: column;
-      gap: 4px;
-      flex: 1 1 auto;
-      min-width: 0;
-    }
-    #dba-top-progress .dba-top-progress__matchTime {
-      font-weight: 900;
-      font-size: 0.95em;
-      opacity: 0.9;
+      line-height: 1.2;
       text-align: left;
-      line-height: 1.1em;
+      margin: 0 0 8px 0;
       white-space: nowrap;
     }
-    /* 試合バー */
-    #dba-top-progress .progress-bar.dba-match-progress {
+    .dba-top-progress-pop__bar {
       height: 18px;
-      font-size: 15px;
-      margin-top: 0;
+      background: #ccc;
       border-radius: 10px;
+      font-size: 15px;
+      line-height: 17px;
+      overflow: hidden;
+      margin: 0 0 10px 0;
     }
-    /* 右ペイン：同期情報（縦に1行ずつ） */
-    #dba-top-progress .dba-top-progress__infoLine {
+    .dba-top-progress-pop__bar > div {
+      height: 100%;
+      background: #428bca;
+      width: 0%;
+      text-align: right;
+      padding-right: 5px;
+      box-sizing: border-box;
+      color: #fff;
+      font-weight: 800;
+    }
+    .dba-top-progress-pop__line {
       font-size: 0.92em;
       font-weight: 800;
-      opacity: 0.88;
       text-align: left;
       line-height: 1.35em;
       margin: 0 0 6px 0;
-      white-space: nowrap;
+      white-space: normal;
+      overflow-wrap: anywhere;
     }
 
     /* ===== バトルマップ透明レイヤー（将来の拡張用土台） ===== */
@@ -428,6 +1275,8 @@
       top: 0;
       width: 0;
       height: 0;
+      font-size: var(--dba-base-font-size);
+      line-height: 1;
       z-index: 999990; /* fnbar(999999)より下、マップより上 */
       pointer-events: none; /* 現段階ではページ既存操作を妨げない */
       background: transparent;
@@ -444,6 +1293,8 @@
       width: 100%;
       height: 100%;
       display: grid;
+      font-size: inherit;
+      line-height: inherit;
       background: transparent;
       box-sizing: border-box;
       contain: layout paint style;
@@ -452,6 +1303,8 @@
       position: absolute;
       inset: 0;
       display: block;
+      font-size: inherit;
+      line-height: inherit;
       pointer-events: none;
       user-select: none;
       background: transparent;
@@ -461,12 +1314,20 @@
     }
     .dba-layer-cell {
       position: relative;
+      font-size: inherit;
+      line-height: inherit;
       background: transparent;
       box-sizing: border-box;
-      overflow: hidden;
+      overflow: visible;
       contain: layout paint style;
       min-width: 0;
       min-height: 0;
+    }
+    .dba-layer-cell[data-dba-current-marker="1"] {
+      /* 現在地マーカーだけはセル外へ少しはみ出させたいので、
+         paint containment を外して overflow:visible を効かせる */
+      contain: layout style;
+      z-index: 3;
     }
     .dba-layer-cell__content {
       position: absolute;
@@ -475,15 +1336,15 @@
       width: 100%;
       height: 100%;
       display: block;
-      font-size: 0.95rem; /* レイヤー上のセルのフォントサイズ */
+      font-size: 0.93em; /* dba-battlemap-layer の基準文字サイズを親として相対指定 */
       font-weight: 700;
-      letter-spacing: -0.08rem;
-      line-height: 0.95rem;
+      letter-spacing: -0.04em;
+      line-height: 0.95em;
       opacity: var(--dba-layer-text-opacity);
       user-select: none;
       pointer-events: none;
       /* 左上寄せ + 折り返し + 下方向は隠す */
-      padding: 2px 2px;
+      padding: 1.5px 2px;
       box-sizing: border-box;
       overflow: hidden;           /* 下にあふれた分は非表示 */
       white-space: pre-wrap;      /* 改行を維持しつつ折り返し */
@@ -495,16 +1356,74 @@
       -webkit-font-smoothing: antialiased;
       text-rendering: optimizeLegibility;
       text-shadow:
-        0 0 4px rgba(255,255,255,1),
-        0 0 8px rgba(255,255,255,0.75);
+        0 0 3px rgba(255,255,255,1),
+        0 0 6px rgba(255,255,255,0.7),
+        0 0 8px rgba(255,255,255,0.4);
+    }
+
+    /* ===== 自チーム首都攻撃の阻止 ===== */
+    .dba-layer-cell__blocker {
+      position: absolute;
+      inset: 0;
+      display: none;
+      pointer-events: auto;
+      user-select: none;
+      z-index: 6;
+      box-sizing: border-box;
+      background: rgba(128, 128, 128, 0.28);
+      outline: 2px solid rgba(80, 80, 80, 0.75);
+      outline-offset: -2px;
+      cursor: not-allowed;
+    }
+    .dba-layer-cell__blocker[data-active="1"] {
+      display: block;
+    }
+    .dba-layer-cell__blocker::before {
+      content: "";
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      width: 72%;
+      border-top: 3px solid rgba(70, 70, 70, 0.88);
+      transform: translate(-50%, -50%) rotate(-28deg);
+      pointer-events: none;
+    }
+
+    .dba-own-capital-attack-disabled {
+      color: #666 !important;
+      background: #bfbfbf !important;
+      border-color: #777 !important;
+      cursor: not-allowed !important;
+      filter: grayscale(1);
+      opacity: 1 !important;
+      box-shadow: none !important;
+    }
+
+    /* ===== 現在地セルを指し示すSVGマーカー ===== */
+    .dba-layer-cell[data-dba-current-marker="1"]::before {
+      content: "";
+      position: absolute;
+      left: 50%;
+      top: -38%;
+      width: 58%;
+      height: 58%;
+      transform: translateX(-50%);
+      pointer-events: none;
+      user-select: none;
+      z-index: 4;
+      background-repeat: no-repeat;
+      background-position: center top;
+      background-size: contain;
+      filter: var(--dba-current-marker-filter);
+      background-image: var(--dba-current-marker-image);
     }
 
     .dba-layer-cell[data-dba-capital-crown="1"]::after {
-      content: "👑";
+      content: "??";
       position: absolute;
       right: 2px;
       bottom: 1px;
-      font-size: 1.6rem;
+      font-size: 1.6em;
       line-height: 1.6;
       pointer-events: none;
       user-select: none;
@@ -514,21 +1433,90 @@
         0 0 8px rgba(0,0,0,0.8);
     }
 
-    /* ===== バトルマップ直下の情報テーブル（2連table）の縦伸び抑制 ===== */
+    /* ===== バトルマップ直下の情報テーブル（2連table）の縦伸び抑制 + 狭幅時の折り返し ===== */
     div[style*="display:inline-flex"] {
       align-items: flex-start !important;
-      gap: 8px;
+      gap: 4px;
+      flex-wrap: wrap !important;
+      justify-content: center;
+      width: 100%;
+      max-width: 100%;
+      box-sizing: border-box;
     }
     div[style*="display:inline-flex"] > table {
       align-self: flex-start !important;
-      flex: 0 0 auto !important;
+      flex: 0 1 auto !important;
       height: auto !important;
       min-height: 0 !important;
       max-height: none !important;
+      min-width: 0;
+      max-width: 100%;
+      box-sizing: border-box;
+    }
+
+    /* 1つ目の「保有地域数」テーブルを、表示領域内に納まりやすいよう固定レイアウト化 */
+    div[style*="display:inline-flex"] > table:first-child {
+      width: min(100%, 300px);
+      table-layout: fixed;
+    }
+    div[style*="display:inline-flex"] > table:first-child th,
+    div[style*="display:inline-flex"] > table:first-child td {
+      min-width: 0 !important;          /* 元ページ側の min-width:150px を打ち消す */
+      padding: 4px !important;      /* 余白を少し詰める */
+      box-sizing: border-box;
+      overflow-wrap: anywhere;
+      word-break: break-word;
+    }
+    div[style*="display:inline-flex"] > table:first-child th:nth-child(1),
+    div[style*="display:inline-flex"] > table:first-child td:nth-child(1) {
+      width: 4em;
+      max-width: 4em;
+      white-space: nowrap;
+      font-size: 0.95em;
+    }
+    div[style*="display:inline-flex"] > table:first-child th:nth-child(2),
+    div[style*="display:inline-flex"] > table:first-child td:nth-child(2) {
+      width: auto;
+      font-size: 0.95em;
+      white-space: wrap !important;
+    }
+    div[style*="display:inline-flex"] > table:first-child th:nth-child(3),
+    div[style*="display:inline-flex"] > table:first-child td:nth-child(3) {
+      width: 8em;
+      max-width: 8em;
+      font-size: 0.95em;
+      white-space: nowrap;
+    }
+
+    /* 2つ目の「戦闘強度」テーブルを、表示領域内に納まりやすいよう固定レイアウト化 */
+    div[style*="display:inline-flex"] > table:last-child {
+      width: min(100%, 300px);
+      table-layout: fixed;
+    }
+    div[style*="display:inline-flex"] > table:last-child th,
+    div[style*="display:inline-flex"] > table:last-child td {
+      min-width: 0 !important;          /* 元ページ側の min-width:150px を打ち消す */
+      padding: 4px !important;      /* 余白を少し詰める */
+      box-sizing: border-box;
+      overflow-wrap: anywhere;
+      word-break: break-word;
+    }
+    div[style*="display:inline-flex"] > table:last-child th:nth-child(1),
+    div[style*="display:inline-flex"] > table:last-child td:nth-child(1) {
+      width: auto;
+      white-space: wrap !important;
+      font-size: 0.95em;
+    }
+    div[style*="display:inline-flex"] > table:last-child th:nth-child(2),
+    div[style*="display:inline-flex"] > table:last-child td:nth-child(2) {
+      width: 5.5em;
+      max-width: 5.5em;
+      font-size: 0.95em;
+      white-space: nowrap;
     }
 
     /* ===== ハードコア / ラダー：巨大マップが上下の領域へ潜り込む問題の抑制 =====
-        元ページ側は「display:flex; justify-content:center; align-items:center; height:70vh; ...」
+        元ページ側は「display:flex; justify-content:center; align-items:center; height:70svh; ...」
         の固定高コンテナ内に .grid を置いているため、セル数やセルサイズが大きいと
         .grid がコンテナからはみ出し、上の fnbar や下の table に重なりやすい。
         ここでは HC / ラダー系のそのコンテナだけを「自動高＋上寄せ」に変えて、
@@ -543,7 +1531,7 @@
     p[style*="text-align:center"][style*="margin:0 auto;"] > div[style*="display: flex"][style*="justify-content: center"][style*="align-items: center"][style*="background-color: #f0f0f0"] {
       width: 100%;
       height: auto !important;
-      min-height: min(70vh, calc(100vh - var(--dba-fn-height) - 160px));
+      min-height: min(70svh, calc(100svh - var(--dba-fn-height) - 160px));
       padding: 12px 8px;
       box-sizing: border-box;
       align-items: flex-start !important;
@@ -563,19 +1551,22 @@
     /* 汎用ボタン（機能系ボタン共通） */
     .dba-btn-fn {
       appearance: none;
+      min-height: 3em;
       margin:4px;
-      padding: 8px 4px;
+      padding: 4px 6px;
       border: 2px solid #000;
       border-radius: 12px;
       background: #f08800;
       color: #fff;
       font-size: 1em;
       font-weight: 500;
-      line-height: 1em;
+      line-height: 1.1em;
       cursor: pointer;
       user-select: none;
       box-shadow: 0 1px 2px rgba(0,0,0,0.12);
       transition: transform 0.05s ease, box-shadow 0.15s ease, background 0.15s ease;
+      white-space: normal;
+      text-align: center;
     }
     /* ラピッド攻撃：ON状態の視認性 */
     .dba-btn-fn[data-on="1"] {
@@ -605,13 +1596,13 @@
       top: 0;
       z-index: 1000001; /* fnbar(999999)より上 */
       display: none;
+      font-size: calc(var(--dba-base-font-size) * 0.95);
       max-width: min(320px, calc(100vw - 24px));
       padding: 8px 10px;
       border: 2px solid #000;
       border-radius: 12px;
       background: rgba(255, 255, 225, 0.98);
       color: #111;
-      font-size: 0.95em;
       font-weight: 700;
       line-height: 1.35;
       white-space: pre-line;
@@ -647,8 +1638,9 @@
       border-radius: 12px;
       padding: 0;
       margin: auto;
+      font-size: var(--dba-base-font-size);
       width: min(640px, 100svw);
-      max-height: min(80svh, calc(100vh));
+      max-height: min(80svh, calc(100svh));
       display: flex;
       flex-direction: column;
       box-sizing: border-box;
@@ -683,7 +1675,7 @@
       min-height: 0;
       padding: 12px;
       overflow: auto;
-      max-height: calc(min(80vh, calc(100vh - 24px)) - 110px);
+      max-height: calc(min(80svh, calc(100svh - 24px)) - 110px);
     }
     .dba-m-std .dba-modal__bot {
       display: flex;
@@ -701,18 +1693,18 @@
     /* ===== セル詳細モーダル（サイズ最適化） ===== */
     #dba-m-cell-detail.dba-m-std {
       width: min(760px, calc(100vw - 24px));
-      max-height: min(88vh, calc(100vh - 24px));
+      max-height: min(88svh, calc(100svh - 24px));
     }
     #dba-m-cell-detail.dba-m-std .dba-modal__mid {
-      /* 標準(80vh)の計算を、セル詳細(88vh)に合わせて上書き */
-      max-height: calc(min(88vh, calc(100vh - 24px)) - 110px);
+      /* 標準(80svh)の計算を、セル詳細(88svh)に合わせて上書き */
+      max-height: calc(min(88svh, calc(100svh - 24px)) - 110px);
     }
 
     /* ===== 戦闘結果モーダル（サイズ最適化 + スクロール） ===== */
     #dba-m-battle-result.dba-m-std {
       width: min(820px, calc(100vw - 24px));
       /* 長い時はここで上限、短い時は content に合わせて自然に縮む */
-      max-height: min(88vh, calc(100vh - 24px));
+      max-height: min(88svh, calc(100svh - 24px));
       /* スクロールは mid のみに限定（dialog全体にはスクロールを出さない） */
       overflow: hidden;
     }
@@ -779,8 +1771,9 @@
       left: 12px;
       right: 12px;
       margin: 0 auto;
+      font-size: var(--dba-base-font-size);
       width: min(360px, calc(100vw - 24px));
-      max-height: min(88vh, calc(100vh - 24px));
+      max-height: min(88svh, calc(100svh - 24px));
       border: 4px solid #080;
       border-radius: 12px;
       padding: 0;
@@ -807,7 +1800,7 @@
     #dba-br-float .dba-btn-x { display:none !important; }
     #dba-br-float .dba-modal__mid {
       overflow: auto;
-      max-height: calc(min(88vh, calc(100vh - 24px)) - 110px);
+      max-height: calc(min(88svh, calc(100svh - 24px)) - 110px);
       scrollbar-gutter: stable both-edges;
     }
     #dba-br-float .dba-modal__mid[data-dba-wheel-scrollable="1"] {
@@ -818,7 +1811,7 @@
       /* 常にスクロール可能（短い時はスクロールは出ない） */
       overflow: auto;
       /* 上限は max-height で決まる。短文なら高さは自然に小さくなる */
-      max-height: calc(min(88vh, calc(100vh - 24px)) - 110px);
+      max-height: calc(min(88svh, calc(100svh - 24px)) - 110px);
       /* スクロールバーを見やすく（OS依存だが効く環境では効く） */
       scrollbar-gutter: stable both-edges;
     }
@@ -840,6 +1833,7 @@
       border-radius: 12px;
       padding: 0;
       margin: auto;
+      font-size: var(--dba-base-font-size);
       width: min(420px, calc(100vw - 24px));
       background: #f0f0cc;
       color: #000;
@@ -894,7 +1888,7 @@
       border: 2px solid #000;
       border-radius: 12px;
       margin: 4px 8px;
-      padding: 8px 12px;
+      padding: 10px 16px;
       font-size: 1em;
       font-weight: 600;
       line-height: 1.1em;
@@ -922,12 +1916,10 @@
       box-shadow: 0 1px 2px rgba(0,0,0,0.12);
     }
     .dba-btn-ok {
-      width: 4em;
       background: #3399ee;
       color: #fff;
       }
     .dba-btn-apply {
-      width: 4em;
       background: #50aa50;
       color: #fff;
       }
@@ -936,15 +1928,14 @@
       color: #fff;
       }
     .dba-btn-close {
-      width: 4em;
       background: #ea4a4a;
       color: #fff;
       }
     .dba-btn-x {
-      width: 32px;
-      height: 32px;
+      width: 34px;
+      height: 34px;
       padding: 0;
-      border-radius: 16px;
+      border-radius: 999px;
       background: #e02222;
       color: #fff;
       font-size: 1.4rem;
@@ -954,7 +1945,7 @@
       appearance: none;
       border: 2px solid #000;
       border-radius: 10px;
-      padding: 6px 10px;
+      padding: 10px 6px;
       margin: 0 0 0 6px;
       font-size: 0.95em;
       font-weight: 700;
@@ -973,17 +1964,25 @@
     /* ===== 「設定」modal ===== */
     .dba-setting-row {
       display: block;
-      margin-left: 30px;
-      padding: 8px 10px;
+      margin: 0 0 12px 0;
+      padding: 8px 12px;
       border: 1px solid #00000022;
       border-radius: 10px;
       background: #fff;
-      margin-bottom: 10px;
       box-sizing: border-box;
     }
     .dba-setting-row label {
       text-align: left;
       font-weight: 700;
+    }
+    .dba-setting-row-sub {
+      display: block;
+      margin: 0 0 0 30px;
+      padding: 8px 12px;
+      border: 1px solid #00000022;
+      border-radius: 10px;
+      background: #fff;
+      box-sizing: border-box;
     }
     .dba-setting-checkline {
       display: flex;
@@ -1068,9 +2067,10 @@
       white-space: nowrap;
     }
     .dba-setting-cellsize-name {
-      width:8.5em;
+      width:11em;
       font-weight: 700;
       text-align: left;
+      white-space: wrap;
     }
     .dba-setting-cellsize-unit {
       white-space: nowrap;
@@ -1080,14 +2080,41 @@
       margin: 0 2px;
     }
 
+    .dba-setting-radio-group {
+      margin: 0 0 0 30px;
+      display: flex;
+      align-items: center;
+      justify-content: flex-start;
+      gap: 18px;
+      flex-wrap: wrap;
+      text-align: left;
+    }
+    .dba-setting-radio-line {
+      display: inline-flex;
+      align-items: center;
+      justify-content: flex-start;
+      gap: 8px;
+      font-weight: 700;
+      cursor: pointer;
+      user-select: none;
+      white-space: nowrap;
+    }
+    .dba-setting-radio-line input[type="radio"] {
+      margin: 0;
+      width: 18px;
+      height: 18px;
+      cursor: pointer;
+      flex: 0 0 auto;
+    }
+
     /* ===== 装備ロスター ===== */
     #dba-m-roster.dba-m-std {
       width: min(920px, calc(100vw - 24px));
-      max-height: min(88vh, calc(100vh - 24px));
+      max-height: min(88svh, calc(100svh - 24px));
       overflow: hidden;
     }
     #dba-m-roster.dba-m-std .dba-modal__mid {
-      max-height: calc(min(88vh, calc(100vh - 24px)) - 110px);
+      max-height: calc(min(88svh, calc(100svh - 24px)) - 110px);
       overflow: hidden; /* mid全体はスクロールさせず、内部のリストだけをスクロール */
       display: flex;
       flex-direction: column;
@@ -1147,7 +2174,7 @@
       gap: 10px;
       align-items: center;
       justify-content: flex-start;
-      margin: 12px 0;
+      margin: 10px 0;
       flex: 0 0 auto;
     }
     .dba-roster-list {
@@ -1184,7 +2211,7 @@
     }
     .dba-roster-item {
       display: grid;
-      grid-template-columns: 1fr auto;
+      grid-template-columns: minmax(0, 1fr) auto;
       gap: 10px;
       align-items: center;
       padding: 8px 10px;
@@ -1210,7 +2237,36 @@
       font-size: 0.9em;
       font-weight: 700;
       opacity: 0.9;
+      display: grid;
+      grid-template-columns: repeat(3, max-content);
+      gap: 2px 10px;
+      align-items: center;
+      justify-items: end;
+      text-align: right;
       white-space: nowrap;
+    }
+    .dba-preset-meta__part {
+      display: block;
+    }
+
+    .dba-roster-item__actions {
+      grid-column: 1 / -1;
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+      gap: 8px;
+      margin-top: 10px;
+      padding-top: 10px;
+      border-top: 1px solid #00000022;
+    }
+    .dba-roster-item__actions .dba-btn-mini {
+      width: 100%;
+      margin: 0;
+      padding: 10px 12px;
+      text-align: center;
+      box-sizing: border-box;
+    }
+    .dba-roster-item__actions .dba-btn-mini--cancel {
+      background: #f3d0d0;
     }
 
     /* 装備変更結果（ロスター）テキスト表示 */
@@ -1227,11 +2283,11 @@
     /* ===== プリセット並び替えモーダル ===== */
     #dba-m-roster-sort.dba-m-std {
       width: min(760px, calc(100vw - 24px));
-      max-height: min(88vh, calc(100vh - 24px));
+      max-height: min(88svh, calc(100svh - 24px));
       overflow: hidden;
     }
     #dba-m-roster-sort.dba-m-std .dba-modal__mid {
-      max-height: calc(min(88vh, calc(100vh - 24px)) - 110px);
+      max-height: calc(min(88svh, calc(100svh - 24px)) - 110px);
       overflow: hidden; /* リスト側でスクロール */
       display: flex;
       flex-direction: column;
@@ -1251,7 +2307,7 @@
       padding: 8px;
       overflow: auto;
       min-height: 120px;
-      max-height: 52vh; /* 画面が小さい時も暴れにくく */
+      max-height: 52svh; /* 画面が小さい時も暴れにくく */
       scrollbar-gutter: stable both-edges;
       position: relative; /* 挿入ラインの absolute 基準 */
     }
@@ -1305,27 +2361,69 @@
       font-size: 0.9em;
       font-weight: 800;
       opacity: 0.85;
+      display: grid;
+      grid-template-columns: repeat(3, max-content);
+      gap: 2px 10px;
+      align-items: center;
+      justify-items: end;
+      text-align: right;
       white-space: nowrap;
+    }
+
+    @media (max-width: 720px) {
+      .dba-roster-item {
+        grid-template-columns: minmax(0, 1fr);
+        align-items: start;
+      }
+      .dba-roster-item__meta {
+        grid-template-columns: 1fr;
+        justify-items: start;
+        text-align: left;
+      }
+      .dba-roster-item__actions {
+        grid-template-columns: 1fr;
+      }
+
+      .dba-sort-item {
+        grid-template-columns: 28px minmax(0, 1fr);
+        align-items: start;
+      }
+      .dba-sort-handle {
+        grid-column: 1;
+        grid-row: 1;
+      }
+      .dba-sort-name {
+        grid-column: 2;
+        grid-row: 1;
+      }
+      .dba-sort-meta {
+        grid-column: 1 / -1;
+        grid-row: 2;
+        grid-template-columns: 1fr;
+        justify-items: start;
+        text-align: left;
+        padding-left: 38px;
+      }
     }
 
     /* ===== 装備プリセット追加モーダル ===== */
     #dba-m-roster-add.dba-m-std {
       width: min(760px, calc(100vw - 24px));
-      max-height: min(88vh, calc(100vh - 24px));
+      max-height: min(88svh, calc(100svh - 24px));
       overflow: hidden;
     }
     #dba-m-roster-add.dba-m-std .dba-modal__mid {
-      max-height: calc(min(88vh, calc(100vh - 24px)) - 110px);
+      max-height: calc(min(88svh, calc(100svh - 24px)) - 110px);
       overflow: auto;
     }
     /* ===== 装備プリセット再編集モーダル ===== */
     #dba-m-roster-edit.dba-m-std {
       width: min(760px, calc(100vw - 24px));
-      max-height: min(88vh, calc(100vh - 24px));
+      max-height: min(88svh, calc(100svh - 24px));
       overflow: hidden;
     }
     #dba-m-roster-edit.dba-m-std .dba-modal__mid {
-      max-height: calc(min(88vh, calc(100vh - 24px)) - 110px);
+      max-height: calc(min(88svh, calc(100svh - 24px)) - 110px);
       overflow: auto;
     }
     .dba-add-wrap {
@@ -1376,11 +2474,11 @@
     /* ===== アイテム選択（バッグ表） ===== */
     #dba-m-pick-item.dba-m-std {
       width: min(1100px, calc(100vw - 24px));
-      max-height: min(90vh, calc(100vh - 24px));
+      max-height: min(90svh, calc(100svh - 24px));
       overflow: hidden;
     }
     #dba-m-pick-item.dba-m-std .dba-modal__mid {
-      max-height: calc(min(90vh, calc(100vh - 24px)) - 110px);
+      max-height: calc(min(90svh, calc(100svh - 24px)) - 110px);
       overflow: auto;
     }
     .dba-pick-hint {
@@ -1485,12 +2583,12 @@
     /* ===== 装備ロスター：オプション ===== */
     #dba-m-roster-option.dba-m-std {
       width: min(720px, calc(100vw - 24px));
-      max-height: min(88vh, calc(100vh - 24px));
+      max-height: min(88svh, calc(100svh - 24px));
       overflow: hidden;
       margin: calc(var(--dba-fn-height) + 12px) auto auto;
     }
     #dba-m-roster-option.dba-m-std .dba-modal__mid {
-      max-height: calc(min(88vh, calc(100vh - 24px)) - 110px);
+      max-height: calc(min(88svh, calc(100svh - 24px)) - 110px);
       overflow: auto;
       display: flex;
       flex-direction: column;
@@ -1498,6 +2596,8 @@
       min-height: 0;
       justify-content: flex-start;
       align-items: stretch;
+      overscroll-behavior: contain;
+      -webkit-overflow-scrolling: touch;
     }
     .dba-roster-opt-section {
       display: flex;
@@ -1558,7 +2658,7 @@
       white-space: normal;
     }
     .dba-roster-opt-note {
-      margin: 0;
+      margin: 0 0 0 24px;
       padding: 0;
       font-size: 0.92em;
       font-weight: 600;
@@ -1568,6 +2668,33 @@
       white-space: normal;
       overflow-wrap: anywhere;
       word-break: break-word;
+    }
+    .dba-roster-opt-radio-group {
+      display: flex;
+      align-items: center;
+      justify-content: flex-start;
+      gap: 18px;
+      flex-wrap: wrap;
+      margin: 0;
+      padding: 0;
+      text-align: left;
+    }
+    .dba-roster-opt-radio-line {
+      display: inline-flex;
+      align-items: center;
+      justify-content: flex-start;
+      gap: 8px;
+      font-weight: 700;
+      cursor: pointer;
+      user-select: none;
+      white-space: nowrap;
+    }
+    .dba-roster-opt-radio-line input[type="radio"] {
+      margin: 0;
+      width: 18px;
+      height: 18px;
+      cursor: pointer;
+      flex: 0 0 auto;
     }
     .dba-roster-opt-btngrid {
       display: grid;
@@ -1583,11 +2710,32 @@
       text-align: center;
       box-sizing: border-box;
     }
+    @media (max-width: 640px), (pointer: coarse) {
+      #dba-m-roster-option.dba-m-std {
+        position: fixed;
+        left: 8px;
+        right: 8px;
+        top: calc(var(--dba-fn-height) + 8px);
+        bottom: 8px;
+        width: auto;
+        height: auto;
+        max-height: none;
+        margin: 0;
+      }
+      #dba-m-roster-option.dba-m-std .dba-modal__mid {
+        flex: 1 1 auto;
+        max-height: none;
+        min-height: 0;
+      }
+      .dba-roster-opt-btngrid {
+        grid-template-columns: 1fr;
+      }
+    }
     /* ===== 装備ロスター：バックアップ直接編集 ===== */
     #dba-m-roster-backup-editor.dba-m-std {
       width: min(1040px, calc(100vw - 16px));
-      height: min(94vh, calc(100vh - 16px));
-      max-height: min(94vh, calc(100vh - 16px));
+      height: min(94svh, calc(100svh - 16px));
+      max-height: min(94svh, calc(100svh - 16px));
       overflow: hidden;
     }
     #dba-m-roster-backup-editor.dba-m-std .dba-modal__mid {
@@ -1612,9 +2760,10 @@
       position: fixed;
       z-index: 999998; /* fnbar(999999)より下 */
       display: none;
+      font-size: var(--dba-base-font-size);
       min-width: 180px;
       max-width: min(360px, 92vw);
-      max-height: min(60vh, 520px);
+      max-height: min(60svh, 520px);
       overflow: auto;
       border: 2px solid #000;
       border-radius: 12px;
@@ -1648,16 +2797,49 @@
 
     #dba-m-auto-equip.dba-m-std {
       width: min(980px, calc(100vw - 24px));
-      max-height: min(88vh, calc(100vh - 24px));
+      max-height: min(88svh, calc(100svh - 24px));
       overflow: hidden;
     }
     #dba-m-auto-equip.dba-m-std .dba-modal__mid {
-      max-height: calc(min(88vh, calc(100vh - 24px)) - 110px);
+      max-height: calc(min(88svh, calc(100svh - 24px)) - 110px);
       /* ★ここが重要：mid全体スクロールを抑止して、内部（左右ゾーン）でスクロールさせる */
       overflow: hidden;
       display: flex;
       flex-direction: column;
       gap: 10px;
+      min-height: 0;
+    }
+    @media (max-width: 640px), (pointer: coarse) {
+      #dba-m-roster-option.dba-m-std,
+      #dba-m-roster-backup-editor.dba-m-std,
+      #dba-m-auto-equip.dba-m-std {
+        position: fixed;
+        left: 8px;
+        right: 8px;
+        top: calc(var(--dba-fn-height) + 8px);
+        bottom: 8px;
+        width: auto;
+        height: auto;
+        max-height: none;
+        margin: 0;
+      }
+      #dba-m-roster-option.dba-m-std .dba-modal__mid,
+      #dba-m-roster-backup-editor.dba-m-std .dba-modal__mid,
+      #dba-m-auto-equip.dba-m-std .dba-modal__mid {
+        flex: 1 1 auto;
+        min-height: 0;
+        max-height: none;
+      }
+      #dba-m-roster-option.dba-m-std .dba-modal__mid {
+        overflow: auto;
+      }
+      #dba-m-roster-backup-editor .dba-backup-textarea {
+        min-height: 160px;
+        height: 100%;
+      }
+      .dba-roster-opt-btngrid {
+        grid-template-columns: 1fr;
+      }
     }
     .dba-ae-topbtns {
       display: flex;
@@ -1716,7 +2898,7 @@
     .dba-ae-wrap {
       display: grid;
       grid-template-columns: 100px 1fr;
-      gap: 10px;
+      gap: 2px;
       /* ★grid item が縮められるようにする（min-height:auto を避ける） */
       align-items: stretch;
       flex: 1 1 auto;  /* #dba-m-auto-equip .dba-modal__mid（flex）配下で残り領域を占有 */
@@ -1725,26 +2907,28 @@
     .dba-ae-leftpane {
       display: flex;
       flex-direction: column;
-      gap: 8px;
+      justify-content: flex-start;
+      gap: 10px;
       align-items: stretch;
       /* ★左ペインも高さが親より大きくならないようにし、溢れは左ペイン内でスクロール */
       overflow: auto;
+      width: 100%;
       min-height: 0;
       max-height: 100%;
       scrollbar-gutter: stable both-edges;
     }
     .dba-ae-rpane {
       display: grid;
-      grid-template-columns: 1fr 100px 1fr;
-      gap: 10px;
+      grid-template-columns: 1fr 90px 1fr;
+      gap: 0;
       align-items: stretch;
       min-height: 0; /* ★子（左右box）が親高さ以内に収まれるように */
     }
     .dba-ae-box {
       border: 1px solid #000;
-      border-radius: 12px;
+      border-radius: 8px;
       background: #fff;
-      padding: 8px;
+      padding: 8px 4px ;
       /* 左右ゾーンは内容が溢れたらゾーン内スクロール */
       overflow: auto;
       /* ★min-height 固定だと親より大きくなって mid がスクロールするので解除 */
@@ -1754,14 +2938,14 @@
     }
     .dba-ae-box-title {
       font-weight: 900;
-      margin: 0 0 8px 0;
+      margin: 0;
       text-align: left;
     }
     .dba-ae-item {
-      padding: 8px 10px;
+      padding: 8px 6px;
       border-radius: 10px;
       border: 1px solid #00000022;
-      margin: 6px 0;
+      margin: 0;
       cursor: pointer;
       user-select: none;
       font-weight: 800;
@@ -1810,9 +2994,10 @@
       position: fixed;
       z-index: 999998; /* fnbar(999999)より下 */
       display: none;
+      font-size: var(--dba-base-font-size);
       min-width: 220px;
       max-width: min(420px, 92vw);
-      max-height: min(60vh, 520px);
+      max-height: min(60svh, 520px);
       overflow: auto;
       border: 2px solid #000;
       border-radius: 12px;
@@ -2063,7 +3248,7 @@
     }
   }
 
-  function showFnTooltipNearButton(btn, text){
+  function showFnTooltipNearButton(btn, text, preferredPos){
     if(!(btn instanceof HTMLElement)) return;
     const el = ensureFnTooltip();
     if(!el) return;
@@ -2073,6 +3258,7 @@
 
     const rect = btn.getBoundingClientRect();
     const margin = 10;
+    const pref = String(preferredPos || '').toLowerCase();
 
     // 一旦表示して実寸取得
     el.style.left = '0px';
@@ -2082,11 +3268,23 @@
     let left = rect.left + (rect.width / 2) - (tipRect.width / 2);
     left = Math.max(12, Math.min(left, window.innerWidth - tipRect.width - 12));
 
-    let top = rect.top - tipRect.height - margin;
-    let pos = 'above';
-    if(top < 8){
+    let top;
+    let pos;
+
+    if(pref === 'below'){
       top = rect.bottom + margin;
       pos = 'below';
+      if(top + tipRect.height > window.innerHeight - 8){
+        top = Math.max(8, rect.top - tipRect.height - margin);
+        pos = 'above';
+      }
+    }else{
+      top = rect.top - tipRect.height - margin;
+      pos = 'above';
+      if(top < 8){
+        top = rect.bottom + margin;
+        pos = 'below';
+      }
     }
 
     el.dataset.pos = pos;
@@ -2094,7 +3292,13 @@
     el.style.top = `${Math.round(top)}px`;
   }
 
-  function scheduleFnTooltip(btn, text){
+  function scheduleFnTooltip(btn, text, preferredPos){
+    const s = loadSettings();
+    if(s?.rbLayer?.hideFnTooltip){
+      hideFnTooltip();
+      return;
+    }
+
     if(DBA_FN_TOOLTIP.timer){
       clearTimeout(DBA_FN_TOOLTIP.timer);
       DBA_FN_TOOLTIP.timer = 0;
@@ -2104,22 +3308,33 @@
     DBA_FN_TOOLTIP.timer = setTimeout(() => {
       DBA_FN_TOOLTIP.timer = 0;
       if(DBA_FN_TOOLTIP.anchor !== btn) return;
-      showFnTooltipNearButton(btn, DBA_FN_TOOLTIP.text);
+      showFnTooltipNearButton(btn, DBA_FN_TOOLTIP.text, preferredPos);
     }, 600);   // ヘルプバルーンの待機時間（ミリ秒）
   }
 
-  function bindFnButtonTooltip(btn, text){
+  function bindFnButtonTooltip(btn, text, preferredPos){
     if(!(btn instanceof HTMLElement)) return;
     const hintText = String(text || '');
+    const hintPos = String(preferredPos || '').toLowerCase();
 
     btn.addEventListener('mouseenter', (e) => {
       if(!(e instanceof MouseEvent)) return;
+      const s = loadSettings();
+      if(s?.rbLayer?.hideFnTooltip){
+        hideFnTooltip();
+        return;
+      }
       hideFnTooltip();
-      scheduleFnTooltip(btn, hintText);
+      scheduleFnTooltip(btn, hintText, hintPos);
     });
 
     btn.addEventListener('mousemove', (e) => {
       if(!(e instanceof MouseEvent)) return;
+      const s = loadSettings();
+      if(s?.rbLayer?.hideFnTooltip){
+        hideFnTooltip();
+        return;
+      }
       const x = Number(e.clientX || 0);
       const y = Number(e.clientY || 0);
       const dx = Math.abs(x - DBA_FN_TOOLTIP.mouseX);
@@ -2131,9 +3346,9 @@
       if(dx > 2 || dy > 2){
         const el = document.getElementById('dba-fn-tooltip');
         if(el && el.dataset.open === '1'){
-          showFnTooltipNearButton(btn, hintText);
+          showFnTooltipNearButton(btn, hintText, hintPos);
         }else{
-          scheduleFnTooltip(btn, hintText);
+          scheduleFnTooltip(btn, hintText, hintPos);
         }
       }
     });
@@ -2177,6 +3392,8 @@
   const LS_CURRENT_PRESET_NAME_KEY = 'dba.roster.currentPresetName.v1'; // string 現在装備中として扱うプリセット名
   const LS_ROSTER_SCROLL_REMEMBER_KEY = 'dba.roster.scrollRemember.v1'; // 0/1
   const LS_ROSTER_SCROLL_TOP_KEY = 'dba.roster.scrollTop.v1'; // number
+  const LS_ROSTER_PRESET_CLICK_ACTION_KEY = 'dba.roster.presetClickAction.v1'; // equip / menu
+  const LS_ROSTER_HIDE_MENU_ROW2_KEY = 'dba.roster.hideMenuRow2.v1'; // 0/1
   const LS_BR_TAIL2_KEY = 'dba.battleResult.tail2.v1'; // 戦闘結果「末尾2行のみ表示」ON/OFF
   const LS_BR_ALIGN_KEY = 'dba.battleResult.align.v1'; // left / center / right
   const LS_BR_PASS_KEY  = 'dba.battleResult.passThrough.v1'; // 0/1 クリック透過
@@ -2194,6 +3411,7 @@
   const DBA_TOP_PROGRESS_CYCLE_MS = 60 * 60 * 1000; // 1サイクル=約1時間（ユーザー説明に基づく）
   const LS_TOP_SYNCINFO_SHOW_KEY = 'dba.topElapsedProgress.showInfo.v1'; // 0/1
   const LS_SHOW_ORIGINAL_HEADER_KEY = 'dba.showOriginalHeader.v1'; // 0/1
+  const LS_SHOW_LIGHT_REFRESH_BUTTON_KEY = 'dba.showLightRefreshButton.v1'; // 0/1
   const LS_PICK_HIDE_MOD0_PREFIX = 'dba.pick.hideModZero.v1.'; // weapon / armor / necklace
 
   function makePickHideModZeroKey(kind){
@@ -2246,6 +3464,22 @@
   function saveShowOriginalHeader(on){
     try{
       localStorage.setItem(LS_SHOW_ORIGINAL_HEADER_KEY, on ? '1' : '0');
+    }catch(_e){}
+  }
+
+  function loadShowLightRefreshButton(){
+    try{
+      const raw = localStorage.getItem(LS_SHOW_LIGHT_REFRESH_BUTTON_KEY);
+      if(raw == null) return false; // デフォルトOFF
+      return raw === '1';
+    }catch(_e){
+      return false;
+    }
+  }
+
+  function saveShowLightRefreshButton(on){
+    try{
+      localStorage.setItem(LS_SHOW_LIGHT_REFRESH_BUTTON_KEY, on ? '1' : '0');
     }catch(_e){}
   }
 
@@ -2380,6 +3614,162 @@
     }
     // hc / l
     return { totalMatches: 2, matchSec: 30 * 60 };
+  }
+
+  // =========================
+  // 試合進捗アンカー
+  //  - 「期」の整数percentをそのまま毎秒試合進捗へ変換すると丸め誤差の影響を受けやすい
+  //  - 同期時点で「何試合目の何秒地点か」を一度アンカー化し、
+  //    以後は実時間で滑らかに進める
+  // =========================
+  const DBA_MATCH_PROGRESS_ANCHOR = {
+    term: '',
+    matchSec: 0,
+    totalMatches: 0,
+    matchIndex: 0,       // 0-based
+    inMatchSec: 0,       // アンカー時点の試合内経過秒
+    anchorAt: 0,         // Date.now()
+    sourceElapsedSec: 0  // 同期元の期内経過秒（デバッグ用）
+  };
+
+  function resetMatchProgressAnchor(){
+    DBA_MATCH_PROGRESS_ANCHOR.term = '';
+    DBA_MATCH_PROGRESS_ANCHOR.matchSec = 0;
+    DBA_MATCH_PROGRESS_ANCHOR.totalMatches = 0;
+    DBA_MATCH_PROGRESS_ANCHOR.matchIndex = 0;
+    DBA_MATCH_PROGRESS_ANCHOR.inMatchSec = 0;
+    DBA_MATCH_PROGRESS_ANCHOR.anchorAt = 0;
+    DBA_MATCH_PROGRESS_ANCHOR.sourceElapsedSec = 0;
+  }
+
+  function normalizeElapsedSecondInTerm(sec){
+    const n = Number(sec);
+    if(!Number.isFinite(n)) return 0;
+    let v = n % 3600;
+    if(v < 0) v += 3600;
+    return v;
+  }
+
+  function getNearestMatchBoundarySecond(elapsedSec, matchSec){
+    const cur = normalizeElapsedSecondInTerm(elapsedSec);
+    const span = Math.max(1, Number(matchSec || 1));
+    const q = Math.round(cur / span);
+    const raw = q * span;
+    if(raw >= 3600) return 0;
+    return raw;
+  }
+
+  function getCircularSecondDistance(a, b){
+    const x = normalizeElapsedSecondInTerm(a);
+    const y = normalizeElapsedSecondInTerm(b);
+    const d = Math.abs(x - y);
+    return Math.min(d, 3600 - d);
+  }
+
+  function maybeSnapElapsedSecondToMatchBoundary(elapsedSec, matchSec){
+    const cur = normalizeElapsedSecondInTerm(elapsedSec);
+    const span = Math.max(1, Number(matchSec || 1));
+    const nearest = getNearestMatchBoundarySecond(cur, span);
+    // トップページの整数percentは 1% = 36秒 粒度なので、
+    // 境界近辺は少し広めに吸着してズレを抑える
+    const SNAP_TOLERANCE_SEC = 24;
+    const dist = getCircularSecondDistance(cur, nearest);
+    return (dist <= SNAP_TOLERANCE_SEC) ? nearest : cur;
+  }
+
+  function setMatchProgressAnchorFromElapsedSec(elapsedSec, termText){
+    const spec = getMatchSpecByMode();
+    const totalMatches = Math.max(1, Number(spec.totalMatches || 1));
+    const matchSec = Math.max(1, Number(spec.matchSec || 1));
+
+    const snappedElapsedSec = maybeSnapElapsedSecondToMatchBoundary(elapsedSec, matchSec);
+    const matchIndex = Math.max(0, Math.min(totalMatches - 1, Math.floor(snappedElapsedSec / matchSec)));
+    const inMatchSec = snappedElapsedSec - (matchIndex * matchSec);
+
+    DBA_MATCH_PROGRESS_ANCHOR.term = String(termText || '');
+    DBA_MATCH_PROGRESS_ANCHOR.matchSec = matchSec;
+    DBA_MATCH_PROGRESS_ANCHOR.totalMatches = totalMatches;
+    DBA_MATCH_PROGRESS_ANCHOR.matchIndex = matchIndex;
+    DBA_MATCH_PROGRESS_ANCHOR.inMatchSec = Math.max(0, Math.min(matchSec, inMatchSec));
+    DBA_MATCH_PROGRESS_ANCHOR.anchorAt = Date.now();
+    DBA_MATCH_PROGRESS_ANCHOR.sourceElapsedSec = normalizeElapsedSecondInTerm(elapsedSec);
+  }
+
+  function syncMatchProgressAnchorFromStoredTopProgress(){
+    const data = loadTopElapsedProgress();
+    if(!data){
+      resetMatchProgressAnchor();
+      return false;
+    }
+
+    const pct = estimateTopElapsedProgressPctFloat();
+    const elapsedSec = pctToElapsedSecond(pct);
+    setMatchProgressAnchorFromElapsedSec(elapsedSec, data.term || '');
+    return true;
+  }
+
+  function isMatchProgressAnchorExpired(nowMs){
+    const now = Number.isFinite(Number(nowMs)) ? Number(nowMs) : Date.now();
+    if(!(DBA_MATCH_PROGRESS_ANCHOR.anchorAt > 0)) return true;
+
+    const ageMs = Math.max(0, now - Number(DBA_MATCH_PROGRESS_ANCHOR.anchorAt || 0));
+    // 1期=約60分。バックグラウンド復帰などでこの程度を超えたら、
+    // 古いアンカーとして扱って同期値の採用を優先する。
+    return ageMs >= (DBA_TOP_PROGRESS_CYCLE_MS + 15000);
+  }
+
+  function getAnchoredMatchProgressState(){
+    const data = loadTopElapsedProgress();
+    if(!data) return null;
+
+    const spec = getMatchSpecByMode();
+    const totalMatches = Math.max(1, Number(spec.totalMatches || 1));
+    const matchSec = Math.max(1, Number(spec.matchSec || 1));
+    const termText = String(data.term || '');
+
+    const anchorUsable =
+      DBA_MATCH_PROGRESS_ANCHOR.anchorAt > 0 &&
+      DBA_MATCH_PROGRESS_ANCHOR.matchSec === matchSec &&
+      DBA_MATCH_PROGRESS_ANCHOR.totalMatches === totalMatches &&
+      DBA_MATCH_PROGRESS_ANCHOR.term === termText;
+
+    if(!anchorUsable){
+      const ok = syncMatchProgressAnchorFromStoredTopProgress();
+      if(!ok) return null;
+    }
+
+    const now = Date.now();
+    const dtSec = Math.max(0, Math.floor((now - DBA_MATCH_PROGRESS_ANCHOR.anchorAt) / 1000));
+    const totalElapsedSec =
+      (DBA_MATCH_PROGRESS_ANCHOR.matchIndex * matchSec) +
+      DBA_MATCH_PROGRESS_ANCHOR.inMatchSec +
+      dtSec;
+
+    // v5.3.6.4 までは 3600秒超を 3599 に固定していたため、
+    // バックグラウンド復帰後などに 99% で張り付くことがあった。
+    // ここでは1期(3600秒)単位で周回させ、ローカル時計側は止めない。
+    const wrappedTotal = normalizeElapsedSecondInTerm(totalElapsedSec);
+
+    let matchIndex = Math.floor(wrappedTotal / matchSec);
+    let inMatchSec = wrappedTotal - (matchIndex * matchSec);
+
+    if(matchIndex >= totalMatches){
+      matchIndex = totalMatches - 1;
+      inMatchSec = 0;
+    }
+
+    inMatchSec = Math.max(0, Math.min(matchSec, inMatchSec));
+
+    const remainSec = Math.max(0, Math.min(matchSec, matchSec - inMatchSec));
+    const matchPct = (matchSec <= 0) ? 0 : Math.max(0, Math.min(100, (inMatchSec / matchSec) * 100));
+
+    return {
+      matchNo: clampInt(matchIndex + 1, 1, totalMatches),
+      totalMatches,
+      inMatchSec,
+      remainSec,
+      matchPct
+    };
   }
 
   function extractFnHeaderInfoFromCurrentHeader(){
@@ -2609,6 +3999,179 @@
     return { left: '[', body: raw, right: ']' };
   }
 
+  function closeFnHeaderPrevMenu(){
+    const panel = document.getElementById('dba-fn-header-info-prevmenu-panel');
+    if(panel) panel.dataset.open = '0';
+  }
+
+  function bindFnHeaderPrevMenuAutoClose(){
+    if(document.documentElement.dataset.dbaFnPrevMenuBound === '1') return;
+    document.documentElement.dataset.dbaFnPrevMenuBound = '1';
+
+    document.addEventListener('pointerdown', (e) => {
+      const root = document.getElementById('dba-fn-header-info-prevmenu');
+      if(!root) return;
+      if(root.contains(e.target)) return;
+      closeFnHeaderPrevMenu();
+    }, true);
+  }
+
+  const DBA_TOP_PROGRESS_POP_STATE = {
+    hideTimer: 0
+  };
+
+  function ensureTopProgressPopup(){
+    let pop = document.getElementById('dba-top-progress-pop');
+    if(pop) return pop;
+
+    pop = document.createElement('div');
+    pop.id = 'dba-top-progress-pop';
+    pop.dataset.open = '0';
+
+    const ttl = document.createElement('div');
+    ttl.className = 'dba-top-progress-pop__title';
+    ttl.id = 'dba-top-progress-pop-title';
+    ttl.textContent = '第 ? 期';
+
+    const bar = document.createElement('div');
+    bar.className = 'dba-top-progress-pop__bar';
+
+    const inner = document.createElement('div');
+    inner.id = 'dba-top-progress-pop-inner';
+    inner.style.width = '0%';
+    inner.textContent = '0%';
+    bar.appendChild(inner);
+
+    const line1 = document.createElement('div');
+    line1.className = 'dba-top-progress-pop__line';
+    line1.id = 'dba-top-progress-pop-sync';
+    line1.textContent = '最終同期（手動＆自動）： --- 秒前';
+
+    const line2 = document.createElement('div');
+    line2.className = 'dba-top-progress-pop__line';
+    line2.id = 'dba-top-progress-pop-auto';
+    line2.textContent = '最終補正（自動）： --- 秒前';
+
+    pop.appendChild(ttl);
+    pop.appendChild(bar);
+    pop.appendChild(line1);
+    pop.appendChild(line2);
+
+    pop.addEventListener('pointerenter', () => {
+      if(DBA_TOP_PROGRESS_POP_STATE.hideTimer){
+        clearTimeout(DBA_TOP_PROGRESS_POP_STATE.hideTimer);
+        DBA_TOP_PROGRESS_POP_STATE.hideTimer = 0;
+      }
+    });
+    pop.addEventListener('pointerleave', () => {
+      hideTopProgressPopupSoon();
+    });
+
+    (document.body || document.documentElement).appendChild(pop);
+    return pop;
+  }
+
+  function updateTopProgressPopupContent(){
+    const pop = ensureTopProgressPopup();
+    if(!pop) return;
+
+    const title = document.getElementById('dba-top-progress-pop-title');
+    const inner = document.getElementById('dba-top-progress-pop-inner');
+    const lineSync = document.getElementById('dba-top-progress-pop-sync');
+    const lineAuto = document.getElementById('dba-top-progress-pop-auto');
+
+    const pct = estimateTopElapsedProgressPct();
+    const data = loadTopElapsedProgress();
+    const now = Date.now();
+    const titleText = (data && data.term) ? data.term : '第 ? 期';
+
+    if(title) title.textContent = titleText;
+    if(inner){
+      inner.style.width = `${pct}%`;
+      inner.textContent = `${pct}%`;
+    }
+    if(lineSync){
+      lineSync.textContent = !data
+        ? '最終同期（手動＆自動）： --- 秒前'
+        : `最終同期（手動＆自動）： ${Math.floor(Math.max(0, now - data.fetchedAt) / 1000)} 秒前`;
+    }
+    if(lineAuto){
+      lineAuto.textContent = (DBA_TOP_PROGRESS_AUTOSYNC.lastAutoAt > 0)
+        ? `最終補正（自動）： ${Math.floor(Math.max(0, now - DBA_TOP_PROGRESS_AUTOSYNC.lastAutoAt) / 1000)} 秒前`
+        : '最終補正（自動）： --- 秒前';
+    }
+  }
+
+  function hideTopProgressPopup(){
+    if(DBA_TOP_PROGRESS_POP_STATE.hideTimer){
+      clearTimeout(DBA_TOP_PROGRESS_POP_STATE.hideTimer);
+      DBA_TOP_PROGRESS_POP_STATE.hideTimer = 0;
+    }
+    const pop = document.getElementById('dba-top-progress-pop');
+    if(pop) pop.dataset.open = '0';
+  }
+
+  function hideTopProgressPopupSoon(){
+    if(DBA_TOP_PROGRESS_POP_STATE.hideTimer){
+      clearTimeout(DBA_TOP_PROGRESS_POP_STATE.hideTimer);
+      DBA_TOP_PROGRESS_POP_STATE.hideTimer = 0;
+    }
+    DBA_TOP_PROGRESS_POP_STATE.hideTimer = setTimeout(() => {
+      DBA_TOP_PROGRESS_POP_STATE.hideTimer = 0;
+      hideTopProgressPopup();
+    }, 120);
+  }
+
+  function showTopProgressPopupNearAnchor(anchor){
+    if(!(anchor instanceof HTMLElement)) return;
+    const pop = ensureTopProgressPopup();
+    if(!pop) return;
+
+    updateTopProgressPopupContent();
+    pop.dataset.open = '1';
+
+    const rect = anchor.getBoundingClientRect();
+    const popRect = pop.getBoundingClientRect();
+
+    let left = rect.left + (rect.width / 2) - (popRect.width / 2);
+    left = Math.max(12, Math.min(left, window.innerWidth - popRect.width - 12));
+
+    let top = rect.bottom + 10;
+    if(top + popRect.height > window.innerHeight - 8){
+      top = Math.max(8, rect.top - popRect.height - 10);
+    }
+
+    pop.style.left = `${Math.round(left)}px`;
+    pop.style.top = `${Math.round(top)}px`;
+  }
+
+  function bindTopProgressPopup(anchor){
+    if(!(anchor instanceof HTMLElement)) return;
+    if(anchor.dataset.dbaTopProgressPopupBound === '1') return;
+    anchor.dataset.dbaTopProgressPopupBound = '1';
+
+    anchor.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const pop = ensureTopProgressPopup();
+      if(pop && pop.dataset.open === '1'){
+        hideTopProgressPopup();
+      }else{
+        showTopProgressPopupNearAnchor(anchor);
+      }
+    });
+
+    document.addEventListener('pointerdown', (e) => {
+      const pop = document.getElementById('dba-top-progress-pop');
+      if(anchor.contains(e.target)) return;
+      if(pop && pop.contains(e.target)) return;
+      hideTopProgressPopup();
+    }, true);
+
+    window.addEventListener('resize', hideTopProgressPopup, { passive:true });
+    window.addEventListener('orientationchange', hideTopProgressPopup, { passive:true });
+  }
+
   function ensureFnHeaderInfoContainer(targetParent){
     const existed = document.getElementById('dba-fn-header-info');
     if(existed){
@@ -2634,10 +4197,13 @@
     const info = extractFnHeaderInfoFromCurrentHeader();
     wrap.textContent = '';
 
+    const line1 = document.createElement('div');
+    line1.className = 'dba-fn-header-info__line1';
+
     const title = document.createElement('span');
     title.className = 'dba-fn-header-info__title';
     title.textContent = 'どんぐりチーム戦い';
-    wrap.appendChild(title);
+    line1.appendChild(title);
 
     const modeLabel = document.createElement('span');
     modeLabel.className = 'dba-fn-header-info__mode';
@@ -2650,11 +4216,12 @@
     }else{
       modeLabel.textContent = '《 unknown mode 》';
     }
-    wrap.appendChild(modeLabel);
+    line1.appendChild(modeLabel);
 
     if(mode === 'rb'){
       const reg = document.createElement('span');
       reg.className = 'dba-fn-header-info__reg';
+      reg.style.cursor = 'help';
 
       const regLabel = document.createElement('span');
       regLabel.className = 'dba-fn-header-info__reg-label';
@@ -2666,7 +4233,19 @@
       regValue.textContent = getRbUnifiedRegDisplayText();
       reg.appendChild(regValue);
 
-      wrap.appendChild(reg);
+      bindFnButtonTooltip(
+        reg,
+        'レギュレーションの短縮表示\n' +
+        '[α]だけ … α\n' +
+        '[α]まで … ?α\n' +
+        '[α]から[β]まで … α-β\n' +
+        '[α]だけ|[エリート] … α?\n' +
+        '[α]まで|[警備員]だけ … ?α警\n' +
+        '[α]だけ|[警備員]だけ|[エリート] … α警?',
+        'below'
+      );
+
+      line1.appendChild(reg);
     }
 
     if(mode === 'rb' && (info.teamName || info.teamColor)){
@@ -2697,43 +4276,74 @@
         team.appendChild(dot);
       }
 
-      wrap.appendChild(team);
+      line1.appendChild(team);
     }
 
     if(info.prevHref || info.animHref){
-      const links = document.createElement('span');
-      links.className = 'dba-fn-header-info__links';
+      const menuWrap = document.createElement('span');
+      menuWrap.className = 'dba-fn-header-info__prevmenu';
+      menuWrap.id = 'dba-fn-header-info-prevmenu';
+
+      const bracketL = document.createElement('span');
+      bracketL.className = 'dba-fn-header-info__prevmenu-bracket';
+      bracketL.textContent = '[';
+
+      const trigger = document.createElement('button');
+      trigger.type = 'button';
+      trigger.className = 'dba-fn-header-info__prevmenu-btn';
+      trigger.textContent = '前の試合';
+
+      const bracketR = document.createElement('span');
+      bracketR.className = 'dba-fn-header-info__prevmenu-bracket';
+      bracketR.textContent = ']';
+
+      const panel = document.createElement('div');
+      panel.className = 'dba-fn-header-info__prevmenu-panel';
+      panel.id = 'dba-fn-header-info-prevmenu-panel';
+      panel.dataset.open = '0';
 
       if(info.prevHref){
+        const row = document.createElement('div');
+        row.className = 'dba-fn-header-info__prevmenu-row';
+
         const aPrev = document.createElement('a');
         aPrev.href = info.prevHref;
-        aPrev.textContent = info.prevText || '前回のチームバトルの結果';
         aPrev.target = '_self';
-        links.appendChild(aPrev);
+        aPrev.className = 'dba-fn-header-info__prevmenu-link';
+        aPrev.textContent = '前回のチームバトルの結果';
+
+        row.appendChild(aPrev);
+        panel.appendChild(row);
       }
 
       if(info.animHref){
-        const anim = normalizeAnimLinkText(info.animText || '[アニメーション]');
-
-        const bL = document.createElement('span');
-        bL.className = 'dba-fn-header-info__anim-bracket';
-        bL.textContent = anim.left || '[';
-        links.appendChild(bL);
+        const row = document.createElement('div');
+        row.className = 'dba-fn-header-info__prevmenu-row';
 
         const aAnim = document.createElement('a');
         aAnim.href = info.animHref;
-        aAnim.textContent = anim.body || 'アニメーション';
         aAnim.target = '_self';
-        links.appendChild(aAnim);
+        aAnim.className = 'dba-fn-header-info__prevmenu-link';
+        aAnim.textContent = 'アニメーション';
 
-        const bR = document.createElement('span');
-        bR.className = 'dba-fn-header-info__anim-bracket';
-        bR.textContent = anim.right || ']';
-        links.appendChild(bR);
+        row.appendChild(aAnim);
+        panel.appendChild(row);
       }
 
-      wrap.appendChild(links);
+      trigger.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        panel.dataset.open = (panel.dataset.open === '1') ? '0' : '1';
+      });
+
+      menuWrap.appendChild(bracketL);
+      menuWrap.appendChild(trigger);
+      menuWrap.appendChild(bracketR);
+      menuWrap.appendChild(panel);
+      line1.appendChild(menuWrap);
+      bindFnHeaderPrevMenuAutoClose();
     }
+    wrap.appendChild(line1);
   }
 
   function ensureTopProgressContainer(targetParent){
@@ -2752,34 +4362,40 @@
     wrap.id = 'dba-top-progress';
     wrap.dataset.showinfo = loadTopSyncInfoShow() ? '1' : '0';
 
-    // --- panes root ---
-    const panes = document.createElement('div');
-    panes.className = 'dba-top-progress__panes';
+    const metaRow = document.createElement('div');
+    metaRow.className = 'dba-top-progress__metaRow';
 
-    // --- left pane ---
-    const paneL = document.createElement('div');
-    paneL.className = 'dba-top-progress__paneL';
+    const metaTerm = document.createElement('span');
+    metaTerm.className = 'dba-top-progress__metaTerm';
+    metaTerm.id = 'dba-top-progress-meta-term';
+    metaTerm.textContent = '第 ? 期';
 
-    // --- middle pane (buttons) ---
-    const paneM = document.createElement('div');
-    paneM.className = 'dba-top-progress__paneM';
+    const metaMatch = document.createElement('span');
+    metaMatch.className = 'dba-top-progress__metaMatch';
+    metaMatch.id = 'dba-top-progress-match-label';
+    metaMatch.textContent = '第 1 試合／?';
 
-    // ★termRow（左=期 / 中=プログレスバー / 右=ボタン）
-    const termRow = document.createElement('div');
-    termRow.className = 'dba-top-progress__termRow';
-    const d0 = loadTopElapsedProgress();
+    const metaTime = document.createElement('span');
+    metaTime.className = 'dba-top-progress__metaTime';
+    metaTime.id = 'dba-top-progress-match-time';
+    metaTime.textContent = '残り: --分--秒（誤差あり）';
 
-    // 「第 xx 期」表示（span）
-    const termSpan = document.createElement('span');
-    termSpan.id = 'dba-top-progress-title';
-    termSpan.textContent = (d0 && d0.term) ? d0.term : '第 ? 期';
+    bindFnButtonTooltip(
+      metaTime,
+      'サーバーから時間の送信はなく、プログレスバーも 36秒 が最小単位なので誤差が出ます。',
+      'below'
+    );
+
+    metaRow.appendChild(metaTerm);
+    metaRow.appendChild(metaMatch);
+    metaRow.appendChild(metaTime);
 
     // 「今すぐ同期」ボタン
     const btnSync = document.createElement('button');
     btnSync.type = 'button';
     btnSync.id = 'dba-top-progress-sync-now';
     btnSync.className = 'dba-btn-progress-mini';
-    btnSync.innerHTML = '今すぐ<br>同期';
+    btnSync.textContent = '同期';
     btnSync.addEventListener('click', (e) => {
       e.preventDefault();
       e.stopPropagation();
@@ -2787,96 +4403,27 @@
       fetchTopElapsedProgressFromTopPageOnce('manual').catch(()=>{});
     });
 
-    // 「同期情報」ボタン（スイッチ）
-    const btnInfo = document.createElement('button');
-    btnInfo.type = 'button';
-    btnInfo.id = 'dba-top-progress-sync-info';
-    btnInfo.className = 'dba-btn-progress-mini';
-    btnInfo.innerHTML = '同期<br>情報';
-    btnInfo.dataset.on = (wrap.dataset.showinfo === '1') ? '1' : '0';
-    btnInfo.addEventListener('click', (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      const on = (wrap.dataset.showinfo === '1') ? false : true;
-      wrap.dataset.showinfo = on ? '1' : '0';
-      btnInfo.dataset.on = on ? '1' : '0';
-      saveTopSyncInfoShow(on);
-      renderTopProgress();
-    });
+    const barRow = document.createElement('div');
+    barRow.className = 'dba-top-progress__barRow';
 
     const bar = document.createElement('div');
-    bar.className = 'progress-bar';
+    bar.className = 'dba-top-progress__matchBar';
+    bar.id = 'dba-top-progress-match-bar';
 
     const inner = document.createElement('div');
-    inner.id = 'dba-top-progress-inner';
+    inner.id = 'dba-top-progress-match-inner';
     inner.style.width = '0%';
     inner.textContent = '0%';
     bar.appendChild(inner);
 
-    // ★左ペイン：期 → バー（ボタンは中央ペインへ）
-    termRow.appendChild(termSpan);
-    termRow.appendChild(bar);
+    barRow.appendChild(bar);
+    barRow.appendChild(btnSync);
 
-    paneL.appendChild(termRow);
+    wrap.appendChild(metaRow);
+    wrap.appendChild(barRow);
 
-    // ★中央ペイン：左から「今すぐ同期」→「同期情報」
-    paneM.appendChild(btnSync);
-    paneM.appendChild(btnInfo);
-
-    // --- match progress (under term progress) ---
-    const matchRow = document.createElement('div');
-    matchRow.className = 'dba-top-progress__matchRow';
-
-    const matchLabel = document.createElement('div');
-    matchLabel.className = 'dba-top-progress__matchLabel';
-    matchLabel.id = 'dba-top-progress-match-label';
-    matchLabel.textContent = '第 1 試合／?';
-
-    const matchRight = document.createElement('div');
-    matchRight.className = 'dba-top-progress__matchRight';
-
-    const matchTime = document.createElement('div');
-    matchTime.className = 'dba-top-progress__matchTime';
-    matchTime.id = 'dba-top-progress-match-time';
-    matchTime.textContent = '残り時間： --分--秒';
-
-    const matchBar = document.createElement('div');
-    matchBar.className = 'progress-bar dba-match-progress';
-
-    const matchInner = document.createElement('div');
-    matchInner.id = 'dba-top-progress-match-inner';
-    matchInner.style.width = '0%';
-    matchInner.textContent = '0%';
-    matchBar.appendChild(matchInner);
-
-    matchRight.appendChild(matchTime);
-    matchRight.appendChild(matchBar);
-
-    matchRow.appendChild(matchLabel);
-    matchRow.appendChild(matchRight);
-    paneL.appendChild(matchRow);
-
-    // --- right pane ---
-    const paneR = document.createElement('div');
-    paneR.className = 'dba-top-progress__paneR';
-
-    const line1 = document.createElement('div');
-    line1.className = 'dba-top-progress__infoLine';
-    line1.id = 'dba-top-progress-info-sync';
-    line1.textContent = '最終同期（手動＆自動）： --- 秒前';
-
-    const line2 = document.createElement('div');
-    line2.className = 'dba-top-progress__infoLine';
-    line2.id = 'dba-top-progress-info-auto';
-    line2.textContent = '最終補正（自動）： --- 秒前';
-
-    paneR.appendChild(line1);
-    paneR.appendChild(line2);
-
-    panes.appendChild(paneL);
-    panes.appendChild(paneM);
-    panes.appendChild(paneR);
-    wrap.appendChild(panes);
+    bindTopProgressPopup(bar);
+    ensureTopProgressPopup();
 
     // ★設置先：targetParent が指定されていれば fnbar 内へ、無ければ従来通り header 直後
     if(targetParent){
@@ -2897,194 +4444,626 @@
   }
 
   const DBA_TOP_PROGRESS_RENDER_CACHE = {
-    pct: null,
+    termPct: null,
     matchLabel: '',
     matchTime: '',
     matchPct: null,
-    title: '',
+    termTitle: '',
     syncDisabled: null,
-    syncHtml: '',
-    infoBtnOn: '',
-    infoSync: '',
-    infoAuto: ''
+    syncText: ''
   };
 
   function renderTopProgress(){
-    const inner = document.getElementById('dba-top-progress-inner');
-    const title = document.getElementById('dba-top-progress-title');
+    const matchInner = document.getElementById('dba-top-progress-match-inner');
+    const termTitle = document.getElementById('dba-top-progress-meta-term');
     const btnSync = document.getElementById('dba-top-progress-sync-now');
-    const btnInfo = document.getElementById('dba-top-progress-sync-info');
-    const wrap = document.getElementById('dba-top-progress');
-    const infoSync = document.getElementById('dba-top-progress-info-sync');
     const infoAuto = document.getElementById('dba-top-progress-info-auto');
     const matchLabel = document.getElementById('dba-top-progress-match-label');
     const matchTime  = document.getElementById('dba-top-progress-match-time');
-    const matchInner = document.getElementById('dba-top-progress-match-inner');
 
-    if(!inner) return;
+    if(!matchInner) return;
     let needsHeightSync = false;
 
-    const pct = estimateTopElapsedProgressPct();
-    if(DBA_TOP_PROGRESS_RENDER_CACHE.pct !== pct){
-      DBA_TOP_PROGRESS_RENDER_CACHE.pct = pct;
-      inner.style.width = `${pct}%`;
-      inner.textContent = `${pct}%`;
+    const termPct = estimateTopElapsedProgressPct();
+    if(DBA_TOP_PROGRESS_RENDER_CACHE.termPct !== termPct){
+      DBA_TOP_PROGRESS_RENDER_CACHE.termPct = termPct;
     }
 
-    // ===== 期内の「試合番号」&「1試合内進捗」 =====
+    // ===== 試合番号 / 残り時間 / 試合プログレス =====
+    // 期percentを毎回そのまま使うのではなく、同期時に作ったアンカーを基準に進める
     try{
-      const spec = getMatchSpecByMode();
-      const totalMatches = spec.totalMatches;
-      const matchSec = spec.matchSec;
+      const st = getAnchoredMatchProgressState();
+      if(st){
+        const m = Math.floor(st.remainSec / 60);
+        const s = Math.floor(st.remainSec % 60);
+        const matchLabelText = `第 ${st.matchNo} 試合／${st.totalMatches}`;
+        const matchTimeText = `残り: ${m}分${s}秒（誤差あり）`;
 
-      // 期(=3600s)の中の経過秒
-      const pctF = estimateTopElapsedProgressPctFloat(); // 0..100未満
-      const totalSec = (pctF / 100) * 60 * 60; // 0..3600
-
-      // 境界（ちょうどの時）を「前の試合の100%」として扱う
-      const eps = 0.001; // 1ms相当（十分小さく）
-      let t = totalSec;
-      let boundary = false;
-      if(t > 0){
-        const mod = t % matchSec;
-        if(mod < eps || (matchSec - mod) < eps){
-          boundary = true;
+        if(matchLabel){
+          if(DBA_TOP_PROGRESS_RENDER_CACHE.matchLabel !== matchLabelText){
+            DBA_TOP_PROGRESS_RENDER_CACHE.matchLabel = matchLabelText;
+            matchLabel.textContent = matchLabelText;
+          }
         }
-      }
-
-      let matchNo = 1;
-      let inSec = 0;
-      if(pctF >= 99.999){ // 期末付近は最後の試合100%に寄せる
-        matchNo = totalMatches;
-        inSec = matchSec;
-      }else if(boundary){
-        const t2 = Math.max(0, t - eps);
-        matchNo = Math.floor(t2 / matchSec) + 1;
-        inSec = matchSec;
+        if(matchTime){
+          if(DBA_TOP_PROGRESS_RENDER_CACHE.matchTime !== matchTimeText){
+            DBA_TOP_PROGRESS_RENDER_CACHE.matchTime = matchTimeText;
+            matchTime.textContent = matchTimeText;
+          }
+        }
+        if(matchInner){
+          const mp = Math.floor(st.matchPct);
+          if(DBA_TOP_PROGRESS_RENDER_CACHE.matchPct !== mp){
+            DBA_TOP_PROGRESS_RENDER_CACHE.matchPct = mp;
+            matchInner.style.width = `${mp}%`;
+            matchInner.textContent = `${mp}%`;
+          }
+        }
       }else{
-        matchNo = Math.floor(t / matchSec) + 1;
-        inSec = t - (Math.floor(t / matchSec) * matchSec);
-      }
-
-      // clamp
-      matchNo = clampInt(matchNo, 1, totalMatches);
-      inSec = Math.max(0, Math.min(matchSec, inSec));
-
-      // 残り時間（試合終了まで）
-      const remainSec = Math.max(0, Math.min(matchSec, (matchSec - inSec)));
-      const m = Math.floor(remainSec / 60);
-      const s = Math.floor(remainSec % 60);
-      const matchPct = (matchSec <= 0) ? 0 : Math.max(0, Math.min(100, (inSec / matchSec) * 100));
-      const matchLabelText = `第 ${matchNo} 試合／${totalMatches}`;
-      const matchTimeText = `残り時間： ${m}分${s}秒 （およそ±20秒？の誤差あり）`;
-
-      if(matchLabel){
-        if(DBA_TOP_PROGRESS_RENDER_CACHE.matchLabel !== matchLabelText){
-          DBA_TOP_PROGRESS_RENDER_CACHE.matchLabel = matchLabelText;
-          matchLabel.textContent = matchLabelText;
+        const matchLabelText = '第 1 試合／?';
+        const matchTimeText = '残り: --分--秒（誤差あり）';
+        if(matchLabel){
+          if(DBA_TOP_PROGRESS_RENDER_CACHE.matchLabel !== matchLabelText){
+            DBA_TOP_PROGRESS_RENDER_CACHE.matchLabel = matchLabelText;
+            matchLabel.textContent = matchLabelText;
+          }
         }
-      }
-      if(matchTime){
-        if(DBA_TOP_PROGRESS_RENDER_CACHE.matchTime !== matchTimeText){
-          DBA_TOP_PROGRESS_RENDER_CACHE.matchTime = matchTimeText;
-          matchTime.textContent = matchTimeText;
+        if(matchTime){
+          if(DBA_TOP_PROGRESS_RENDER_CACHE.matchTime !== matchTimeText){
+            DBA_TOP_PROGRESS_RENDER_CACHE.matchTime = matchTimeText;
+            matchTime.textContent = matchTimeText;
+          }
         }
-      }
-      if(matchInner){
-        const mp = Math.floor(matchPct);
-        if(DBA_TOP_PROGRESS_RENDER_CACHE.matchPct !== mp){
-          DBA_TOP_PROGRESS_RENDER_CACHE.matchPct = mp;
-          matchInner.style.width = `${mp}%`;
-          matchInner.textContent = `${mp}%`;
+        if(matchInner){
+          if(DBA_TOP_PROGRESS_RENDER_CACHE.matchPct !== 0){
+            DBA_TOP_PROGRESS_RENDER_CACHE.matchPct = 0;
+            matchInner.style.width = '0%';
+            matchInner.textContent = '0%';
+          }
         }
       }
     }catch(_e){}
 
     // 期（第 xxxx 期）表示を最新保存値で更新
-    if(title){
+    if(termTitle){
       const d0 = loadTopElapsedProgress();
       const titleText = (d0 && d0.term) ? d0.term : '第 ? 期';
-      if(DBA_TOP_PROGRESS_RENDER_CACHE.title !== titleText){
-        DBA_TOP_PROGRESS_RENDER_CACHE.title = titleText;
-        title.textContent = titleText;
+      if(DBA_TOP_PROGRESS_RENDER_CACHE.termTitle !== titleText){
+        DBA_TOP_PROGRESS_RENDER_CACHE.termTitle = titleText;
+        termTitle.textContent = titleText;
         needsHeightSync = true;
       }
     }
 
-    // 「今すぐ同期」ボタン状態
+    // 「同期」ボタン状態
     if(btnSync){
       const inflight = !!DBA_TOP_PROGRESS_AUTOSYNC.inFlight;
-      const syncHtml = inflight ? '同期中…' : '今すぐ<br>同期';
+      const syncText = inflight ? '同期中…' : '同期';
       if(DBA_TOP_PROGRESS_RENDER_CACHE.syncDisabled !== inflight){
         DBA_TOP_PROGRESS_RENDER_CACHE.syncDisabled = inflight;
         btnSync.disabled = inflight;
       }
-      if(DBA_TOP_PROGRESS_RENDER_CACHE.syncHtml !== syncHtml){
-        DBA_TOP_PROGRESS_RENDER_CACHE.syncHtml = syncHtml;
-        btnSync.innerHTML = syncHtml;
+      if(DBA_TOP_PROGRESS_RENDER_CACHE.syncText !== syncText){
+        DBA_TOP_PROGRESS_RENDER_CACHE.syncText = syncText;
+        btnSync.textContent = syncText;
         needsHeightSync = true;
       }
     }
 
-    // 「同期情報」スイッチ状態（見た目だけ同期）
-    if(btnInfo && wrap){
-      const on = (wrap.dataset.showinfo === '1');
-      const onText = on ? '1' : '0';
-      if(DBA_TOP_PROGRESS_RENDER_CACHE.infoBtnOn !== onText){
-        DBA_TOP_PROGRESS_RENDER_CACHE.infoBtnOn = onText;
-        btnInfo.dataset.on = onText;
-        needsHeightSync = true;
-      }
-    }
-
-    // 右ペイン（同期情報）更新
-    const data = loadTopElapsedProgress();
-    const now = Date.now();
-    if(infoSync){
-      const infoSyncText = !data
-        ? '最終同期（手動＆自動）： --- 秒前'
-        : `最終同期（手動＆自動）： ${Math.floor(Math.max(0, now - data.fetchedAt) / 1000)} 秒前`;
-      if(DBA_TOP_PROGRESS_RENDER_CACHE.infoSync !== infoSyncText){
-        DBA_TOP_PROGRESS_RENDER_CACHE.infoSync = infoSyncText;
-        infoSync.textContent = infoSyncText;
-      }
-    }
-    if(infoAuto){
-      const infoAutoText = (DBA_TOP_PROGRESS_AUTOSYNC.lastAutoAt > 0)
-        ? `最終補正（自動）： ${Math.floor(Math.max(0, now - DBA_TOP_PROGRESS_AUTOSYNC.lastAutoAt) / 1000)} 秒前`
-        : '最終補正（自動）： --- 秒前';
-      if(DBA_TOP_PROGRESS_RENDER_CACHE.infoAuto !== infoAutoText){
-        DBA_TOP_PROGRESS_RENDER_CACHE.infoAuto = infoAutoText;
-        infoAuto.textContent = infoAutoText;
-      }
-    }
     // レイアウトに影響する更新があった時だけ fnbar 高さを再同期
     if(needsHeightSync){
       try{ scheduleFnbarHeightSync(); }catch(_e){}
     }
+
+    updateTopProgressPopupContent();
   }
 
   // =========================
-  // トップページ進捗：自動補正（裏でトップページを1回だけfetch）
-  // 条件：
-  //  - 未同期の場合：ページロード後に1回だけ自動fetch
-  //  - 進捗を 60分換算したときに 8/18/28/38/48/58 分のとき：その分境で1回だけ自動fetch
+  // トップページ進捗：同期制御
+  // 方針：
+  //  - 通常時はローカル時計で進める
+  //  - 自動同期は「試合境界の前後」だけ行う
+  //  - ただし、長時間未同期の時だけ低頻度の保険的な同期を行う
+  //  - タブ復帰 / ページ復帰後、一定時間以上止まっていたら再同期候補を取る
+  //  - 手動同期/自動同期とも、取得結果が有用な場合だけ採用し、
+  //    ズレが大きく連続性に欠ける場合は破棄する
+  //  - 同期は「試合境界の前後」ではなく、「その試合の中で決めた時点」に行う
+  //  - RB は「切替直後 + 終盤安全帯 1回」を基本とする
+  //  - HC / ラダーは「切替直後 + 中間 1回」を基本とし、終盤は条件付きの保険にする
+  //  - タブ復帰 / ページ復帰は即同期せず、終盤保険を許可する条件として扱う
   // =========================
-  const DBA_TOP_PROGRESS_TARGET_MINUTES = new Set([8, 18, 28, 38, 48, 58]);
+  const DBA_TOP_PROGRESS_SYNC_ACCEPT_SEC = 60;                     // 通常時の許容ズレ
+  const DBA_TOP_PROGRESS_SYNC_ACCEPT_SEC_NEAR_BOUNDARY = 60;      // 期切替付近の許容ズレ
+  const DBA_TOP_PROGRESS_SYNC_ACCEPT_SEC_LATE = 45;               // 終盤同期の許容ズレ
+  const DBA_BATTLEINFO_RB_BOUNDARY_RETRY_WINDOW_SEC = 45;         // RBの「戦況情報」クリック時、境界直後の旧マップ掴みを再確認する範囲
+  const DBA_BATTLEINFO_RB_BOUNDARY_RETRY_DELAYS_MS = [1500, 2500, 3500, 4500, 5500, 6500, 7500]; // 合計31.5秒
+  const DBA_TOP_PROGRESS_RECENT_SYNC_SUPPRESS_MS = 90 * 1000;     // 直近同期後の自動同期抑止
+  const DBA_TOP_PROGRESS_RESUME_SYNC_MIN_PAUSE_MS = 45 * 1000;    // 復帰イベントとして記録する最小停止時間
+  const DBA_TOP_PROGRESS_RESUME_SYNC_COOLDOWN_MS = 90 * 1000;     // 復帰イベント記録の連発抑止
+  const DBA_TOP_PROGRESS_MATCH_START_SYNC_SUPPRESS_MS = 20 * 1000; // 切替直後同期の近接抑止
+  const DBA_TOP_PROGRESS_MATCH_SWITCH_GUARD_MS = 8 * 1000;        // 切替直後、他phase判定を待つ時間
+  const DBA_TOP_PROGRESS_RB_LATE_MIN_SEC = 180;                   // RB 終盤同期：残り3分00秒
+  const DBA_TOP_PROGRESS_RB_LATE_MAX_SEC = 270;                   // RB 終盤同期：残り4分30秒
+  const DBA_TOP_PROGRESS_RB_RESCUE_MIN_SEC = 60;                  // RB 保険同期：残り1分00秒
+  const DBA_TOP_PROGRESS_RB_RESCUE_MAX_SEC = 120;                 // RB 保険同期：残り2分00秒
+  const DBA_TOP_PROGRESS_HCL_MID_MIN_SEC = 600;                   // HC/L 中間同期：残り10分00秒
+  const DBA_TOP_PROGRESS_HCL_MID_MAX_SEC = 720;                   // HC/L 中間同期：残り12分00秒
+  const DBA_TOP_PROGRESS_HCL_LATE_MIN_SEC = 180;                  // HC/L 終盤保険：残り3分00秒
+  const DBA_TOP_PROGRESS_HCL_LATE_MAX_SEC = 270;                  // HC/L 終盤保険：残り4分30秒
+  const DBA_TOP_PROGRESS_HCL_FORCE_RESCUE_AFTER_MS = 12 * 60 * 1000; // HC/L 長時間未補正で終盤保険を許可
   const DBA_TOP_PROGRESS_AUTOSYNC = {
     inFlight: false,
     doneAt: 0,
-    lastMinute: -1,
+    lastManualAt: 0,
     lastAutoAt: 0, // 最終補正（自動）専用
+    lastRejectedAt: 0,
+    lastResumeAt: 0,
+    hiddenAt: 0,
+    lastTickAt: 0,
     failCount: 0,
     nextRetryAt: 0
   };
 
-  function pctToMinute(pct){
-    // 0..100% -> 0..59分（floor）
+  const DBA_MATCH_SYNC_PLAN = {
+    matchKey: '',
+    mode: '',
+    term: '',
+    matchNo: 0,
+    startedAt: 0,
+    switchedAt: 0,
+    lastAcceptedAt: 0,
+    startDone: false,
+    midDone: false,
+    lateDone: false,
+    rescueDone: false,
+    midScheduledRemainSec: null,
+    lateScheduledRemainSec: null,
+    rbRescueScheduledRemainSec: null,
+    midWindowMissed: false,
+    lateWindowMissed: false,
+    rbRescueWindowMissed: false,
+    lastSyncReason: '',
+    hadFailureInThisMatch: false,
+    hadResumeEventInThisMatch: false,
+    pendingResumeEventAt: 0
+  };
+
+  function pctToElapsedSecond(pct){
+    // 0..100% -> 0..3599秒（floor）
     const p = Math.max(0, Math.min(100, Number(pct)));
-    const m = Math.floor((p / 100) * 60);
-    return clampInt(m, 0, 59);
+    const sec = Math.floor((p / 100) * 60 * 60);
+    return clampInt(sec, 0, 3599);
+  }
+
+  function getTopProgressIdleSyncMsByMode(){
+    return (mode === 'rb')
+      ? DBA_TOP_PROGRESS_IDLE_SYNC_MS_RB
+      : DBA_TOP_PROGRESS_IDLE_SYNC_MS_HC_L;
+  }
+
+  function hasRecentAcceptedOrManualTopSync(now){
+    const currentNow = Number.isFinite(Number(now)) ? Number(now) : Date.now();
+
+    const lastManualAgoMs = currentNow - Number(DBA_TOP_PROGRESS_AUTOSYNC.lastManualAt || 0);
+    const hadRecentManualSync =
+      DBA_TOP_PROGRESS_AUTOSYNC.lastManualAt > 0 &&
+      lastManualAgoMs >= 0 &&
+      lastManualAgoMs <= DBA_TOP_PROGRESS_RECENT_SYNC_SUPPRESS_MS;
+
+    const lastAcceptedAgoMs = currentNow - Number(DBA_TOP_PROGRESS_AUTOSYNC.doneAt || 0);
+    const hadRecentAcceptedSync =
+      DBA_TOP_PROGRESS_AUTOSYNC.doneAt > 0 &&
+      lastAcceptedAgoMs >= 0 &&
+      lastAcceptedAgoMs <= DBA_TOP_PROGRESS_RECENT_SYNC_SUPPRESS_MS;
+
+    return hadRecentManualSync || hadRecentAcceptedSync;
+  }
+
+  function noteTopProgressResumeEvent(reason, pauseMs){
+    const currentNow = Date.now();
+    const stoppedMs = Math.max(0, Number(pauseMs || 0));
+    if(stoppedMs < DBA_TOP_PROGRESS_RESUME_SYNC_MIN_PAUSE_MS) return false;
+    if(!ensureMatchSyncPlan(getAnchoredMatchProgressState(), currentNow)) return false;
+    if(!noteResumeEventForCurrentMatch(currentNow)) return false;
+    void reason;
+    return true;
+  }
+
+  function installTopProgressResumeHooks(){
+    if(document.documentElement.dataset.dbaTopProgressResumeHookBound === '1') return;
+    document.documentElement.dataset.dbaTopProgressResumeHookBound = '1';
+
+    document.addEventListener('visibilitychange', () => {
+      if(document.visibilityState === 'hidden'){
+        DBA_TOP_PROGRESS_AUTOSYNC.hiddenAt = Date.now();
+        return;
+      }
+
+      const hiddenAt = Number(DBA_TOP_PROGRESS_AUTOSYNC.hiddenAt || 0);
+      const pauseMs = hiddenAt > 0 ? (Date.now() - hiddenAt) : 0;
+      DBA_TOP_PROGRESS_AUTOSYNC.hiddenAt = 0;
+      noteTopProgressResumeEvent('visibility', pauseMs);
+    });
+
+    window.addEventListener('focus', () => {
+      const lastTickAt = Number(DBA_TOP_PROGRESS_AUTOSYNC.lastTickAt || 0);
+      const pauseMs = lastTickAt > 0 ? (Date.now() - lastTickAt) : 0;
+      noteTopProgressResumeEvent('focus', pauseMs);
+    }, true);
+
+    window.addEventListener('pageshow', (e) => {
+      const persisted = !!(e && e.persisted);
+      const lastTickAt = Number(DBA_TOP_PROGRESS_AUTOSYNC.lastTickAt || 0);
+      const pauseMs = lastTickAt > 0 ? (Date.now() - lastTickAt) : 0;
+      if(persisted || pauseMs >= DBA_TOP_PROGRESS_RESUME_SYNC_MIN_PAUSE_MS){
+        noteTopProgressResumeEvent('pageshow', pauseMs);
+      }
+    });
+  }
+
+  function getExpectedElapsedSecondFromCurrentMatchState(){
+    const st = getAnchoredMatchProgressState();
+    if(!st) return null;
+    const spec = getMatchSpecByMode();
+    const matchSec = Math.max(1, Number(spec.matchSec || 1));
+    const v = ((Math.max(1, Number(st.matchNo || 1)) - 1) * matchSec) + Number(st.inMatchSec || 0);
+    return normalizeElapsedSecondInTerm(v);
+  }
+
+  function buildCurrentMatchSyncKey(matchState, termText){
+    const st = matchState || getAnchoredMatchProgressState();
+    const term = String(termText != null ? termText : (loadTopElapsedProgress()?.term || '') || '');
+    if(!st || !term) return '';
+    const matchNo = Math.max(1, Number(st.matchNo || 1));
+    return `${String(mode || '')}|${term}|${matchNo}`;
+  }
+
+  function randIntInclusive(min, max, salt){
+    const lo = Math.min(Number(min || 0), Number(max || 0));
+    const hi = Math.max(Number(min || 0), Number(max || 0));
+    const span = Math.max(1, Math.floor(hi - lo + 1));
+
+    let seed = 0x9e3779b9;
+    const text = String(salt || '');
+    for(let i = 0; i < text.length; i++){
+      seed = Math.imul(seed ^ text.charCodeAt(i), 0x85ebca6b) >>> 0;
+      seed = ((seed << 13) | (seed >>> 19)) >>> 0;
+    }
+
+    const value = rand01(seed);
+    return Math.floor(lo + (value * span));
+  }
+
+  function shouldAllowLateRescueForCurrentMatch(now){
+    const currentNow = Number.isFinite(Number(now)) ? Number(now) : Date.now();
+    if(mode === 'rb') return false;
+
+    if(DBA_MATCH_SYNC_PLAN.hadFailureInThisMatch) return true;
+    if(DBA_MATCH_SYNC_PLAN.hadResumeEventInThisMatch) return true;
+    if(DBA_MATCH_SYNC_PLAN.midWindowMissed) return true;
+
+    const baseAt = Math.max(
+      Number(DBA_MATCH_SYNC_PLAN.lastAcceptedAt || 0),
+      Number(DBA_TOP_PROGRESS_AUTOSYNC.lastManualAt || 0),
+      Number(DBA_TOP_PROGRESS_AUTOSYNC.doneAt || 0)
+    );
+    if(baseAt > 0 && (currentNow - baseAt) >= DBA_TOP_PROGRESS_HCL_FORCE_RESCUE_AFTER_MS){
+      return true;
+    }
+
+    return false;
+  }
+
+  function resetMatchSyncPlan(){
+    DBA_MATCH_SYNC_PLAN.matchKey = '';
+    DBA_MATCH_SYNC_PLAN.mode = String(mode || '');
+    DBA_MATCH_SYNC_PLAN.term = '';
+    DBA_MATCH_SYNC_PLAN.matchNo = 0;
+    DBA_MATCH_SYNC_PLAN.startedAt = 0;
+    DBA_MATCH_SYNC_PLAN.switchedAt = 0;
+    DBA_MATCH_SYNC_PLAN.lastAcceptedAt = 0;
+    DBA_MATCH_SYNC_PLAN.startDone = false;
+    DBA_MATCH_SYNC_PLAN.midDone = false;
+    DBA_MATCH_SYNC_PLAN.lateDone = false;
+    DBA_MATCH_SYNC_PLAN.rescueDone = false;
+    DBA_MATCH_SYNC_PLAN.midScheduledRemainSec = null;
+    DBA_MATCH_SYNC_PLAN.lateScheduledRemainSec = null;
+    DBA_MATCH_SYNC_PLAN.rbRescueScheduledRemainSec = null;
+    DBA_MATCH_SYNC_PLAN.midWindowMissed = false;
+    DBA_MATCH_SYNC_PLAN.lateWindowMissed = false;
+    DBA_MATCH_SYNC_PLAN.rbRescueWindowMissed = false;
+    DBA_MATCH_SYNC_PLAN.lastSyncReason = '';
+    DBA_MATCH_SYNC_PLAN.hadFailureInThisMatch = false;
+    DBA_MATCH_SYNC_PLAN.hadResumeEventInThisMatch = false;
+    DBA_MATCH_SYNC_PLAN.pendingResumeEventAt = 0;
+  }
+
+  function initializeMatchSyncPlan(matchState, now){
+    const st = matchState || getAnchoredMatchProgressState();
+    if(!st) return false;
+
+    const currentNow = Number.isFinite(Number(now)) ? Number(now) : Date.now();
+    const term = String(loadTopElapsedProgress()?.term || '');
+    const key = buildCurrentMatchSyncKey(st, term);
+    if(!key) return false;
+    if(DBA_MATCH_SYNC_PLAN.matchKey === key) return false;
+
+    const prevAcceptedAt = Number(DBA_TOP_PROGRESS_AUTOSYNC.doneAt || 0);
+    const prevManualAt = Number(DBA_TOP_PROGRESS_AUTOSYNC.lastManualAt || 0);
+    const recentAccepted = prevAcceptedAt > 0 && (currentNow - prevAcceptedAt) <= DBA_TOP_PROGRESS_MATCH_START_SYNC_SUPPRESS_MS;
+    const recentManual = prevManualAt > 0 && (currentNow - prevManualAt) <= DBA_TOP_PROGRESS_MATCH_START_SYNC_SUPPRESS_MS;
+
+    resetMatchSyncPlan();
+    DBA_MATCH_SYNC_PLAN.matchKey = key;
+    DBA_MATCH_SYNC_PLAN.mode = String(mode || '');
+    DBA_MATCH_SYNC_PLAN.term = term;
+    DBA_MATCH_SYNC_PLAN.matchNo = Math.max(1, Number(st.matchNo || 1));
+    DBA_MATCH_SYNC_PLAN.startedAt = currentNow;
+    DBA_MATCH_SYNC_PLAN.switchedAt = currentNow;
+    DBA_MATCH_SYNC_PLAN.lastAcceptedAt = prevAcceptedAt;
+    DBA_MATCH_SYNC_PLAN.startDone = recentAccepted || recentManual;
+
+    if(mode === 'rb'){
+      DBA_MATCH_SYNC_PLAN.lateScheduledRemainSec = randIntInclusive(
+        DBA_TOP_PROGRESS_RB_LATE_MIN_SEC,
+        DBA_TOP_PROGRESS_RB_LATE_MAX_SEC,
+        `${key}|late`
+      );
+      DBA_MATCH_SYNC_PLAN.rbRescueScheduledRemainSec = randIntInclusive(
+        DBA_TOP_PROGRESS_RB_RESCUE_MIN_SEC,
+        DBA_TOP_PROGRESS_RB_RESCUE_MAX_SEC,
+        `${key}|rb-rescue`
+      );
+    }else{
+      DBA_MATCH_SYNC_PLAN.midScheduledRemainSec = randIntInclusive(
+        DBA_TOP_PROGRESS_HCL_MID_MIN_SEC,
+        DBA_TOP_PROGRESS_HCL_MID_MAX_SEC,
+        `${key}|mid`
+      );
+      DBA_MATCH_SYNC_PLAN.lateScheduledRemainSec = randIntInclusive(
+        DBA_TOP_PROGRESS_HCL_LATE_MIN_SEC,
+        DBA_TOP_PROGRESS_HCL_LATE_MAX_SEC,
+        `${key}|late`
+      );
+    }
+
+    return true;
+  }
+
+  function ensureMatchSyncPlan(matchState, now){
+    const st = matchState || getAnchoredMatchProgressState();
+    if(!st) return false;
+    const term = String(loadTopElapsedProgress()?.term || '');
+    const key = buildCurrentMatchSyncKey(st, term);
+    if(!key) return false;
+    if(DBA_MATCH_SYNC_PLAN.matchKey !== key){
+      initializeMatchSyncPlan(st, now);
+    }
+    return DBA_MATCH_SYNC_PLAN.matchKey === key;
+  }
+
+  function noteResumeEventForCurrentMatch(now){
+    const currentNow = Number.isFinite(Number(now)) ? Number(now) : Date.now();
+    if(DBA_TOP_PROGRESS_AUTOSYNC.lastResumeAt > 0){
+      const agoMs = currentNow - Number(DBA_TOP_PROGRESS_AUTOSYNC.lastResumeAt || 0);
+      if(agoMs >= 0 && agoMs <= DBA_TOP_PROGRESS_RESUME_SYNC_COOLDOWN_MS){
+        return false;
+      }
+    }
+
+    DBA_TOP_PROGRESS_AUTOSYNC.lastResumeAt = currentNow;
+    DBA_MATCH_SYNC_PLAN.pendingResumeEventAt = currentNow;
+    DBA_MATCH_SYNC_PLAN.hadResumeEventInThisMatch = true;
+    return true;
+  }
+
+  function shouldConsumeResumeEventForCurrentMatch(now){
+    const currentNow = Number.isFinite(Number(now)) ? Number(now) : Date.now();
+    const pendingAt = Number(DBA_MATCH_SYNC_PLAN.pendingResumeEventAt || 0);
+    if(!(pendingAt > 0)) return false;
+    if((currentNow - pendingAt) > DBA_TOP_PROGRESS_RESUME_SYNC_COOLDOWN_MS){
+      DBA_MATCH_SYNC_PLAN.pendingResumeEventAt = 0;
+      return false;
+    }
+    return true;
+  }
+
+  function markMatchSyncAccepted(reason, now){
+    const currentNow = Number.isFinite(Number(now)) ? Number(now) : Date.now();
+    DBA_MATCH_SYNC_PLAN.lastAcceptedAt = currentNow;
+    DBA_MATCH_SYNC_PLAN.lastSyncReason = String(reason || '');
+    DBA_MATCH_SYNC_PLAN.pendingResumeEventAt = 0;
+
+    const rs = String(reason || '');
+    if(rs === 'start-switch'){
+      DBA_MATCH_SYNC_PLAN.startDone = true;
+      return;
+    }
+    if(rs === 'rb-late'){
+      DBA_MATCH_SYNC_PLAN.lateDone = true;
+      return;
+    }
+    if(rs === 'rb-rescue'){
+      DBA_MATCH_SYNC_PLAN.rescueDone = true;
+      return;
+    }
+    if(rs === 'hc-mid' || rs === 'l-mid'){
+      DBA_MATCH_SYNC_PLAN.midDone = true;
+      return;
+    }
+    if(rs === 'hc-late-rescue' || rs === 'l-late-rescue'){
+      DBA_MATCH_SYNC_PLAN.lateDone = true;
+      return;
+    }
+  }
+
+  function markMatchSyncFailure(reason){
+    const rs = String(reason || '');
+    if(!rs || rs === 'manual' || rs === 'unsynced') return;
+    DBA_MATCH_SYNC_PLAN.hadFailureInThisMatch = true;
+  }
+
+  function consumeMatchSyncPhase(state, now){
+    const currentNow = Number.isFinite(Number(now)) ? Number(now) : Date.now();
+    const st = state || getAnchoredMatchProgressState();
+    if(!st) return null;
+    if(!ensureMatchSyncPlan(st, currentNow)) return null;
+    if(currentNow < Number(DBA_TOP_PROGRESS_AUTOSYNC.nextRetryAt || 0)) return null;
+    if(DBA_TOP_PROGRESS_AUTOSYNC.inFlight) return null;
+
+    const matchAgeMs = currentNow - Number(DBA_MATCH_SYNC_PLAN.switchedAt || 0);
+    const remainSec = Math.max(0, Number(st.remainSec || 0));
+    const shouldAllowStart = !DBA_MATCH_SYNC_PLAN.startDone && matchAgeMs >= 0;
+
+    if(shouldAllowStart){
+      const recentAccepted = DBA_TOP_PROGRESS_AUTOSYNC.doneAt > 0
+        && (currentNow - Number(DBA_TOP_PROGRESS_AUTOSYNC.doneAt || 0)) <= DBA_TOP_PROGRESS_MATCH_START_SYNC_SUPPRESS_MS;
+      const recentManual = DBA_TOP_PROGRESS_AUTOSYNC.lastManualAt > 0
+        && (currentNow - Number(DBA_TOP_PROGRESS_AUTOSYNC.lastManualAt || 0)) <= DBA_TOP_PROGRESS_MATCH_START_SYNC_SUPPRESS_MS;
+      if(recentAccepted || recentManual){
+        DBA_MATCH_SYNC_PLAN.startDone = true;
+      }else{
+        return 'start-switch';
+      }
+    }
+
+    if(matchAgeMs < DBA_TOP_PROGRESS_MATCH_SWITCH_GUARD_MS) return null;
+    if(hasRecentAcceptedOrManualTopSync(currentNow)) return null;
+
+    if(mode === 'rb'){
+      const lateTarget = Number(DBA_MATCH_SYNC_PLAN.lateScheduledRemainSec || 0);
+      if(!DBA_MATCH_SYNC_PLAN.lateDone && lateTarget > 0){
+        if(remainSec <= lateTarget){
+          return 'rb-late';
+        }
+      }
+      if(!DBA_MATCH_SYNC_PLAN.lateDone && !DBA_MATCH_SYNC_PLAN.midDone && lateTarget > 0 && remainSec < DBA_TOP_PROGRESS_RB_LATE_MIN_SEC){
+        DBA_MATCH_SYNC_PLAN.lateWindowMissed = true;
+      }
+
+      const rescueTarget = Number(DBA_MATCH_SYNC_PLAN.rbRescueScheduledRemainSec || 0);
+      const rescueAllowed =
+        !DBA_MATCH_SYNC_PLAN.rescueDone &&
+        DBA_MATCH_SYNC_PLAN.hadFailureInThisMatch &&
+        DBA_MATCH_SYNC_PLAN.lateWindowMissed;
+      if(rescueAllowed && rescueTarget > 0 && remainSec <= rescueTarget){
+        return 'rb-rescue';
+      }
+      if(rescueAllowed && rescueTarget > 0 && remainSec < DBA_TOP_PROGRESS_RB_RESCUE_MIN_SEC){
+        DBA_MATCH_SYNC_PLAN.rbRescueWindowMissed = true;
+      }
+      return null;
+    }
+
+    const midTarget = Number(DBA_MATCH_SYNC_PLAN.midScheduledRemainSec || 0);
+    if(!DBA_MATCH_SYNC_PLAN.midDone && midTarget > 0){
+      if(remainSec <= midTarget){
+        return `${mode}-mid`;
+      }
+    }
+    if(!DBA_MATCH_SYNC_PLAN.midDone && midTarget > 0 && remainSec < DBA_TOP_PROGRESS_HCL_MID_MIN_SEC){
+      DBA_MATCH_SYNC_PLAN.midWindowMissed = true;
+    }
+
+    const allowLateRescue = shouldAllowLateRescueForCurrentMatch(currentNow) || shouldConsumeResumeEventForCurrentMatch(currentNow);
+    const lateTarget = Number(DBA_MATCH_SYNC_PLAN.lateScheduledRemainSec || 0);
+    if(allowLateRescue && !DBA_MATCH_SYNC_PLAN.lateDone && lateTarget > 0){
+      if(remainSec <= lateTarget){
+        return `${mode}-late-rescue`;
+      }
+    }
+    if(allowLateRescue && !DBA_MATCH_SYNC_PLAN.lateDone && lateTarget > 0 && remainSec < DBA_TOP_PROGRESS_HCL_LATE_MIN_SEC){
+      DBA_MATCH_SYNC_PLAN.lateWindowMissed = true;
+      DBA_MATCH_SYNC_PLAN.pendingResumeEventAt = 0;
+    }
+
+    return null;
+  }
+
+  function getNearestMatchBoundaryInfo(elapsedSec){
+    const spec = getMatchSpecByMode();
+    const matchSec = Math.max(1, Number(spec.matchSec || 1));
+    const cur = normalizeElapsedSecondInTerm(elapsedSec);
+    const nearest = getNearestMatchBoundarySecond(cur, matchSec);
+
+    let signedDelta = cur - nearest;
+    if(signedDelta > 1800) signedDelta -= 3600;
+    if(signedDelta < -1800) signedDelta += 3600;
+
+    return {
+      nearestSecond: nearest,
+      signedDeltaSec: signedDelta,
+      distanceSec: Math.abs(signedDelta),
+      key: `${matchSec}:${nearest}`
+    };
+  }
+
+  function isNearMatchBoundary(elapsedSec, padSec){
+    const info = getNearestMatchBoundaryInfo(elapsedSec);
+    return info.distanceSec <= Math.max(0, Number(padSec || 0));
+  }
+
+  function evaluateTopProgressSyncCandidate(pct, term, reason){
+    const nextElapsedSec = pctToElapsedSecond(pct);
+    const currentElapsedSec = getExpectedElapsedSecondFromCurrentMatchState();
+    const currentData = loadTopElapsedProgress();
+    const isManual = (String(reason || '') === 'manual');
+    const anchorExpired = isMatchProgressAnchorExpired(Date.now());
+
+    if(currentElapsedSec == null || anchorExpired){
+      return {
+        accept: true,
+        elapsedSec: nextElapsedSec,
+        reason: (currentElapsedSec == null) ? 'no-current-anchor' : 'expired-anchor'
+      };
+    }
+
+    if(
+      currentData &&
+      currentData.term &&
+      term &&
+      String(currentData.term) !== String(term)
+    ){
+      const allowAcrossTermBoundary =
+        isNearMatchBoundary(currentElapsedSec, DBA_TOP_PROGRESS_SYNC_ACCEPT_SEC_NEAR_BOUNDARY) ||
+        isNearMatchBoundary(nextElapsedSec, DBA_TOP_PROGRESS_SYNC_ACCEPT_SEC_NEAR_BOUNDARY);
+
+      if(!allowAcrossTermBoundary){
+        return {
+          accept: isManual,
+          elapsedSec: nextElapsedSec,
+          reason: isManual
+            ? `manual-override-term-mismatch:${String(reason || '')}`
+            : `term-mismatch:${String(reason || '')}`
+        };
+      }
+    }
+
+    const rs = String(reason || '');
+    const isLateSync = (
+      rs === 'rb-late' ||
+      rs === 'rb-rescue' ||
+      rs === 'hc-late-rescue' ||
+      rs === 'l-late-rescue'
+    );
+    const allowSec = isLateSync
+      ? DBA_TOP_PROGRESS_SYNC_ACCEPT_SEC_LATE
+      : DBA_TOP_PROGRESS_SYNC_ACCEPT_SEC;
+
+    const driftSec = getCircularSecondDistance(nextElapsedSec, currentElapsedSec);
+    if(driftSec > allowSec){
+      return {
+        accept: false,
+        elapsedSec: nextElapsedSec,
+        reason: `drift=${driftSec}s:${String(reason || '')}`
+      };
+    }
+
+    return {
+      accept: true,
+      elapsedSec: nextElapsedSec,
+      reason: isLateSync ? 'accept-late' : 'accept-normal'
+    };
   }
 
   async function fetchTopElapsedProgressFromTopPageOnce(reason){
@@ -3112,17 +5091,52 @@
       const pct = parseElapsedProgressPctFromTopDoc(doc);
       if(pct == null) return false;
       const term = parseElapsedTermFromTopDoc(doc);
+      const judged = evaluateTopProgressSyncCandidate(pct, term, reason);
+
+      if(!judged.accept){
+        if(isManual){
+          DBA_TOP_PROGRESS_AUTOSYNC.lastManualAt = Date.now();
+          // 手動同期で候補が棄却された場合でも、アンカー期限切れなら
+          // ローカル側を保存値基準へ立て直して「99%張り付き」を避ける。
+          if(isMatchProgressAnchorExpired(Date.now())){
+            try{
+              saveTopElapsedProgress(pct, term);
+              setMatchProgressAnchorFromElapsedSec(
+                pctToElapsedSecond(pct),
+                term
+              );
+              DBA_TOP_PROGRESS_AUTOSYNC.doneAt = Date.now();
+              DBA_TOP_PROGRESS_AUTOSYNC.failCount = 0;
+              DBA_TOP_PROGRESS_AUTOSYNC.nextRetryAt = 0;
+            }catch(_e){}
+          }
+        }
+        DBA_TOP_PROGRESS_AUTOSYNC.lastRejectedAt = Date.now();
+        markMatchSyncFailure(reason);
+        try{ renderTopProgress(); }catch(_e){}
+        return false;
+      }
 
       saveTopElapsedProgress(pct, term);
       DBA_TOP_PROGRESS_AUTOSYNC.doneAt = Date.now();
+      try{
+        setMatchProgressAnchorFromElapsedSec(
+          pctToElapsedSecond(pct),
+          term
+        );
+      }catch(_e){}
+      if(isManual){
+        DBA_TOP_PROGRESS_AUTOSYNC.lastManualAt = DBA_TOP_PROGRESS_AUTOSYNC.doneAt;
+      }
       DBA_TOP_PROGRESS_AUTOSYNC.failCount = 0;
       DBA_TOP_PROGRESS_AUTOSYNC.nextRetryAt = 0;
       // manual 以外は「自動補正」としても記録
       if(String(reason || '') !== 'manual'){
         DBA_TOP_PROGRESS_AUTOSYNC.lastAutoAt = DBA_TOP_PROGRESS_AUTOSYNC.doneAt;
+        markMatchSyncAccepted(reason, DBA_TOP_PROGRESS_AUTOSYNC.doneAt);
       }
 
-      // 反映
+      // 反映（「期」側だけでなく「試合」側プログレスバーもここで更新）
       try{ renderTopProgress(); }catch(_e){}
       return true;
     }catch(_e){
@@ -3140,18 +5154,17 @@
 
   function maybeAutoSyncTopProgress(){
     // まだコンテナが無い/表示不要なら何もしない
-    if(!document.getElementById('dba-top-progress-inner')) return;
+    if(!document.getElementById('dba-top-progress-match-inner')) return;
 
     const now = Date.now();
+    DBA_TOP_PROGRESS_AUTOSYNC.lastTickAt = now;
     if(now < Number(DBA_TOP_PROGRESS_AUTOSYNC.nextRetryAt || 0)){
       return;
     }
 
     const data = loadTopElapsedProgress();
-    const pct = estimateTopElapsedProgressPct();
-    const minute = pctToMinute(pct);
 
-    // (A) 未同期：1回だけ自動補正
+    // 未同期：1回だけ自動補正
     if(!data){
       if(DBA_TOP_PROGRESS_AUTOSYNC.doneAt === 0 && !DBA_TOP_PROGRESS_AUTOSYNC.inFlight){
         fetchTopElapsedProgressFromTopPageOnce('unsynced').catch(()=>{});
@@ -3159,18 +5172,23 @@
       return;
     }
 
-    // (B) 分境（8/18/…/58分）に来たら、その分境で1回だけ自動補正
-    //  - 同じ minute が続く間は繰り返さない
-    if(DBA_TOP_PROGRESS_TARGET_MINUTES.has(minute) && minute !== DBA_TOP_PROGRESS_AUTOSYNC.lastMinute){
-      DBA_TOP_PROGRESS_AUTOSYNC.lastMinute = minute;
-      fetchTopElapsedProgressFromTopPageOnce(`minute=${minute}`).catch(()=>{});
-    }
+    const st = getAnchoredMatchProgressState();
+    if(!st) return;
+    ensureMatchSyncPlan(st, now);
+
+    const reason = consumeMatchSyncPhase(st, now);
+    if(!reason) return;
+
+    fetchTopElapsedProgressFromTopPageOnce(reason).catch(()=>{});
   }
 
   let DBA_TOP_PROGRESS_TID = 0;
   function startTopProgressTicker(){
     if(DBA_TOP_PROGRESS_TID) return;
+    installTopProgressResumeHooks();
     // 初回描画
+    try{ syncMatchProgressAnchorFromStoredTopProgress(); }catch(_e){}
+    DBA_TOP_PROGRESS_AUTOSYNC.lastTickAt = Date.now();
     renderTopProgress();
     // 軽めに 1s 更新（見た目の「進行感」用）
     DBA_TOP_PROGRESS_TID = window.setInterval(() => {
@@ -3242,6 +5260,12 @@
       const term = parseElapsedTermFromTopDoc(document);
       // 保存（＝teambattle側の表示を補正する基準）
       saveTopElapsedProgress(pct, term);
+      try{
+        setMatchProgressAnchorFromElapsedSec(
+          pctToElapsedSecond(pct),
+          term
+        );
+      }catch(_e){}
       return true;
     }catch(_e){
       return false;
@@ -3256,12 +5280,21 @@
       hc: { width: 72, height: 64 },
       l:  { width: 72, height: 64 }
     },
+    // DBA全体の基準文字サイズ
+    ui: { baseFontPx: getDefaultBaseFontPxForDevice() },
     // 攻撃後の自動差分取得
-    postBattle: { autoDiffSync: false },
+    postBattle: {
+      autoDiffSync: false,
+      suppressOwnCapitalFriendlyFire: false
+    },
     // 一定回数ごとにページ再読込して軽量化
     lightRefresh: {
       enabled: false,
       battleCount: 20
+    },
+    // ファンクションセクションの軽量化ボタン表示
+    functionButtons: {
+      showLightRefreshButton: false
     },
     // レッドvsブルー：Reg.表示・境界線・アニメーション・首都王冠・誰もいない
     rbLayer: {
@@ -3270,9 +5303,13 @@
       borderOpacity: 80,
       stopAnimation: false,
       showCapitalCrown: false,
-      showNobodyHolder: false
+      showCurrentCellMarker: false,
+      currentCellMarkerColor: 'silver',
+      currentCellMarkerDelayMs: 500,
+      showNobodyHolder: false,
+      hideFnTooltip: false
     },
-    // レイヤー文字濃度（範囲：0〜100）
+    // レイヤー文字濃度（範囲：0?100）
     layer: { textOpacity: 100 },
     // オリジナルHTMLの<header>要素を表示するか
     header: { showOriginalHeader: false }
@@ -3484,17 +5521,65 @@
       const { roster } = getActiveRoster();
       const ae = ensureRosterAutoEquipBlock(roster);
       const obj = ae && ae.candidates && typeof ae.candidates === 'object' ? ae.candidates : {};
-      return obj;
+      return normalizeAutoEquipCandidateStore(obj);
     }catch(_e){
       return {};
     }
+  }
+
+  function normalizeAutoEquipCandidateKey(key){
+    const s0 = sanitizeText(key || '');
+    if(!s0) return '';
+
+    // 旧表記 → 新表記
+    // 例:
+    //   N.エ   -> N?
+    //   SR.警  -> SR警
+    //   UR.警エ -> UR警?
+    let s = s0;
+    s = s.replace(/\.警エ$/u, '警?');
+    s = s.replace(/\.警$/u, '警');
+    s = s.replace(/\.エ$/u, '?');
+
+    // 念のため、すでに新表記のものもそのまま正規形へ寄せる
+    const m = s.match(/^(N|R|SR|SSR|UR)(警?|警|?)?$/u);
+    if(!m) return s0;
+    return `${m[1]}${m[2] || ''}`;
+  }
+
+  function normalizeAutoEquipCandidateStore(obj){
+    const src = (obj && typeof obj === 'object') ? obj : {};
+    const out = {};
+
+    for(const rawKey of Object.keys(src)){
+      const normKey = normalizeAutoEquipCandidateKey(rawKey);
+      if(!normKey) continue;
+
+      const arr0 = Array.isArray(src[rawKey]) ? src[rawKey] : [];
+      const arr = arr0.map(x => sanitizeText(x)).filter(Boolean);
+
+      if(!Array.isArray(out[normKey])) out[normKey] = [];
+      out[normKey].push(...arr);
+    }
+
+    // 配列内の重複除去
+    for(const k of Object.keys(out)){
+      const seen = new Set();
+      out[k] = out[k].filter((name) => {
+        if(seen.has(name)) return false;
+        seen.add(name);
+        return true;
+      });
+    }
+
+    return out;
   }
 
   function saveAutoEquipCandidates(obj){
     try{
       const { store, roster } = getActiveRoster();
       const ae = ensureRosterAutoEquipBlock(roster);
-      ae.candidates = (obj && typeof obj === 'object') ? obj : {};
+      ae.candidates = normalizeAutoEquipCandidateStore(obj);
       roster.autoEquip = ae;
       roster.updatedAt = nowIso();
       store.rosters[store.activeId] = roster;
@@ -3690,6 +5775,38 @@
     }catch(_e){}
   }
 
+  function loadRosterPresetClickAction(){
+    try{
+      const raw = localStorage.getItem(LS_ROSTER_PRESET_CLICK_ACTION_KEY);
+      return (raw === 'menu') ? 'menu' : 'equip';
+    }catch(_e){
+      return 'equip';
+    }
+  }
+
+  function saveRosterPresetClickAction(modeValue){
+    const v = (modeValue === 'menu') ? 'menu' : 'equip';
+    try{
+      localStorage.setItem(LS_ROSTER_PRESET_CLICK_ACTION_KEY, v);
+    }catch(_e){}
+  }
+
+  function loadRosterHideMenuRow2Enabled(){
+    try{
+      const raw = localStorage.getItem(LS_ROSTER_HIDE_MENU_ROW2_KEY);
+      if(raw == null) return false; // デフォルトOFF
+      return raw === '1';
+    }catch(_e){
+      return false;
+    }
+  }
+
+  function saveRosterHideMenuRow2Enabled(on){
+    try{
+      localStorage.setItem(LS_ROSTER_HIDE_MENU_ROW2_KEY, on ? '1' : '0');
+    }catch(_e){}
+  }
+
   function captureRosterListScrollState(){
     const list = document.getElementById('dba-roster-list');
     if(!(list instanceof HTMLElement)) return 0;
@@ -3842,6 +5959,25 @@
     setLightRefreshButtonBusyState(false);
   }
 
+  function applyLightRefreshButtonVisibility(btnOrSettingsObj, settingsObj){
+    let btn = null;
+    let s = null;
+
+    if(btnOrSettingsObj instanceof HTMLElement){
+      btn = btnOrSettingsObj;
+      s = settingsObj || loadSettings();
+    }else{
+      btn = document.getElementById('dba-btn-light-refresh');
+      if(!btn) return false;
+      s = btnOrSettingsObj || loadSettings();
+    }
+
+    const show = !!s?.functionButtons?.showLightRefreshButton;
+
+    btn.style.display = show ? '' : 'none';
+    return true;
+  }
+
   function setLightRefreshButtonBusyState(running){
     const btn = document.getElementById('dba-btn-light-refresh');
     if(!btn) return;
@@ -3932,6 +6068,10 @@
   }
 
   async function rapidAttackAt(row, col){
+    if(consumeOwnCapitalAttackIfNeeded(row, col)){
+      return;
+    }
+
     // セル詳細を経由せず、teamchallenge に直接 POST
     // ※占領済み/空きセルの分岐はサーバー側が判断（＝「このエリアを捕らえよ」or「エリアに挑む」相当）
     openBattleResultModalWithNode('戦闘結果を取得中…', 'ラピッド攻撃');
@@ -4008,6 +6148,34 @@
     return x;
   }
 
+  function getDefaultBaseFontPxForDevice(){
+    try{
+      const coarse = !!(window.matchMedia && window.matchMedia('(pointer: coarse)').matches);
+      const narrow = Math.max(0, window.innerWidth || 0) <= 640;
+      const tabletLike = Math.max(0, window.innerWidth || 0) <= 1024;
+
+      if(coarse && narrow) return 14;     // スマホ
+      if(coarse || tabletLike) return 16;   // タブレット
+      return 17;   // パソコン
+    }catch(_e){
+      return 17;   // 基準文字サイズ
+    }
+  }
+
+  function sanitizeBaseFontPx(v, fallback){
+    const fb = (fallback === 14 || fallback === 16 || fallback === 17)   // 基準文字サイズ
+      ? fallback
+      : getDefaultBaseFontPxForDevice();
+    const x = Number.parseInt(v, 10);
+    if(x === 14 || x === 16 || x === 17) return x;   // 基準文字サイズ
+    return fb;
+  }
+
+  function applyBaseFontSize(baseFontPx){
+    const px = sanitizeBaseFontPx(baseFontPx, getDefaultBaseFontPxForDevice());
+    document.documentElement.style.setProperty('--dba-base-font-size', `${px}px`);
+  }
+
   function sanitizeRbBorderOpacity(v){
     const x = Number.parseInt(v, 10);
     if(!Number.isFinite(x)) return 100;
@@ -4047,12 +6215,29 @@
           out.cellSize[k].height = px;
         }
       }
+      if(obj && obj.ui){
+        out.ui.baseFontPx = sanitizeBaseFontPx(obj.ui.baseFontPx, getDefaultBaseFontPxForDevice());
+      }
       if(obj && obj.postBattle){
         out.postBattle.autoDiffSync = !!obj.postBattle.autoDiffSync;
+        if(typeof obj.postBattle.suppressOwnCapitalFriendlyFire !== 'undefined'){
+          out.postBattle.suppressOwnCapitalFriendlyFire = !!obj.postBattle.suppressOwnCapitalFriendlyFire;
+        }else if(typeof obj.postBattle.disableOwnCapitalProtection !== 'undefined'){
+          // 旧設定の互換:
+          // disableOwnCapitalProtection === true  -> 新設定 suppressOwnCapitalFriendlyFire === false
+          // disableOwnCapitalProtection === false -> 新設定 suppressOwnCapitalFriendlyFire === true
+          out.postBattle.suppressOwnCapitalFriendlyFire = !obj.postBattle.disableOwnCapitalProtection;
+        }
       }
       if(obj && obj.lightRefresh){
         out.lightRefresh.enabled = !!obj.lightRefresh.enabled;
         out.lightRefresh.battleCount = sanitizeLightRefreshBattleCount(obj.lightRefresh.battleCount);
+      }
+      if(obj && obj.functionButtons){
+        out.functionButtons.showLightRefreshButton = !!obj.functionButtons.showLightRefreshButton;
+      }else{
+        // 旧版からの移行：専用LSがあれば引き継ぐ
+        out.functionButtons.showLightRefreshButton = loadShowLightRefreshButton();
       }
       if(obj && obj.rbLayer){
         out.rbLayer.showCellRegulation = !!obj.rbLayer.showCellRegulation;
@@ -4060,7 +6245,11 @@
         out.rbLayer.borderOpacity = sanitizeRbBorderOpacity(obj.rbLayer.borderOpacity);
         out.rbLayer.stopAnimation = !!obj.rbLayer.stopAnimation;
         out.rbLayer.showCapitalCrown = !!obj.rbLayer.showCapitalCrown;
+        out.rbLayer.showCurrentCellMarker = !!obj.rbLayer.showCurrentCellMarker;
+        out.rbLayer.currentCellMarkerColor = sanitizeCurrentMarkerColorName(obj.rbLayer.currentCellMarkerColor);
+        out.rbLayer.currentCellMarkerDelayMs = sanitizeCurrentMarkerDelayMs(obj.rbLayer.currentCellMarkerDelayMs);
         out.rbLayer.showNobodyHolder = !!obj.rbLayer.showNobodyHolder;
+        out.rbLayer.hideFnTooltip = !!obj.rbLayer.hideFnTooltip;
       }
       if(obj && obj.layer){
         out.layer.textOpacity = sanitizeOpacity(obj.layer.textOpacity);
@@ -4094,10 +6283,19 @@
             height: sanitizeCellPx(s?.cellSize?.l?.height, DEFAULT_SETTINGS.cellSize.l.height)
           }
         },
-        postBattle: { autoDiffSync: !!s?.postBattle?.autoDiffSync },
+        ui: {
+          baseFontPx: sanitizeBaseFontPx(s?.ui?.baseFontPx, getDefaultBaseFontPxForDevice())
+        },
+        postBattle: {
+          autoDiffSync: !!s?.postBattle?.autoDiffSync,
+          suppressOwnCapitalFriendlyFire: !!s?.postBattle?.suppressOwnCapitalFriendlyFire
+        },
         lightRefresh: {
           enabled: !!s?.lightRefresh?.enabled,
           battleCount: sanitizeLightRefreshBattleCount(s?.lightRefresh?.battleCount)
+        },
+        functionButtons: {
+          showLightRefreshButton: !!s?.functionButtons?.showLightRefreshButton
         },
         rbLayer: {
           showCellRegulation: !!s?.rbLayer?.showCellRegulation,
@@ -4105,12 +6303,17 @@
           borderOpacity: sanitizeRbBorderOpacity(s?.rbLayer?.borderOpacity),
           stopAnimation: !!s?.rbLayer?.stopAnimation,
           showCapitalCrown: !!s?.rbLayer?.showCapitalCrown,
-          showNobodyHolder: !!s?.rbLayer?.showNobodyHolder
+          showCurrentCellMarker: !!s?.rbLayer?.showCurrentCellMarker,
+          currentCellMarkerColor: sanitizeCurrentMarkerColorName(s?.rbLayer?.currentCellMarkerColor),
+          currentCellMarkerDelayMs: sanitizeCurrentMarkerDelayMs(s?.rbLayer?.currentCellMarkerDelayMs),
+          showNobodyHolder: !!s?.rbLayer?.showNobodyHolder,
+          hideFnTooltip: !!s?.rbLayer?.hideFnTooltip
         },
         layer: { textOpacity: sanitizeOpacity(s?.layer?.textOpacity) },
         header: { showOriginalHeader: !!s?.header?.showOriginalHeader }
       };
       localStorage.setItem(LS_KEY, JSON.stringify(out));
+      saveShowLightRefreshButton(out.functionButtons.showLightRefreshButton);
       saveShowOriginalHeader(out.header.showOriginalHeader);
     }catch(_e){}
   }
@@ -4142,15 +6345,60 @@
     }
 
     const grid = document.querySelector('.grid');
-    const cell = grid ? grid.querySelector('.cell') : null;
-    if(cell){
-      const cs = window.getComputedStyle(cell);
-      const w = Math.round(parseFloat(cs.width) || parseFloat(cell.style.width) || DEFAULT_SETTINGS.cellSize[modeKey].width);
-      const h = Math.round(parseFloat(cs.height) || parseFloat(cell.style.height) || DEFAULT_SETTINGS.cellSize[modeKey].height);
-      return {
-        width: sanitizeCellPx(w, DEFAULT_SETTINGS.cellSize[modeKey].width),
-        height: sanitizeCellPx(h, DEFAULT_SETTINGS.cellSize[modeKey].height)
-      };
+    if(grid){
+      const spec = getHcLGridSpec(grid);
+      const colCount = Math.max(0, Number(spec.cols) || 0);
+      const rowCount = Math.max(0, Number(spec.rows) || 0);
+      const csGrid = window.getComputedStyle(grid);
+
+      let w = 0;
+      let h = 0;
+
+      if(colCount > 0){
+        const gridRect = grid.getBoundingClientRect();
+        const colGapPx = Math.max(0, parseCssPx(spec.colGap || csGrid.columnGap || '0px'));
+        const totalGapW = Math.max(0, colCount - 1) * colGapPx;
+        w = Math.round((Math.max(0, gridRect.width) - totalGapW) / colCount);
+      }
+      if(rowCount > 0){
+        const gridRect = grid.getBoundingClientRect();
+        const rowGapPx = Math.max(0, parseCssPx(spec.rowGap || csGrid.rowGap || '0px'));
+        const totalGapH = Math.max(0, rowCount - 1) * rowGapPx;
+        h = Math.round((Math.max(0, gridRect.height) - totalGapH) / rowCount);
+      }
+
+      if(!(w > 0) || !(h > 0)){
+        const gtc = String(grid.style.gridTemplateColumns || spec.gtc || '');
+        const gtr = String(grid.style.gridTemplateRows || spec.gtr || '');
+        const m1 = gtc.match(/repeat\(\s*(\d+)\s*,\s*(\d+)px\s*\)/);
+        const m2 = gtr.match(/repeat\(\s*(\d+)\s*,\s*(\d+)px\s*\)/);
+        if(!(w > 0) && m1){
+          w = Number(m1[2]) || 0;
+        }
+        if(!(h > 0) && m2){
+          h = Number(m2[2]) || 0;
+        }
+      }
+
+      if(!(w > 0) || !(h > 0)){
+        const cell = grid.querySelector('.cell');
+        if(cell){
+          const csCell = window.getComputedStyle(cell);
+          if(!(w > 0)){
+            w = Math.round(parseFloat(csCell.width) || parseFloat(cell.style.width) || 0);
+          }
+          if(!(h > 0)){
+            h = Math.round(parseFloat(csCell.height) || parseFloat(cell.style.height) || 0);
+          }
+        }
+      }
+
+      if(w > 0 || h > 0){
+        return {
+          width: sanitizeCellPx(w, DEFAULT_SETTINGS.cellSize[modeKey].width),
+          height: sanitizeCellPx(h, DEFAULT_SETTINGS.cellSize[modeKey].height)
+        };
+      }
     }
 
     return {
@@ -4167,6 +6415,124 @@
       width: sanitizeCellPx(src.width, def.width),
       height: sanitizeCellPx(src.height, def.height)
     };
+  }
+
+  function getBattlemapScaleTargetElement(modeKey){
+    if(modeKey === 'rb'){
+      return document.getElementById('gridWrap');
+    }
+    return document.querySelector('.grid');
+  }
+
+  function getBattlemapScaleHostElement(modeKey){
+    const target = getBattlemapScaleTargetElement(modeKey);
+    if(!target) return null;
+
+    if(modeKey === 'rb'){
+      return target.parentElement || target;
+    }
+
+    return target.parentElement || target;
+  }
+
+  function getBattlemapColumnCountForMode(modeKey){
+    if(modeKey === 'rb'){
+      const n = getRbGridSizeFromPageScript();
+      return Number.isFinite(n) ? n : 0;
+    }
+
+    const grid = document.querySelector('.grid');
+    if(!grid) return 0;
+    const spec = getHcLGridSpec(grid);
+    return Number(spec.cols) || 0;
+  }
+
+  function getBattlemapColumnGapPxForMode(modeKey){
+    if(modeKey === 'rb') return 0;
+
+    const grid = document.querySelector('.grid');
+    if(!grid) return 0;
+
+    const cs = getComputedStyle(grid);
+    return Math.max(0, Math.round(parseCssPx(cs.columnGap || cs.gap || '0px')));
+  }
+
+  function getBattlemapAvailableWidthPx(modeKey){
+    const host = getBattlemapScaleHostElement(modeKey);
+    if(host instanceof HTMLElement){
+      const rect = host.getBoundingClientRect();
+      const cs = getComputedStyle(host);
+      const padL = parseCssPx(cs.paddingLeft || '0px');
+      const padR = parseCssPx(cs.paddingRight || '0px');
+      const inner = Math.floor((rect.width || host.clientWidth || 0) - padL - padR);
+      if(inner > 0) return inner;
+    }
+
+    return Math.max(0, Math.floor((window.innerWidth || 0) * 0.96));
+  }
+
+  function getBattlemapFittedCellSizeForMode(modeKey, settingsObj){
+    const base = getEffectiveCellSizeForMode(modeKey, settingsObj);
+    const cols = Math.max(0, getBattlemapColumnCountForMode(modeKey));
+    const gapPx = Math.max(0, getBattlemapColumnGapPxForMode(modeKey));
+    const availW = Math.max(0, getBattlemapAvailableWidthPx(modeKey));
+
+    if(cols <= 0 || availW <= 0){
+      return {
+        width: base.width,
+        height: base.height,
+        scale: 1
+      };
+    }
+
+    const naturalW = (cols * base.width) + (Math.max(0, cols - 1) * gapPx);
+    if(naturalW <= 0 || naturalW <= availW){
+      return {
+        width: base.width,
+        height: base.height,
+        scale: 1
+      };
+    }
+
+    const scale = Math.max(0.1, Math.min(1, availW / naturalW));
+    const fittedW = Math.max(8, Math.floor(base.width * scale));
+    const fittedH = Math.max(8, Math.floor(base.height * scale));
+    const actualScale = Math.max(
+      0.1,
+      Math.min(
+        1,
+        fittedW / Math.max(1, base.width),
+        fittedH / Math.max(1, base.height)
+      )
+    );
+
+    return {
+      width: sanitizeCellPx(fittedW, base.width),
+      height: sanitizeCellPx(fittedH, base.height),
+      scale: actualScale
+    };
+  }
+
+  function applyBattlemapLayerScaledFont(baseFontPx, scale){
+    const root = document.getElementById('dba-battlemap-layer');
+    if(!root) return false;
+
+    const basePx = sanitizeBaseFontPx(baseFontPx, getDefaultBaseFontPxForDevice());
+    const s = Math.max(0.1, Math.min(1, Number(scale) || 1));
+    root.style.fontSize = `${Math.max(8, Math.round(basePx * s * 100) / 100)}px`;
+    return true;
+  }
+
+  function beginBattlemapFitPrepare(){
+    const root = document.getElementById('dba-battlemap-layer');
+    if(!root) return;
+    root.dataset.fitPreparing = '1';
+  }
+
+  function endBattlemapFitPrepare(){
+    const root = document.getElementById('dba-battlemap-layer');
+    if(!root) return;
+    root.dataset.fitPreparing = '0';
   }
 
   function applyCellSizeToGrid(widthPx, heightPx){
@@ -4406,17 +6772,14 @@
       lpCtx = calcRC(evt);
       if(!lpCtx) return;
 
-      // 「クリック/長押し」分岐はオート装備ONの時だけ意味があるので、その時だけ表示
-      if(loadAutoEquipEnabled()){
-        longPressGaugeStart(lpCtx.x, lpCtx.y, LP_MS);
-      }
+      // 長押しメニューは、オート装備OFFでも開けるようにする
+      // （タイル操作「要塞を建設」「レーダーを設置」も同じメニュー内にあるため）
+      longPressGaugeStart(lpCtx.x, lpCtx.y, LP_MS);
       lpTimer = setTimeout(async () => {
         lpFired = true;
         try{
-          if(loadAutoEquipEnabled()){
-            longPressGaugeComplete();
-            await handleAutoEquipLongPress(lpCtx.r, lpCtx.c, lpCtx.x, lpCtx.y);
-          }
+          longPressGaugeComplete();
+          await handleAutoEquipLongPress(lpCtx.r, lpCtx.c, lpCtx.x, lpCtx.y);
         }catch(_e){
           // noop
         }
@@ -4512,7 +6875,7 @@
   // =========================
   // セル詳細：多重open防止（同一セルの二重起動・close直後の再ポップ抑止）
   const DBA_CELL_DETAIL_GUARD = {
-    inFlight: false,    // openCellDetailModal の fetch〜show 中
+    inFlight: false,    // openCellDetailModal の fetch?show 中
     isOpen: false,      // dialog が open 状態
     lastKey: '',        // `${mode}:${row},${col}`
     lastCloseAt: 0      // Date.now()
@@ -4592,6 +6955,37 @@
       closeDirect();
     });
 
+    // ★重要：セル詳細内で無効化された攻撃ボタンが押された時は、submit させず alert を出す
+    dlg.addEventListener('click', (e) => {
+      const trigger = (e.target instanceof Element)
+        ? e.target.closest('input[type="submit"], input[type="image"], button[type="submit"], button:not([type])')
+        : null;
+      if(!trigger) return;
+      if(!box.contains(trigger)) return;
+
+      if(trigger.matches('.dba-own-capital-attack-disabled, [aria-disabled="true"]') || trigger.disabled){
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        openOwnCapitalAttackBlockedModal();
+        return;
+      }
+
+      const submitText = sanitizeText(trigger.textContent || trigger.value || '');
+      if(
+        !submitText.includes('エリアに挑む') &&
+        !submitText.includes('エリアに挑戦') &&
+        !submitText.includes('このエリアを捕らえよ')
+      ) return;
+
+      const form = trigger.closest('form');
+      const coord = resolveOwnCapitalAttackCoordFromForm(form);
+      if(!coord) return;
+      if(!consumeOwnCapitalAttackIfNeeded(coord.row, coord.col)) return;
+
+      e.preventDefault();
+      e.stopImmediatePropagation();
+    }, true);
+
     // ★重要：セル詳細内の form submit（例：「エリアに挑む」）を捕捉して遷移抑止 → 戦闘結果モーダル表示
     // - capture で先に止める
     dlg.addEventListener('submit', (e) => {
@@ -4599,6 +6993,14 @@
       if(!(form instanceof HTMLFormElement)) return;
       // セル詳細ボックス配下の form だけ対象
       if(!box.contains(form)) return;
+
+      const disabledAttackBtn = form.querySelector('.dba-own-capital-attack-disabled, [aria-disabled="true"]');
+      if(disabledAttackBtn){
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        openOwnCapitalAttackBlockedModal();
+        return;
+      }
 
       // 「エリアに挑む」以外（強化/弱体化等）は従来通り遷移させても良いが、
       // ここでは要望に合わせて
@@ -5935,6 +8337,17 @@
       fd.append(submitter.name, submitter.value || sanitizeText(submitter.textContent || ''));
     }
 
+    {
+      const row = Number(fd.get('row'));
+      const col = Number(fd.get('col'));
+      const isTeamChallenge =
+        /\/teamchallenge(?:\?|$)/.test(`${url.pathname}${url.search}`) ||
+        /\/teamchallenge(?:\?|$)/.test(String(action || ''));
+      if(isTeamChallenge && consumeOwnCapitalAttackIfNeeded(row, col)){
+        return;
+      }
+    }
+
     // 戦闘結果モーダルを先に開いて「取得中…」を出す（体感をよくする）
     openBattleResultModalWithNode('戦闘結果を取得中…', '戦闘結果');
 
@@ -6063,6 +8476,8 @@
           const imported = document.importNode(table, true);
           box.textContent = '';
           box.appendChild(imported);
+          disableOwnCapitalAttackControlsInCellDetail(box, row, col);
+          neutralizeOwnCapitalAttackFormsInCellDetail(box, row, col);
         }
       }catch(_e){
         box.textContent = '取得に失敗しました。';
@@ -6207,17 +8622,14 @@
       // ★重要：rc を確実に保持（spreading 記法や誤記で壊れないよう明示）
       lpCtx = { r: rc.r, c: rc.c, x, y };
 
-      // 「クリック/長押し」分岐はオート装備ONの時だけ意味があるので、その時だけ表示
-      if(loadAutoEquipEnabled()){
-        longPressGaugeStart(lpCtx.x, lpCtx.y, LP_MS);
-      }
+      // 長押しメニューは、オート装備OFFでも開けるようにする
+      // （オート装備候補の確認用途もあるため）
+      longPressGaugeStart(lpCtx.x, lpCtx.y, LP_MS);
       lpTimer = setTimeout(async () => {
         lpFired = true;
         try{
-          if(loadAutoEquipEnabled()){
-            longPressGaugeComplete();
-            await handleAutoEquipLongPress(lpCtx.r, lpCtx.c, lpCtx.x, lpCtx.y);
-          }
+          longPressGaugeComplete();
+          await handleAutoEquipLongPress(lpCtx.r, lpCtx.c, lpCtx.x, lpCtx.y);
         }catch(_e){
           // noop
         }
@@ -6355,6 +8767,7 @@
   let dbaLayerMutObs = null;
   let dbaLayerCellDecoMap = new Map();
   let dbaLayerCellContentMap = new Map();
+  let dbaLayerCellBlockerMap = new Map();
   let dbaLayerLastRectKey = '';
   let dbaLayerLastGridStyleKey = '';
   let dbaLayerPendingRectKey = '';
@@ -6439,6 +8852,7 @@
     grid.textContent = '';
     dbaLayerCellDecoMap = new Map();
     dbaLayerCellContentMap = new Map();
+    dbaLayerCellBlockerMap = new Map();
     const frag = document.createDocumentFragment();
     for(let r=0;r<rows;r++){
       for(let c=0;c<cols;c++){
@@ -6455,10 +8869,27 @@
         content.className = 'dba-layer-cell__content';
         content.textContent = ''; // 将来：ここに文字列/絵文字を配置
 
+        const blocker = document.createElement('div');
+        blocker.className = 'dba-layer-cell__blocker';
+        blocker.dataset.active = '0';
+        blocker.title = '';
+
+        const blockEvent = (e) => {
+          if(blocker.dataset.active !== '1') return;
+          e.preventDefault();
+          e.stopImmediatePropagation();
+          openOwnCapitalAttackBlockedModal();
+        };
+        blocker.addEventListener('pointerdown', blockEvent, true);
+        blocker.addEventListener('click', blockEvent, true);
+        blocker.addEventListener('touchstart', blockEvent, { capture:true, passive:false });
+
         cell.appendChild(deco);
         cell.appendChild(content);
+        cell.appendChild(blocker);
         dbaLayerCellDecoMap.set(`${r},${c}`, deco);
         dbaLayerCellContentMap.set(`${r},${c}`, content);
+        dbaLayerCellBlockerMap.set(`${r},${c}`, blocker);
         frag.appendChild(cell);
       }
     }
@@ -6625,6 +9056,8 @@
       const snap = getBattlemapSnapshotFromDoc(document);
       renderRbOriginalBorders(snap);
       renderRbCapitalCrowns(snap);
+      renderCurrentCellMarker(snap);
+      renderOwnCapitalRapidAttackBlockers(snap);
     }
 
     return true;
@@ -6636,11 +9069,14 @@
       dbaLayerRAF = 0;
       const ok = syncBattlemapLayer();
       if(ok === true){
+        cancelDeferredCurrentCellMarkerRefreshFramesOnly();
         dbaLayerSyncRetryCount = 0;
+        endBattlemapFitPrepare();
         endBattlemapLayerTextFreeze();
         return;
       }
 
+      cancelDeferredCurrentCellMarkerRefreshFramesOnly();
       dbaLayerSyncRetryCount += 1;
       if(dbaLayerSyncRetryCount < clampInt(DBA_LAYER_SYNC_RETRY_LIMIT, 1, 60)){
         scheduleBattlemapLayerSync();
@@ -6648,6 +9084,7 @@
       }
 
       dbaLayerSyncRetryCount = 0;
+      endBattlemapFitPrepare();
       endBattlemapLayerTextFreeze();
     });
   }
@@ -6755,13 +9192,22 @@
 
     // bodyが無い可能性を考慮
     const start = () => {
+      cancelDeferredCurrentCellMarkerRefresh();
       ensureBattlemapLayerDOM();
-      // 初期値反映（文字濃度）
+      installCurrentCellResponseHooks();
+      installRuntimeCurrentCellDebugProbes();
+      dbaProbeRuntimeCurrentCell('initBattlemapLayer:start');
+      // 初期値反映（文字濃度・セルサイズ）
       const s = loadSettings();
+      applyBaseFontSize(s?.ui?.baseFontPx);
       applyLayerTextOpacity(s.layer.textOpacity);
+      applyCurrentModeScale();
 
       // まず同期
       scheduleBattlemapLayerSync();
+      setTimeout(() => {
+        dbaProbeRuntimeCurrentCell('initBattlemapLayer:post-sync');
+      }, 250);
       hydrateBattlemapLayerTextsOnInit().catch(()=>{});
 
       // スクロール・リサイズ追従
@@ -6792,24 +9238,33 @@
 
   function applyCurrentModeScale(){
     const settings = loadSettings();
+    const baseFontPx = settings?.ui?.baseFontPx;
+    applyBaseFontSize(baseFontPx);
     applyLayerTextOpacity(settings.layer.textOpacity);
+
     if(mode === 'rb'){
-      const sz = getEffectiveCellSizeForMode('rb', settings);
+      const sz = getBattlemapFittedCellSizeForMode('rb', settings);
+      beginBattlemapFitPrepare();
       applyCellSizeToCanvasWrap(sz.width, sz.height);
+      applyBattlemapLayerScaledFont(baseFontPx, sz.scale);
       ensureRbPointerFix();
       scheduleBattlemapLayerSync();
       return;
     }
     if(mode === 'hc'){
-      const sz = getEffectiveCellSizeForMode('hc', settings);
+      const sz = getBattlemapFittedCellSizeForMode('hc', settings);
+      beginBattlemapFitPrepare();
       applyCellSizeToGrid(sz.width, sz.height);
+      applyBattlemapLayerScaledFont(baseFontPx, sz.scale);
       syncHcLMapContainerHeight();
       scheduleBattlemapLayerSync();
       return;
     }
     if(mode === 'l'){
-      const sz = getEffectiveCellSizeForMode('l', settings);
+      const sz = getBattlemapFittedCellSizeForMode('l', settings);
+      beginBattlemapFitPrepare();
       applyCellSizeToGrid(sz.width, sz.height);
+      applyBattlemapLayerScaledFont(baseFontPx, sz.scale);
       syncHcLMapContainerHeight();
       scheduleBattlemapLayerSync();
       return;
@@ -6832,11 +9287,11 @@
   // レギュレーション表示の簡略化
   // 例：
   //  [N]だけ                      -> N
-  //  [SSR]まで                    -> --SSR
+  //  [SSR]まで                    -> ?SSR
   //  [R]から[SSR]まで             -> R-SSR
-  //  [SSR]だけ|[エリート]         -> SSR.エ
-  //  [R]まで|[警備員]だけ         -> --R.警
-  //  [SSR]だけ|[警備員]だけ|[エリート] -> SSR.警エ
+  //  [SSR]だけ|[エリート]         -> SSR?
+  //  [R]まで|[警備員]だけ         -> ?R警
+  //  [SSR]だけ|[警備員]だけ|[エリート] -> SSR警?
   // =========================
   function simplifyRegulationText(raw){
     const src0 = sanitizeText(raw || '');
@@ -6854,19 +9309,19 @@
     let m = src.match(/\[(N|R|SR|SSR|UR)\]\s*だけ/);
     if(m){
       let out = m[1];
-      if(hasGuard && hasElite) out += '.警エ';
-      else if(hasGuard) out += '.警';
-      else if(hasElite) out += '.エ';
+      if(hasGuard && hasElite) out += '警?';
+      else if(hasGuard) out += '警';
+      else if(hasElite) out += '?';
       return out;
     }
 
     // - 「まで」
     m = src.match(/\[(N|R|SR|SSR|UR)\]\s*まで/);
     if(m){
-      let out = `--${m[1]}`;
-      if(hasGuard && hasElite) out += '.警エ';
-      else if(hasGuard) out += '.警';
-      else if(hasElite) out += '.エ';
+      let out = `?${m[1]}`;
+      if(hasGuard && hasElite) out += '警?';
+      else if(hasGuard) out += '警';
+      else if(hasElite) out += '?';
       return out;
     }
 
@@ -6874,9 +9329,9 @@
     m = src.match(/\[(N|R|SR|SSR|UR)\]\s*から\s*\[(N|R|SR|SSR|UR)\]\s*まで/);
     if(m){
       let out = `${m[1]}-${m[2]}`;
-      if(hasGuard && hasElite) out += '.警エ';
-      else if(hasGuard) out += '.警';
-      else if(hasElite) out += '.エ';
+      if(hasGuard && hasElite) out += '警?';
+      else if(hasGuard) out += '警';
+      else if(hasElite) out += '?';
       return out;
     }
 
@@ -6887,8 +9342,8 @@
 
   // =========================
   // オート装備（レギュレーション → 候補キー）
-  //  - simplifyRegulationText() の出力（例：N / --SSR / R-UR.警エ）を受け取る前提
-  //  - 上限レアリティ + 特殊サフィックス（.エ / .警 / .警エ）で候補キーを決める
+  //  - simplifyRegulationText() の出力（例：N / ?SSR / R-UR警?）を受け取る前提
+  //  - 上限レアリティ + 特殊サフィックス（? / 警 / 警?）で候補キーを決める
   // =========================
   function mapRegToAutoEquipKey(reg){
     const s0 = sanitizeText(reg || '');
@@ -6897,22 +9352,22 @@
 
     // 特殊サフィックス
     let suffix = '';
-    if(s.includes('.警エ')){
-      suffix = '.警エ';
-      s = s.replace('.警エ','');
-    }else if(s.includes('.警')){
-      suffix = '.警';
-      s = s.replace('.警','');
-    }else if(s.includes('.エ')){
-      suffix = '.エ';
-      s = s.replace('.エ','');
+    if(s.includes('警?')){
+      suffix = '警?';
+      s = s.replace('警?','');
+    }else if(s.includes('警')){
+      suffix = '警';
+      s = s.replace('警','');
+    }else if(s.includes('?')){
+      suffix = '?';
+      s = s.replace('?','');
     }
 
     // 上限レアリティ
-    // --R / R / N-R / R-SR など
+    // ?R / R / N-R / R-SR など
     let top = '';
-    if(s.startsWith('--')){
-      top = s.slice(2);
+    if(s.startsWith('?')){
+      top = s.slice(1);
     }else if(s.includes('-')){
       const parts = s.split('-');
       top = parts[parts.length - 1];
@@ -6924,13 +9379,13 @@
     if(!top) return '';
     // 期待するのは N/R/SR/SSR/UR
     if(!['N','R','SR','SSR','UR'].includes(top)) return '';
-    return `${top}${suffix}`;
+    return normalizeAutoEquipCandidateKey(`${top}${suffix}`);
   }
 
   function getAutoEquipCandidatesForReg(reg){
     const key = mapRegToAutoEquipKey(reg);
     if(!key) return { key:'', list: [] };
-    const store = loadAutoEquipCandidates();
+    const store = normalizeAutoEquipCandidateStore(loadAutoEquipCandidates());
     const list = Array.isArray(store[key]) ? store[key].map(x => sanitizeText(x)).filter(Boolean) : [];
     // 重複除去（保存データの汚れ対策）
     const seen = new Set();
@@ -7015,6 +9470,347 @@
     const tileColor = getCurrentRbTileColor(row, col);
     if(!tileColor) return false;
     return tileColor === team.teamColor;
+  }
+
+  function parseBattleCoordKey(key){
+    const m = String(key || '').match(/^(-?\d+)[,-](-?\d+)$/);
+    if(!m) return null;
+    const row = Number(m[1]);
+    const col = Number(m[2]);
+    if(!Number.isFinite(row) || !Number.isFinite(col)) return null;
+    return { row, col };
+  }
+
+  function isOwnCapitalFriendlyFireSuppressed(){
+    const s = loadSettings();
+    return !!s?.postBattle?.suppressOwnCapitalFriendlyFire;
+  }
+
+  function getCurrentRbOwnCapitalCoord(snapshot){
+    if(mode !== 'rb') return null;
+
+    const snap = snapshot || getCurrentBattlemapSnapshot();
+    const capitalSet = (snap && snap.capitalSet instanceof Set) ? snap.capitalSet : new Set();
+    if(!capitalSet.size) return null;
+
+    for(const key of capitalSet){
+      const rc = parseBattleCoordKey(key);
+      if(!rc) continue;
+      const row = Number(rc.row);
+      const col = Number(rc.col);
+      if(isRbTileOwnedByCurrentTeam(row, col)){
+        return { row, col };
+      }
+    }
+
+    return null;
+  }
+
+  function shouldBlockOwnCapitalAttack(row, col, snapshot){
+    if(mode !== 'rb') return false;
+    if(!isOwnCapitalFriendlyFireSuppressed()) return false;
+
+    const r = Number(row);
+    const c = Number(col);
+    if(!Number.isFinite(r) || !Number.isFinite(c)) return false;
+
+    const snap = snapshot || getCurrentBattlemapSnapshot();
+    const current = getCurrentBattleCellCoord(snap);
+    if(!current) return false;
+    if(Number(current.row) !== r || Number(current.col) !== c) return false;
+
+    const capitalSet = (snap && snap.capitalSet instanceof Set) ? snap.capitalSet : new Set();
+    const hitCapital =
+      capitalSet.has(`${r},${c}`) ||
+      capitalSet.has(`${r}-${c}`);
+    if(!hitCapital) return false;
+
+    if(isRbTileOwnedByCurrentTeam(r, c)) return true;
+
+    const ownCapital = getCurrentRbOwnCapitalCoord(snap);
+    if(!ownCapital) return false;
+    return Number(ownCapital.row) === r && Number(ownCapital.col) === c;
+  }
+
+  function consumeOwnCapitalAttackIfNeeded(row, col, snapshot){
+    if(!shouldBlockOwnCapitalAttack(row, col, snapshot)) return false;
+    openOwnCapitalAttackBlockedModal();
+    return true;
+  }
+
+  function shouldBlockOwnCapitalRapidAttackOnLayer(row, col, snapshot){
+    if(mode !== 'rb') return false;
+    if(!loadRapidAttackEnabled()) return false;
+    return shouldBlockOwnCapitalAttack(row, col, snapshot);
+  }
+
+  function disableOwnCapitalAttackControlsInCellDetail(root, row, col, snapshot){
+    if(!(root instanceof Element)) return false;
+    if(!shouldBlockOwnCapitalAttack(row, col, snapshot)) return false;
+
+    const controls = Array.from(
+      root.querySelectorAll('input[type="submit"], input[type="image"], button[type="submit"], button:not([type])')
+    );
+
+    let changed = false;
+    for(const ctrl of controls){
+      const txt = sanitizeText(ctrl.textContent || ctrl.value || '');
+      if(
+        !txt.includes('エリアに挑む') &&
+        !txt.includes('エリアに挑戦') &&
+        !txt.includes('このエリアを捕らえよ')
+      ) continue;
+
+      if('disabled' in ctrl) ctrl.disabled = true;
+      ctrl.classList.add('dba-own-capital-attack-disabled');
+      ctrl.setAttribute('aria-disabled', 'true');
+      ctrl.setAttribute('title', '自分のチームの首都を攻撃することは推奨されません。');
+
+      if(ctrl instanceof HTMLInputElement){
+        ctrl.value = '攻撃不可';
+      }else{
+        ctrl.textContent = '攻撃不可';
+      }
+      changed = true;
+    }
+
+    return changed;
+  }
+
+  function neutralizeOwnCapitalAttackFormsInCellDetail(root, row, col, snapshot){
+    if(!(root instanceof Element)) return false;
+    if(!shouldBlockOwnCapitalAttack(row, col, snapshot)) return false;
+
+    const forms = Array.from(root.querySelectorAll('form'));
+    let changed = false;
+
+    for(const form of forms){
+      if(!(form instanceof HTMLFormElement)) continue;
+
+      const action = String(form.getAttribute('action') || '');
+      const fd = new FormData(form);
+      const fr = Number(fd.get('row'));
+      const fc = Number(fd.get('col'));
+
+      const isTeamChallenge =
+        /\/teamchallenge(?:\?|$)/.test(action) ||
+        /teamchallenge/.test(action);
+
+      if(!isTeamChallenge) continue;
+      if(Number.isFinite(fr) && Number.isFinite(fc)){
+        if(fr !== Number(row) || fc !== Number(col)) continue;
+      }
+
+      form.dataset.dbaOwnCapitalBlocked = '1';
+      form.setAttribute('action', 'javascript:void(0)');
+      form.setAttribute('onsubmit', 'return false;');
+      form.method = 'post';
+
+      form.addEventListener('submit', (e) => {
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        openOwnCapitalAttackBlockedModal();
+        return false;
+      }, true);
+
+      changed = true;
+    }
+
+    return changed;
+  }
+
+  function renderOwnCapitalRapidAttackBlockers(snapshot){
+    if(mode !== 'rb'){
+      for(const blocker of dbaLayerCellBlockerMap.values()){
+        blocker.dataset.active = '0';
+        blocker.title = '';
+      }
+      return;
+    }
+
+    for(const [key, blocker] of dbaLayerCellBlockerMap.entries()){
+      const rc = parseBattleCoordKey(key);
+      if(!rc){
+        blocker.dataset.active = '0';
+        blocker.title = '';
+        continue;
+      }
+
+      const row = Number(rc.row);
+      const col = Number(rc.col);
+      const active = shouldBlockOwnCapitalRapidAttackOnLayer(row, col, snapshot);
+      blocker.dataset.active = active ? '1' : '0';
+      blocker.title = active ? '自分のチームの首都を攻撃することは推奨されません。' : '';
+    }
+  }
+
+  function resolveOwnCapitalAttackCoordFromForm(form){
+    if(!(form instanceof HTMLFormElement)) return null;
+
+    const fd = new FormData(form);
+    const row = Number(fd.get('row'));
+    const col = Number(fd.get('col'));
+    if(!Number.isFinite(row) || !Number.isFinite(col)) return null;
+
+    return { row, col };
+  }
+
+  function buildOwnCapitalAttackBlockedModal(){
+    if(document.getElementById('dba-m-own-capital-attack-blocked')) return;
+
+    const dlg = document.createElement('dialog');
+    dlg.id = 'dba-m-own-capital-attack-blocked';
+    dlg.className = 'dba-m-alert';
+
+    const title = document.createElement('div');
+    title.className = 'dba-alert__title';
+    title.textContent = 'Alert:';
+
+    const mid = document.createElement('div');
+    mid.className = 'dba-alert__mid';
+    mid.textContent = '自分のチームの首都を攻撃することは推奨されません。';
+
+    const bot = document.createElement('div');
+    bot.className = 'dba-alert__bot';
+
+    const btnClose = document.createElement('button');
+    btnClose.type = 'button';
+    btnClose.className = 'dba-btn-close';
+    btnClose.textContent = 'Close';
+
+    bot.appendChild(btnClose);
+    dlg.appendChild(title);
+    dlg.appendChild(mid);
+    dlg.appendChild(bot);
+    document.body.appendChild(dlg);
+
+    const closeDirect = () => {
+      try{ dlg.close(); }catch(_e){ dlg.removeAttribute('open'); }
+    };
+
+    btnClose.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      closeDirect();
+    });
+    dlg.addEventListener('cancel', (e) => {
+      e.preventDefault();
+      closeDirect();
+    });
+  }
+
+  function openOwnCapitalAttackBlockedModal(){
+    buildOwnCapitalAttackBlockedModal();
+    const dlg = document.getElementById('dba-m-own-capital-attack-blocked');
+    if(!dlg) return;
+    try{ dlg.showModal(); }catch(_e){ dlg.setAttribute('open', ''); }
+  }
+
+  function installOwnCapitalAttackGlobalGuards(){
+    if(document.documentElement.dataset.dbaOwnCapitalGlobalGuardInstalled === '1') return;
+    document.documentElement.dataset.dbaOwnCapitalGlobalGuardInstalled = '1';
+
+    document.addEventListener('click', (e) => {
+      const target = (e.target instanceof Element) ? e.target.closest('#gridActionAttack') : null;
+      if(!target) return;
+      if(!shouldBlockOwnCapitalAttack(
+        Number((window.__gridActionMenuState && window.__gridActionMenuState.row) ?? getCurrentBattleCellCoord()?.row),
+        Number((window.__gridActionMenuState && window.__gridActionMenuState.col) ?? getCurrentBattleCellCoord()?.col)
+      )){
+        return;
+      }
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      openOwnCapitalAttackBlockedModal();
+    }, true);
+
+    document.addEventListener('submit', (e) => {
+      const form = e.target;
+      if(!(form instanceof HTMLFormElement)) return;
+      const action = String(form.getAttribute('action') || '');
+      if(!/\/teamchallenge(?:\?|$)|teamchallenge/.test(action)) return;
+
+      const fd = new FormData(form);
+      const row = Number(fd.get('row'));
+      const col = Number(fd.get('col'));
+      if(!consumeOwnCapitalAttackIfNeeded(row, col)) return;
+
+      e.preventDefault();
+      e.stopImmediatePropagation();
+    }, true);
+  }
+
+  function buildDisableOwnCapitalProtectionConfirmModal(){
+    if(document.getElementById('dba-m-disable-own-capital-protection-confirm')) return;
+
+    const dlg = document.createElement('dialog');
+    dlg.id = 'dba-m-disable-own-capital-protection-confirm';
+    dlg.className = 'dba-m-alert';
+
+    const title = document.createElement('div');
+    title.className = 'dba-alert__title';
+    title.textContent = 'Confirm:';
+
+    const mid = document.createElement('div');
+    mid.className = 'dba-alert__mid';
+    mid.textContent = '本当に自チーム首都保護を解除しますか？';
+
+    const bot = document.createElement('div');
+    bot.className = 'dba-alert__bot';
+
+    const btnYes = document.createElement('button');
+    btnYes.type = 'button';
+    btnYes.className = 'dba-btn-ok';
+    btnYes.textContent = 'はい';
+
+    const btnCancel = document.createElement('button');
+    btnCancel.type = 'button';
+    btnCancel.className = 'dba-btn-close';
+    btnCancel.textContent = 'Cancel';
+
+    bot.appendChild(btnYes);
+    bot.appendChild(btnCancel);
+    dlg.appendChild(title);
+    dlg.appendChild(mid);
+    dlg.appendChild(bot);
+    document.body.appendChild(dlg);
+  }
+
+  function openDisableOwnCapitalProtectionConfirmModal(){
+    buildDisableOwnCapitalProtectionConfirmModal();
+    const dlg = document.getElementById('dba-m-disable-own-capital-protection-confirm');
+    if(!dlg) return Promise.resolve(false);
+
+    return new Promise((resolve) => {
+      const btnYes = dlg.querySelector('.dba-btn-ok');
+      const btnCancel = dlg.querySelector('.dba-btn-close');
+
+      const finalize = (answer) => {
+        try{ dlg.close(); }catch(_e){ dlg.removeAttribute('open'); }
+        resolve(answer);
+      };
+
+      if(btnYes){
+        btnYes.onclick = (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          finalize(true);
+        };
+      }
+      if(btnCancel){
+        btnCancel.onclick = (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          finalize(false);
+        };
+      }
+      dlg.oncancel = (e) => {
+        e.preventDefault();
+        finalize(false);
+      };
+
+      try{ dlg.showModal(); }catch(_e){ dlg.setAttribute('open', ''); }
+    });
   }
 
   async function triggerBattleInfoShortPress(){
@@ -7126,7 +9922,7 @@
 
     if(rect.right > vw - 8) nx -= (rect.right - (vw - 8));
     if(rect.left < 8) nx = 8;
-    if(rect.bottom > vh - 8) ny -= (rect.bottom - (vh - 8));
+    if(rect.bottom > vh - 8) ny -= (rect.bottom - (svh - 8));
     if(rect.top < 8) ny = 8;
 
     pop.style.left = nx + 'px';
@@ -7510,7 +10306,7 @@
   function placePopupUnderButton(pop, btn){
     const rect = btn.getBoundingClientRect();
     const vw = window.innerWidth || document.documentElement.clientWidth || 800;
-    const vh = window.innerHeight || document.documentElement.clientHeight || 600;
+    const svh = window.innerHeight || document.documentElement.clientHeight || 600;
 
     // ボタンの“下”を基本
     let x = rect.left;
@@ -7527,7 +10323,7 @@
     let ny = r2.top;
     if(r2.right > vw - 8) nx -= (r2.right - (vw - 8));
     if(r2.left < 8) nx = 8;
-    if(r2.bottom > vh - 8) ny -= (r2.bottom - (vh - 8));
+    if(r2.bottom > svh - 8) ny -= (r2.bottom - (svh - 8));
     if(r2.top < 8) ny = 8;
 
     pop.style.left = nx + 'px';
@@ -8241,15 +11037,18 @@
     return true;
   }
 
-  function setPresetAt(name, triple, insertIndex){
+  function setPresetAt(name, triple, insertIndex, options){
     const { store, roster } = getActiveRoster();
     const n = sanitizeText(name);
     if(!n) throw new Error('プリセット名が空です');
-    assertPresetNameAvailable(n);
-    if(!Array.isArray(triple) || triple.length !== 3) throw new Error('Invalid preset triple');
     roster.presets = roster.presets || {};
     roster.presetOrder = Array.isArray(roster.presetOrder) ? roster.presetOrder : [];
     const existed = !!(roster.presets && Object.prototype.hasOwnProperty.call(roster.presets, n));
+    const allowOverwrite = !!(options && options.allowOverwrite);
+    if(!(allowOverwrite && existed)){
+      assertPresetNameAvailable(n);
+    }
+    if(!Array.isArray(triple) || triple.length !== 3) throw new Error('Invalid preset triple');
     roster.presets[n] = [
       (triple[0] === null) ? null : Number(triple[0]),
       (triple[1] === null) ? null : Number(triple[1]),
@@ -8271,6 +11070,84 @@
 
   function setPreset(name, triple){
     setPresetAt(name, triple, null);
+  }
+
+  function makeDuplicatedPresetName(sourceName){
+    const src = sanitizeText(sourceName);
+    if(!src) throw new Error('複製元のプリセット名が不正です');
+
+    const base = `コピー：${src}`;
+    if(!hasPresetName(base)){
+      return base;
+    }
+
+    let n = 2;
+    while(n <= 9999){
+      const cand = `${base} (${n})`;
+      if(!hasPresetName(cand)){
+        return cand;
+      }
+      n += 1;
+    }
+
+    throw new Error(`複製先のプリセット名を確保できませんでした: ${base}`);
+  }
+
+  function duplicatePresetBelow(name){
+    const { roster } = getActiveRoster();
+    const nm = sanitizeText(name);
+    if(!nm) throw new Error('複製元のプリセット名が不正です');
+
+    roster.presets = (roster && roster.presets && typeof roster.presets === 'object') ? roster.presets : {};
+    roster.presetOrder = Array.isArray(roster.presetOrder) ? roster.presetOrder : [];
+
+    if(!Object.prototype.hasOwnProperty.call(roster.presets, nm)){
+      throw new Error(`プリセットが見つかりません: ${nm}`);
+    }
+
+    const triple = roster.presets[nm];
+    if(!Array.isArray(triple) || triple.length !== 3){
+      throw new Error(`プリセット内容が不正です: ${nm}`);
+    }
+
+    const baseIdx = roster.presetOrder.indexOf(nm);
+    const insertIdx = (baseIdx >= 0) ? (baseIdx + 1) : roster.presetOrder.length;
+    const newName = makeDuplicatedPresetName(nm);
+
+    setPresetAt(newName, [
+      (triple[0] === null) ? null : Number(triple[0]),
+      (triple[1] === null) ? null : Number(triple[1]),
+      (triple[2] === null) ? null : Number(triple[2])
+    ], insertIdx);
+
+    return newName;
+  }
+
+  function movePresetBy(name, delta){
+    const { store, roster } = getActiveRoster();
+    const nm = sanitizeText(name);
+    const d = Number(delta);
+
+    if(!nm) return false;
+    if(!Number.isFinite(d) || d === 0) return false;
+
+    roster.presets = (roster && roster.presets && typeof roster.presets === 'object') ? roster.presets : {};
+    roster.presetOrder = Array.isArray(roster.presetOrder) ? roster.presetOrder.slice() : [];
+
+    const from = roster.presetOrder.indexOf(nm);
+    if(from < 0) return false;
+
+    const to = from + (d < 0 ? -1 : 1);
+    if(to < 0 || to >= roster.presetOrder.length) return false;
+
+    const tmp = roster.presetOrder[from];
+    roster.presetOrder[from] = roster.presetOrder[to];
+    roster.presetOrder[to] = tmp;
+
+    roster.updatedAt = nowIso();
+    store.rosters[store.activeId] = roster;
+    saveRosterStore(store);
+    return true;
   }
 
   function deletePreset(name){
@@ -8456,6 +11333,26 @@
     return `${w} ${a} ${n}`;
   }
 
+  function buildPresetMetaNode(triple, className){
+    const wrap = document.createElement('div');
+    wrap.className = className;
+
+    const parts = [
+      (triple && triple[0] != null) ? `W:${triple[0]}` : 'W:-',
+      (triple && triple[1] != null) ? `A:${triple[1]}` : 'A:-',
+      (triple && triple[2] != null) ? `N:${triple[2]}` : 'N:-'
+    ];
+
+    for(const txt of parts){
+      const part = document.createElement('span');
+      part.className = 'dba-preset-meta__part';
+      part.textContent = txt;
+      wrap.appendChild(part);
+    }
+
+    return wrap;
+  }
+
   async function equipById(id){
     if(id == null) return { ok:true, missing:false };
     const url = makeEquipUrl(id);
@@ -8578,8 +11475,12 @@
     const delMode = !!(rosterDlg && rosterDlg.dataset.dbaDelMode === '1');
     // 再編集モード（「再編集」→対象選択 方式）
     const editMode = !!(rosterDlg && rosterDlg.dataset.dbaEditMode === '1');
+    // 複製モード（「複製」→対象選択 方式）
+    const dupMode = !!(rosterDlg && rosterDlg.dataset.dbaDupMode === '1');
     // 追加位置選択モード（「追加」→挿入位置選択 方式）
     const addPickMode = !!(rosterDlg && rosterDlg.dataset.dbaAddPickMode === '1');
+    const presetClickAction = loadRosterPresetClickAction();
+    const expandedMenuPresetName = sanitizeText(rosterDlg && rosterDlg.dataset.dbaMenuPresetName ? rosterDlg.dataset.dbaMenuPresetName : '');
     // ★並び替え禁止：表示順は presetOrder（追加順／バックアップ記述順）を優先
     const order = Array.isArray(roster && roster.presetOrder) ? roster.presetOrder : [];
     const seen = new Set();
@@ -8613,27 +11514,26 @@
     const headBtns = document.createElement('div');
     headBtns.className = 'dba-roster-head-btns';
 
-    const btnRename = document.createElement('button');
-    btnRename.type = 'button';
-    btnRename.className = 'dba-btn-mini';
-    btnRename.textContent = '名前変更';
+    const btnAuto = document.createElement('button');
+    btnAuto.type = 'button';
+    btnAuto.className = 'dba-btn-mini';
+    btnAuto.textContent = 'オート装備設定';
 
     const btnOption = document.createElement('button');
     btnOption.type = 'button';
     btnOption.className = 'dba-btn-mini';
-    btnOption.textContent = 'オプション';
+    btnOption.textContent = 'ロスターオプション';
 
-    const btnWipe = document.createElement('button');
-    btnWipe.type = 'button';
-    btnWipe.className = 'dba-btn-mini dba-btn-mini--danger';
-    btnWipe.textContent = 'ロスター削除';
 
-    headBtns.appendChild(btnRename);
+    headBtns.appendChild(btnAuto);
     headBtns.appendChild(btnOption);
-    headBtns.appendChild(btnWipe);
 
     head.appendChild(headTitle);
     head.appendChild(headBtns);
+    const hideMenuRow2 = loadRosterHideMenuRow2Enabled();
+    if(hideMenuRow2){
+      head.style.borderBottom = '0';
+    }
     box.appendChild(head);
 
     // 2段目：追加/削除
@@ -8644,6 +11544,12 @@
     btnAdd.type = 'button';
     btnAdd.className = 'dba-btn-mini dba-btn-mini--ok';
     btnAdd.textContent = addPickMode ? '追加位置:選択してください' : '追加';
+
+    const btnDuplicate = document.createElement('button');
+    btnDuplicate.type = 'button';
+    btnDuplicate.className = 'dba-btn-mini';
+    btnDuplicate.textContent = dupMode ? '複製:選択してください' : '複製';
+    btnDuplicate.disabled = false;
 
     const btnEdit = document.createElement('button');
     btnEdit.type = 'button';
@@ -8666,16 +11572,15 @@
     btnDel.disabled = false;
 
     row2.appendChild(btnAdd);
+    row2.appendChild(btnDuplicate);
     row2.appendChild(btnEdit);
     row2.appendChild(btnSort);
 
-    const btnAuto = document.createElement('button');
-    btnAuto.type = 'button';
-    btnAuto.className = 'dba-btn-mini';
-    btnAuto.textContent = 'オート装備設定';
-
-    row2.appendChild(btnAuto);
     row2.appendChild(btnDel);
+    if(hideMenuRow2){
+      row2.style.display = 'none';
+      row2.hidden = true;
+    }
     box.appendChild(row2);
 
     // リスト
@@ -8701,18 +11606,41 @@
         item.className = 'dba-roster-item';
         item.dataset.name = nm;
         // 削除モード中は「選択＝装備適用」ではないため、選択強調はOFFにする
-        item.dataset.selected = (!delMode && (nm === selectedPresetName)) ? '1' : '0';
+        item.dataset.selected = (
+          !delMode && !dupMode && (
+            (nm === selectedPresetName) ||
+            (presetClickAction === 'menu' && nm === expandedMenuPresetName)
+          )
+        ) ? '1' : '0';
 
         const n = document.createElement('div');
         n.className = 'dba-roster-item__name';
         n.textContent = nm;
 
-        const m = document.createElement('div');
-        m.className = 'dba-roster-item__meta';
-        m.textContent = presetMetaText(triple);
+        const m = buildPresetMetaNode(triple, 'dba-roster-item__meta');
 
         item.appendChild(n);
         item.appendChild(m);
+
+        const runEquipPreset = async () => {
+          renderRosterModalState(nm);
+          try{
+            closeRosterResultModal();
+            openRosterProgressAlertModal(`装備切替中…\n${nm}\n${presetMetaText(presets[nm])}`, '装備ロスター');
+            const result = await equipPresetByName(nm);
+            if(result && result.missing){
+              closeRosterProgressAlertModal();
+              return;
+            }
+            saveAutoEquipLastPreset('');
+            if(rosterDlg) rosterDlg.dataset.dbaMenuPresetName = '';
+            closeRosterProgressAlertModal();
+            openRosterResultModalWithNode(`装備切替完了\n${nm}`, '装備ロスター');
+          }catch(_e2){
+            closeRosterProgressAlertModal();
+            openRosterResultModalWithNode(`装備切替に失敗しました\n${nm}`, '装備ロスター');
+          }
+        };
 
         item.addEventListener('click', async (e) => {
           e.preventDefault();
@@ -8741,6 +11669,21 @@
             return;
           }
 
+          // 複製モード中：クリック＝複製対象の選択（装備はしない）
+          if(rosterDlg && rosterDlg.dataset.dbaDupMode === '1'){
+            let duplicatedName = '';
+            try{
+              duplicatedName = duplicatePresetBelow(nm);
+            }catch(err){
+              alert(err && err.message ? err.message : 'プリセットの複製に失敗しました。');
+              return;
+            }
+            rosterDlg.dataset.dbaDupMode = '0';
+            rosterDlg.dataset.dbaMenuPresetName = duplicatedName;
+            renderRosterModalState(duplicatedName);
+            return;
+          }
+
           // 再編集モード中：クリック＝再編集対象の選択（装備はしない）
           if(rosterDlg && rosterDlg.dataset.dbaEditMode === '1'){
             // 再編集モード解除（選択後は通常に戻す）
@@ -8752,30 +11695,184 @@
             return;
           }
 
+          if(presetClickAction === 'menu'){
+            if(rosterDlg){
+              rosterDlg.dataset.dbaMenuPresetName = (expandedMenuPresetName === nm) ? '' : nm;
+            }
+            renderRosterModalState(selectedPresetName || null);
+            return;
+          }
+
           // 通常：クリック＝選択 + 装備適用
-          renderRosterModalState(nm);
-          try{
-            // 装備ロスター専用の進行中ダイアログはアラート（赤枠）で表示
-            closeRosterResultModal();
-            openRosterProgressAlertModal(`装備切替中…\n${nm}\n${presetMetaText(presets[nm])}`, '装備ロスター');
-            const result = await equipPresetByName(nm);
-            if(result && result.missing){
-              closeRosterProgressAlertModal();
+          await runEquipPreset();
+        });
+
+        if(presetClickAction === 'menu' && expandedMenuPresetName === nm){
+          const actionWrap = document.createElement('div');
+          actionWrap.className = 'dba-roster-item__actions';
+
+          const baseIdx = names.indexOf(nm);
+          const canMoveUp = baseIdx > 0;
+          const canMoveDown = baseIdx >= 0 && baseIdx < (names.length - 1);
+
+          const btnCancelMenu = document.createElement('button');
+          btnCancelMenu.type = 'button';
+          btnCancelMenu.className = 'dba-btn-mini dba-btn-mini--cancel';
+          btnCancelMenu.textContent = 'キャンセル';
+
+          const btnEquipMenu = document.createElement('button');
+          btnEquipMenu.type = 'button';
+          btnEquipMenu.className = 'dba-btn-mini dba-btn-mini--ok';
+          btnEquipMenu.textContent = '装備';
+
+          const btnReeditMenu = document.createElement('button');
+          btnReeditMenu.type = 'button';
+          btnReeditMenu.className = 'dba-btn-mini';
+          btnReeditMenu.textContent = '再編集';
+
+          const btnDuplicateMenu = document.createElement('button');
+          btnDuplicateMenu.type = 'button';
+          btnDuplicateMenu.className = 'dba-btn-mini';
+          btnDuplicateMenu.textContent = '複製';
+
+          const btnAddAboveMenu = document.createElement('button');
+          btnAddAboveMenu.type = 'button';
+          btnAddAboveMenu.className = 'dba-btn-mini';
+          btnAddAboveMenu.textContent = '上に追加';
+
+          const btnAddBelowMenu = document.createElement('button');
+          btnAddBelowMenu.type = 'button';
+          btnAddBelowMenu.className = 'dba-btn-mini';
+          btnAddBelowMenu.textContent = '下に追加';
+
+          const btnMoveUpMenu = document.createElement('button');
+          btnMoveUpMenu.type = 'button';
+          btnMoveUpMenu.className = 'dba-btn-mini';
+          btnMoveUpMenu.textContent = '1つ上げる';
+          btnMoveUpMenu.disabled = !canMoveUp;
+
+          const btnMoveDownMenu = document.createElement('button');
+          btnMoveDownMenu.type = 'button';
+          btnMoveDownMenu.className = 'dba-btn-mini';
+          btnMoveDownMenu.textContent = '1つ下げる';
+          btnMoveDownMenu.disabled = !canMoveDown;
+
+          const btnDeleteMenu = document.createElement('button');
+          btnDeleteMenu.type = 'button';
+          btnDeleteMenu.className = 'dba-btn-mini dba-btn-mini--danger';
+          btnDeleteMenu.textContent = '削除';
+
+          btnCancelMenu.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            if(rosterDlg) rosterDlg.dataset.dbaMenuPresetName = '';
+            renderRosterModalState(selectedPresetName || null);
+          });
+
+          btnEquipMenu.addEventListener('click', async (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            await runEquipPreset();
+          });
+
+          btnReeditMenu.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            if(rosterDlg) rosterDlg.dataset.dbaDupMode = '0';
+            if(rosterDlg) rosterDlg.dataset.dbaMenuPresetName = '';
+            renderRosterModalState(null);
+            openRosterEditPresetModal(nm, () => {
+              renderRosterModalState(nm);
+            });
+          });
+
+          btnDuplicateMenu.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            let duplicatedName = '';
+            try{
+              duplicatedName = duplicatePresetBelow(nm);
+            }catch(err){
+              alert(err && err.message ? err.message : 'プリセットの複製に失敗しました。');
               return;
             }
-            // 手動で装備ロスターから装備を変えた直後は、
-            // 「最後にオート装備で適用したプリセット」の記録を無効化する。
-            // これをしないと、後で別レギュレーションのセルを攻撃した際に
-            // オート装備が「同じプリセットは既に装備済み」と誤判定して
-            // 再装備を省略してしまうことがある。
-            saveAutoEquipLastPreset('');
-            closeRosterProgressAlertModal();
-            openRosterResultModalWithNode(`装備切替完了\n${nm}`, '装備ロスター');
-          }catch(_e2){
-            closeRosterProgressAlertModal();
-            openRosterResultModalWithNode(`装備切替に失敗しました\n${nm}`, '装備ロスター');
-          }
-        });
+            if(rosterDlg) rosterDlg.dataset.dbaMenuPresetName = duplicatedName;
+            renderRosterModalState(selectedPresetName || null);
+          });
+
+          btnAddAboveMenu.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            const baseIdx = names.indexOf(nm);
+            const insertIdx = (baseIdx >= 0) ? baseIdx : 0;
+            if(rosterDlg) rosterDlg.dataset.dbaMenuPresetName = '';
+            if(rosterDlg) rosterDlg.dataset.dbaAddPickMode = '0';
+            if(rosterDlg) rosterDlg.dataset.dbaDelMode = '0';
+            if(rosterDlg) rosterDlg.dataset.dbaDupMode = '0';
+            if(rosterDlg) rosterDlg.dataset.dbaEditMode = '0';
+            renderRosterModalState(null);
+            openRosterAddPresetModal(() => {
+              renderRosterModalState(null);
+            }, insertIdx);
+          });
+
+          btnAddBelowMenu.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            const baseIdx = names.indexOf(nm);
+            const insertIdx = (baseIdx >= 0) ? (baseIdx + 1) : names.length;
+            if(rosterDlg) rosterDlg.dataset.dbaMenuPresetName = '';
+            if(rosterDlg) rosterDlg.dataset.dbaAddPickMode = '0';
+            if(rosterDlg) rosterDlg.dataset.dbaDelMode = '0';
+            if(rosterDlg) rosterDlg.dataset.dbaDupMode = '0';
+            if(rosterDlg) rosterDlg.dataset.dbaEditMode = '0';
+            renderRosterModalState(null);
+            openRosterAddPresetModal(() => {
+              renderRosterModalState(null);
+            }, insertIdx);
+          });
+
+          btnMoveUpMenu.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            if(!canMoveUp) return;
+            const moved = movePresetBy(nm, -1);
+            if(!moved) return;
+            if(rosterDlg) rosterDlg.dataset.dbaMenuPresetName = nm;
+            renderRosterModalState(selectedPresetName || null);
+          });
+
+          btnMoveDownMenu.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            if(!canMoveDown) return;
+            const moved = movePresetBy(nm, 1);
+            if(!moved) return;
+            if(rosterDlg) rosterDlg.dataset.dbaMenuPresetName = nm;
+            renderRosterModalState(selectedPresetName || null);
+          });
+
+          btnDeleteMenu.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            const ok = confirm(`プリセット「${nm}」を削除しますか？`);
+            if(!ok) return;
+            deletePreset(nm);
+            if(rosterDlg) rosterDlg.dataset.dbaMenuPresetName = '';
+            renderRosterModalState(null);
+          });
+
+          actionWrap.appendChild(btnCancelMenu);
+          actionWrap.appendChild(btnEquipMenu);
+          actionWrap.appendChild(btnReeditMenu);
+          actionWrap.appendChild(btnDuplicateMenu);
+          actionWrap.appendChild(btnAddAboveMenu);
+          actionWrap.appendChild(btnAddBelowMenu);
+          actionWrap.appendChild(btnMoveUpMenu);
+          actionWrap.appendChild(btnMoveDownMenu);
+          actionWrap.appendChild(btnDeleteMenu);
+          item.appendChild(actionWrap);
+        }
 
         list.appendChild(item);
       }
@@ -8806,14 +11903,31 @@
       const touchState = {
         active: false,
         moved: false,
+        scrolled: false,
+        startAt: 0,
         startX: 0,
-        startY: 0
+        startY: 0,
+        startScrollTop: 0
       };
+
+      const INSERT_PICK_TAP_MAX_MS = 250;
+      const INSERT_PICK_TAP_MOVE_PX = 6;
+      const INSERT_PICK_TAP_SCROLL_PX = 2;
 
       const getTouchClientY = (evt) => {
         if(evt && evt.touches && evt.touches[0]) return evt.touches[0].clientY;
         if(evt && evt.changedTouches && evt.changedTouches[0]) return evt.changedTouches[0].clientY;
         return null;
+      };
+
+      const resetTouchState = () => {
+        touchState.active = false;
+        touchState.moved = false;
+        touchState.scrolled = false;
+        touchState.startAt = 0;
+        touchState.startX = 0;
+        touchState.startY = 0;
+        touchState.startScrollTop = 0;
       };
 
       showRosterInsertLineAtIndex(list, names.length);
@@ -8839,33 +11953,66 @@
         }, idx);
       });
 
+      list.addEventListener('click', (e) => {
+        if(!rosterDlg) return;
+        if(rosterDlg.dataset.dbaAddPickMode === '1') return;
+        if(loadRosterPresetClickAction() !== 'menu') return;
+        if((e.target instanceof Element) && e.target.closest('.dba-roster-item')) return;
+        if(!sanitizeText(rosterDlg.dataset.dbaMenuPresetName || '')) return;
+        e.preventDefault();
+        e.stopPropagation();
+        rosterDlg.dataset.dbaMenuPresetName = '';
+        renderRosterModalState(selectedPresetName || null);
+      });
+
       list.addEventListener('touchstart', (e) => {
         const y = getTouchClientY(e);
         if(y == null) return;
         const x = (e.touches && e.touches[0]) ? e.touches[0].clientX : 0;
         touchState.active = true;
         touchState.moved = false;
+        touchState.scrolled = false;
+        touchState.startAt = Date.now();
         touchState.startX = x;
         touchState.startY = y;
+        touchState.startScrollTop = list.scrollTop;
         updateRosterInsertLineFromClientY(list, y);
       }, { passive: true });
 
       list.addEventListener('touchmove', (e) => {
+        if(!touchState.active) return;
         const y = getTouchClientY(e);
         if(y == null) return;
         const x = (e.touches && e.touches[0]) ? e.touches[0].clientX : 0;
-        if(Math.abs(x - touchState.startX) > 8 || Math.abs(y - touchState.startY) > 8){
+        if(
+          Math.abs(x - touchState.startX) > INSERT_PICK_TAP_MOVE_PX ||
+          Math.abs(y - touchState.startY) > INSERT_PICK_TAP_MOVE_PX
+        ){
           touchState.moved = true;
         }
+        if(Math.abs(list.scrollTop - touchState.startScrollTop) > INSERT_PICK_TAP_SCROLL_PX){
+          touchState.scrolled = true;
+        }
         updateRosterInsertLineFromClientY(list, y);
+      }, { passive: true });
+
+      list.addEventListener('scroll', () => {
+        if(!touchState.active) return;
+        if(Math.abs(list.scrollTop - touchState.startScrollTop) > INSERT_PICK_TAP_SCROLL_PX){
+          touchState.scrolled = true;
+        }
       }, { passive: true });
 
       list.addEventListener('touchend', (e) => {
         if(!rosterDlg || rosterDlg.dataset.dbaAddPickMode !== '1') return;
         const y = getTouchClientY(e);
-        if(y == null) return;
-        if(touchState.moved){
-          touchState.active = false;
+        if(y == null){
+          resetTouchState();
+          return;
+        }
+        const elapsed = touchState.startAt > 0 ? (Date.now() - touchState.startAt) : Number.POSITIVE_INFINITY;
+        if(touchState.moved || touchState.scrolled || elapsed > INSERT_PICK_TAP_MAX_MS){
+          resetTouchState();
           return;
         }
         const idx = updateRosterInsertLineFromClientY(list, y);
@@ -8875,7 +12022,11 @@
         openRosterAddPresetModal(() => {
           renderRosterModalState(null);
         }, idx);
-        touchState.active = false;
+        resetTouchState();
+      }, { passive: true });
+
+      list.addEventListener('touchcancel', () => {
+        resetTouchState();
       }, { passive: true });
 
       list.addEventListener('click', () => {
@@ -8884,54 +12035,59 @@
       }, { capture: true });
     }
 
-    // --- handlers ---
-    btnRename.addEventListener('click', (e) => {
-      e.preventDefault(); e.stopPropagation();
-      if(rosterDlg) rosterDlg.dataset.dbaDelMode = '0';
-      if(rosterDlg) rosterDlg.dataset.dbaEditMode = '0';
-      openRosterRenameModal(title, (newName) => {
-        setRosterTitle(newName);
-        renderRosterModalState(selectedPresetName || null);
-      });
-    });
-
+    // ----- Handlers (1) -----
     btnOption.addEventListener('click', (e) => {
       e.preventDefault(); e.stopPropagation();
       if(rosterDlg) rosterDlg.dataset.dbaDelMode = '0';
+      if(rosterDlg) rosterDlg.dataset.dbaDupMode = '0';
       if(rosterDlg) rosterDlg.dataset.dbaEditMode = '0';
       if(rosterDlg) rosterDlg.dataset.dbaAddPickMode = '0';
+      if(rosterDlg) rosterDlg.dataset.dbaMenuPresetName = '';
       openRosterOptionsModal(() => {
         renderRosterModalState(selectedPresetName || null);
       });
     });
 
-    btnWipe.addEventListener('click', (e) => {
-      e.preventDefault(); e.stopPropagation();
-      if(rosterDlg) rosterDlg.dataset.dbaDelMode = '0';
-      if(rosterDlg) rosterDlg.dataset.dbaEditMode = '0';
-      openRosterWipeModal(() => {
-        deleteActiveRosterAndSwitch();
-        renderRosterModalState(null);
-      });
-    });
-
+    // ----- Handlers (2) -----
     btnAdd.addEventListener('click', (e) => {
       e.preventDefault(); e.stopPropagation();
       if(rosterDlg) rosterDlg.dataset.dbaDelMode = '0';
+      if(rosterDlg) rosterDlg.dataset.dbaDupMode = '0';
       if(rosterDlg) rosterDlg.dataset.dbaEditMode = '0';
+      if(rosterDlg) rosterDlg.dataset.dbaMenuPresetName = '';
       if(!rosterDlg) return;
       const next = (rosterDlg.dataset.dbaAddPickMode === '1') ? '0' : '1';
       rosterDlg.dataset.dbaAddPickMode = next;
       renderRosterModalState(null);
     });
 
+    // ----- Handlers (3) -----
+    btnDuplicate.addEventListener('click', (e) => {
+      e.preventDefault(); e.stopPropagation();
+      if(!rosterDlg) return;
+      rosterDlg.dataset.dbaDelMode = '0';
+      rosterDlg.dataset.dbaEditMode = '0';
+      rosterDlg.dataset.dbaAddPickMode = '0';
+      rosterDlg.dataset.dbaMenuPresetName = '';
+      const next = (rosterDlg.dataset.dbaDupMode === '1') ? '0' : '1';
+      rosterDlg.dataset.dbaDupMode = next;
+      if(next === '1'){
+        renderRosterModalState(null);
+      }else{
+        renderRosterModalState(selectedPresetName || null);
+      }
+    });
+
+    // ----- Handlers (4) -----
     btnEdit.addEventListener('click', (e) => {
       e.preventDefault(); e.stopPropagation();
       // 「再編集」→「対象選択」へ切り替え
       if(!rosterDlg) return;
       // 再編集モードに入るときは削除モードをOFF（誤操作防止）
       rosterDlg.dataset.dbaDelMode = '0';
+      rosterDlg.dataset.dbaDupMode = '0';
       rosterDlg.dataset.dbaAddPickMode = '0';
+      rosterDlg.dataset.dbaMenuPresetName = '';
       const next = (rosterDlg.dataset.dbaEditMode === '1') ? '0' : '1';
       rosterDlg.dataset.dbaEditMode = next;
       // 再編集モードON時は、誤操作防止のため選択状態をクリアして描画
@@ -8942,28 +12098,36 @@
       }
     });
 
+    // ----- Handlers (5) -----
     btnSort.addEventListener('click', (e) => {
       e.preventDefault(); e.stopPropagation();
       if(rosterDlg) rosterDlg.dataset.dbaDelMode = '0';
+      if(rosterDlg) rosterDlg.dataset.dbaDupMode = '0';
       if(rosterDlg) rosterDlg.dataset.dbaEditMode = '0';
+      if(rosterDlg) rosterDlg.dataset.dbaMenuPresetName = '';
       openRosterSortModal(() => {
         renderRosterModalState(selectedPresetName || null);
       });
     });
 
+    // ----- Handlers (6) -----
     btnAuto.addEventListener('click', (e) => {
       e.preventDefault(); e.stopPropagation();
       if(rosterDlg) rosterDlg.dataset.dbaDelMode = '0';
+      if(rosterDlg) rosterDlg.dataset.dbaDupMode = '0';
       if(rosterDlg) rosterDlg.dataset.dbaEditMode = '0';
       if(rosterDlg) rosterDlg.dataset.dbaAddPickMode = '0';
+      if(rosterDlg) rosterDlg.dataset.dbaMenuPresetName = '';
       openAutoEquipSettingsModal();
     });
 
+    // ----- Handlers (7) -----
     btnDel.addEventListener('click', (e) => {
       e.preventDefault(); e.stopPropagation();
       // 「削除」→「対象選択」へ切り替え
       if(!rosterDlg) return;
       // 削除モードに入るときは再編集モードをOFF（誤操作防止）
+      rosterDlg.dataset.dbaDupMode = '0';
       rosterDlg.dataset.dbaEditMode = '0';
       rosterDlg.dataset.dbaAddPickMode = '0';
       const next = (rosterDlg.dataset.dbaDelMode === '1') ? '0' : '1';
@@ -8986,7 +12150,9 @@
       if(dlg){
         dlg.dataset.dbaAddPickMode = '0';
         dlg.dataset.dbaDelMode = '0';
+        dlg.dataset.dbaDupMode = '0';
         dlg.dataset.dbaEditMode = '0';
+        dlg.dataset.dbaMenuPresetName = '';
       }
       renderRosterModalState(null);
       const dlg2 = document.getElementById('dba-m-roster');
@@ -9000,8 +12166,8 @@
   // =========================
   // オート装備設定モーダル（候補登録）
   // =========================
-  const AE_KEYS_GENERAL = ['N','R','SR','SSR','UR','N.エ','R.エ','SR.エ','SSR.エ','UR.エ'];
-  const AE_KEYS_GUARD   = ['N.警','R.警','SR.警','SSR.警','UR.警','N.警エ','R.警エ','SR.警エ','SSR.警エ','UR.警エ'];
+  const AE_KEYS_GENERAL = ['N','R','SR','SSR','UR','N?','R?','SR?','SSR?','UR?'];
+  const AE_KEYS_GUARD   = ['N警','R警','SR警','SSR警','UR警','N警?','R警?','SR警?','SSR警?','UR警?'];
 
   function buildAutoEquipSettingsModal(){
     if(document.getElementById('dba-m-auto-equip')) return;
@@ -10374,6 +13540,56 @@
     const mid = document.createElement('div');
     mid.className = 'dba-modal__mid';
 
+    const actionSection = document.createElement('section');
+    actionSection.className = 'dba-roster-opt-section';
+
+    const actionTitle = document.createElement('div');
+    actionTitle.className = 'dba-roster-opt-section__title';
+    actionTitle.textContent = 'プリセットをクリック／タップした時の動作';
+    actionSection.appendChild(actionTitle);
+
+    const actionBody = document.createElement('div');
+    actionBody.className = 'dba-roster-opt-section__body';
+
+    const actionRadioGroup = document.createElement('div');
+    actionRadioGroup.className = 'dba-roster-opt-radio-group';
+
+    const actionEquipLabel = document.createElement('label');
+    actionEquipLabel.className = 'dba-roster-opt-radio-line';
+    const actionEquipRadio = document.createElement('input');
+    actionEquipRadio.type = 'radio';
+    actionEquipRadio.name = 'dba-roster-option-preset-click-action';
+    actionEquipRadio.id = 'dba-roster-option-preset-click-equip';
+    actionEquipRadio.value = 'equip';
+    const actionEquipText = document.createElement('span');
+    actionEquipText.textContent = 'プリセットを装備';
+    actionEquipLabel.appendChild(actionEquipRadio);
+    actionEquipLabel.appendChild(actionEquipText);
+
+    const actionMenuLabel = document.createElement('label');
+    actionMenuLabel.className = 'dba-roster-opt-radio-line';
+    const actionMenuRadio = document.createElement('input');
+    actionMenuRadio.type = 'radio';
+    actionMenuRadio.name = 'dba-roster-option-preset-click-action';
+    actionMenuRadio.id = 'dba-roster-option-preset-click-menu';
+    actionMenuRadio.value = 'menu';
+    const actionMenuText = document.createElement('span');
+    actionMenuText.textContent = 'メニューを展開';
+    actionMenuLabel.appendChild(actionMenuRadio);
+    actionMenuLabel.appendChild(actionMenuText);
+
+    actionRadioGroup.appendChild(actionEquipLabel);
+    actionRadioGroup.appendChild(actionMenuLabel);
+    actionBody.appendChild(actionRadioGroup);
+
+    const actionNote = document.createElement('p');
+    actionNote.className = 'dba-roster-opt-note';
+    actionNote.textContent = '「メニューを展開」を選ぶと、プリセットを クリック／タップ した時に「キャンセル・装備・再編集・複製・上に追加・下に追加・1つ上げる・1つ下げる・削除」のメニューを表示します。';
+    actionBody.appendChild(actionNote);
+
+    actionSection.appendChild(actionBody);
+    mid.appendChild(actionSection);
+
     const rememberSection = document.createElement('section');
     rememberSection.className = 'dba-roster-opt-section';
 
@@ -10384,6 +13600,23 @@
 
     const rememberBody = document.createElement('div');
     rememberBody.className = 'dba-roster-opt-section__body';
+
+    const hideMenuRow2Label = document.createElement('label');
+    hideMenuRow2Label.className = 'dba-roster-opt-row';
+    const hideMenuRow2Chk = document.createElement('input');
+    hideMenuRow2Chk.type = 'checkbox';
+    hideMenuRow2Chk.id = 'dba-roster-option-hide-menu-row2';
+    const hideMenuRow2Text = document.createElement('span');
+    hideMenuRow2Text.className = 'dba-roster-opt-rowtext';
+    hideMenuRow2Text.textContent = '装備ロスターのメニュー2段目を隠す。';
+    hideMenuRow2Label.appendChild(hideMenuRow2Chk);
+    hideMenuRow2Label.appendChild(hideMenuRow2Text);
+    rememberBody.appendChild(hideMenuRow2Label);
+
+    const hideMenuRow2Note = document.createElement('p');
+    hideMenuRow2Note.className = 'dba-roster-opt-note';
+    hideMenuRow2Note.textContent = '2段目の「追加」「複製」…「削除」等のメニューを非表示化し、空間を詰めます。';
+    rememberBody.appendChild(hideMenuRow2Note);
 
     const rememberLabel = document.createElement('label');
     rememberLabel.className = 'dba-roster-opt-row';
@@ -10405,6 +13638,43 @@
     rememberSection.appendChild(rememberBody);
 
     mid.appendChild(rememberSection);
+
+    const manageSection = document.createElement('section');
+    manageSection.className = 'dba-roster-opt-section';
+
+    const manageTitle = document.createElement('div');
+    manageTitle.className = 'dba-roster-opt-section__title';
+    manageTitle.textContent = '装備ロスター管理';
+    manageSection.appendChild(manageTitle);
+
+    const manageBody = document.createElement('div');
+    manageBody.className = 'dba-roster-opt-section__body';
+
+    const manageNote = document.createElement('p');
+    manageNote.className = 'dba-roster-opt-note';
+    manageNote.textContent = '現在読み込んでいる装備ロスターの名前変更や削除を行います。';
+    manageBody.appendChild(manageNote);
+
+    const manageWrap = document.createElement('div');
+    manageWrap.className = 'dba-roster-opt-btngrid';
+
+    const btnRename = document.createElement('button');
+    btnRename.type = 'button';
+    btnRename.id = 'dba-roster-option-btn-rename';
+    btnRename.className = 'dba-btn-mini';
+    btnRename.textContent = '名前変更';
+
+    const btnWipe = document.createElement('button');
+    btnWipe.type = 'button';
+    btnWipe.id = 'dba-roster-option-btn-wipe';
+    btnWipe.className = 'dba-btn-mini dba-btn-mini--danger';
+    btnWipe.textContent = 'ロスター削除';
+
+    manageWrap.appendChild(btnRename);
+    manageWrap.appendChild(btnWipe);
+    manageBody.appendChild(manageWrap);
+    manageSection.appendChild(manageBody);
+    mid.appendChild(manageSection);
 
     const backupSection = document.createElement('section');
     backupSection.className = 'dba-roster-opt-section';
@@ -10447,7 +13717,6 @@
     backupWrap.appendChild(btnImport);
     backupWrap.appendChild(btnEdit);
     backupBody.appendChild(backupWrap);
-    backupBody.appendChild(backupWrap);
     backupSection.appendChild(backupBody);
     mid.appendChild(backupSection);
 
@@ -10478,24 +13747,100 @@
       const dlg = document.getElementById('dba-m-roster-option');
       if(!dlg) return;
 
+      const btnX = dlg.querySelector('.dba-btn-x');
+      const btnClose = dlg.querySelector('.dba-btn-close');
+      const chkHideMenuRow2 = document.getElementById('dba-roster-option-hide-menu-row2');
       const chkRemember = document.getElementById('dba-roster-option-scroll-remember');
+      const radioEquip = document.getElementById('dba-roster-option-preset-click-equip');
+      const radioMenu = document.getElementById('dba-roster-option-preset-click-menu');
       const btnExport = document.getElementById('dba-roster-option-btn-export');
       const btnImport = document.getElementById('dba-roster-option-btn-import');
       const btnEdit = document.getElementById('dba-roster-option-btn-edit');
+      const btnRename = document.getElementById('dba-roster-option-btn-rename');
+      const btnWipe = document.getElementById('dba-roster-option-btn-wipe');
 
-      if(chkRemember){
-        chkRemember.checked = loadRosterScrollRememberEnabled();
-        chkRemember.onchange = () => {
-          const on = !!chkRemember.checked;
-          saveRosterScrollRememberEnabled(on);
-          if(on){
-            const top = captureRosterListScrollState();
-            saveRosterSavedScrollTop(top);
-          }else{
-            clearRosterSavedScrollTop();
+      const initialClickAction = loadRosterPresetClickAction();
+      let pendingClickAction = initialClickAction;
+      let pendingHideMenuRow2 = loadRosterHideMenuRow2Enabled();
+      let pendingRemember = loadRosterScrollRememberEnabled();
+      let appliedOnClose = false;
+
+      const applyPendingOptions = () => {
+        if(appliedOnClose) return;
+        appliedOnClose = true;
+
+        saveRosterPresetClickAction(pendingClickAction);
+        saveRosterHideMenuRow2Enabled(pendingHideMenuRow2);
+        saveRosterScrollRememberEnabled(pendingRemember);
+
+        if(pendingRemember){
+          const top = captureRosterListScrollState();
+          saveRosterSavedScrollTop(top);
+        }else{
+          clearRosterSavedScrollTop();
+        }
+
+        if(typeof onDone === 'function'){
+          try{ onDone(); }catch(_e){}
+        }
+      };
+
+      const closeDirect = () => {
+        applyPendingOptions();
+        try{ dlg.close(); }catch(_e){ dlg.removeAttribute('open'); }
+      };
+
+      const clickAction = loadRosterPresetClickAction();
+      if(radioEquip) radioEquip.checked = (clickAction === 'equip');
+      if(radioMenu) radioMenu.checked = (clickAction === 'menu');
+
+      if(radioEquip){
+        radioEquip.onchange = () => {
+          if(radioEquip.checked){
+            pendingClickAction = 'equip';
           }
         };
       }
+      if(radioMenu){
+        radioMenu.onchange = () => {
+          if(radioMenu.checked){
+            pendingClickAction = 'menu';
+          }
+        };
+      }
+
+      if(chkHideMenuRow2){
+        chkHideMenuRow2.checked = pendingHideMenuRow2;
+        chkHideMenuRow2.onchange = () => {
+          pendingHideMenuRow2 = !!chkHideMenuRow2.checked;
+        };
+      }
+
+      if(chkRemember){
+        chkRemember.checked = pendingRemember;
+        chkRemember.onchange = () => {
+          pendingRemember = !!chkRemember.checked;
+        };
+      }
+
+      if(btnX){
+        btnX.onclick = (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          closeDirect();
+        };
+      }
+      if(btnClose){
+        btnClose.onclick = (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          closeDirect();
+        };
+      }
+      dlg.oncancel = (e) => {
+        e.preventDefault();
+        closeDirect();
+      };
 
       if(btnExport){
         btnExport.onclick = (e) => {
@@ -10516,6 +13861,30 @@
           e.preventDefault();
           e.stopPropagation();
           openRosterBackupEditorModal(onDone);
+        };
+      }
+      if(btnRename){
+        btnRename.onclick = (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          openRosterRenameModal(getActiveRoster().roster?.title || '', (newName) => {
+            setRosterTitle(newName);
+            if(typeof onDone === 'function'){
+              try{ onDone(); }catch(_e){}
+            }
+          });
+        };
+      }
+      if(btnWipe){
+        btnWipe.onclick = (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          openRosterWipeModal(() => {
+            deleteActiveRosterAndSwitch();
+            if(typeof onDone === 'function'){
+              try{ onDone(); }catch(_e){}
+            }
+          });
         };
       }
 
@@ -10954,37 +14323,9 @@
       }
 
       if(dlg){
-        const onWheelCapture = (e) => {
-          if(!(dlg.open || dlg.hasAttribute('open'))) return;
-          const target = e.target;
-          if(target instanceof Node && dlg.contains(target)) return;
-          e.preventDefault();
-          e.stopPropagation();
-          e.stopImmediatePropagation();
-        };
-
-        const onTouchMoveCapture = (e) => {
-          if(!(dlg.open || dlg.hasAttribute('open'))) return;
-          const target = e.target;
-          if(target instanceof Node && dlg.contains(target)) return;
-          e.preventDefault();
-          e.stopPropagation();
-          e.stopImmediatePropagation();
-        };
-
-        document.addEventListener('wheel', onWheelCapture, { capture: true, passive: false });
-        document.addEventListener('touchmove', onTouchMoveCapture, { capture: true, passive: false });
-
-        const cleanupScrollBlock = () => {
-          document.removeEventListener('wheel', onWheelCapture, { capture: true });
-          document.removeEventListener('touchmove', onTouchMoveCapture, { capture: true });
-        };
-
-        dlg.addEventListener('close', cleanupScrollBlock, { once: true });
-        dlg.addEventListener('cancel', cleanupScrollBlock, { once: true });
-
         try{ dlg.showModal(); }catch(_e){ dlg.setAttribute('open',''); }
       }
+
     };
     if(document.body) openNow(); else document.addEventListener('DOMContentLoaded', openNow, { once:true });
   }
@@ -11107,7 +14448,12 @@
             if(nextName !== nm){
               renamePreset(nm, nextName);
             }
-            setPreset(nextName, [st.weaponId, st.armorId, st.necklaceId]);
+            setPresetAt(
+              nextName,
+              [st.weaponId, st.armorId, st.necklaceId],
+              null,
+              { allowOverwrite:true }
+            );
             try{ onDone && onDone(); }catch(_e2){}
             try{ dlg.close(); }catch(_e2){ dlg.removeAttribute('open'); }
           }catch(_e2){
@@ -11324,9 +14670,7 @@
           const n = document.createElement('div');
           n.className = 'dba-sort-name';
           n.textContent = nm;
-          const m = document.createElement('div');
-          m.className = 'dba-sort-meta';
-          m.textContent = presetMetaText(triple);
+          const m = buildPresetMetaNode(triple, 'dba-sort-meta');
 
           row.appendChild(h);
           row.appendChild(n);
@@ -11724,6 +15068,7 @@
   async function openPickItemModal(kind){
     buildPickItemModal();
     const dlg = document.getElementById('dba-m-pick-item');
+    const mid = dlg ? dlg.querySelector('.dba-modal__mid') : null;
     const title = document.getElementById('dba-pick-title');
     const hint = document.getElementById('dba-pick-hint');
     const box = document.getElementById('dba-pick-box');
@@ -11735,6 +15080,11 @@
     if(title) title.textContent = `${kLabel}を選択`;
     if(hint) hint.textContent = '行をクリックして選択してください（装/解/分解列は非表示）。';
     box.textContent = '読み込み中…';
+
+    // dba-m-pick-item は使い回しなので、前回のスクロール位置を毎回破棄する
+    try{ dlg.scrollTop = 0; }catch(_e){}
+    try{ if(mid) mid.scrollTop = 0; }catch(_e){}
+    try{ box.scrollTop = 0; }catch(_e){}
 
     let selectedRow = null;
     let activeRarity = 'ALL';
@@ -11877,6 +15227,11 @@
       box.appendChild(filterBar);
       box.appendChild(imported);
 
+      // 中身を差し替えた直後にも先頭へ戻す
+      try{ dlg.scrollTop = 0; }catch(_e){}
+      try{ if(mid) mid.scrollTop = 0; }catch(_e){}
+      try{ box.scrollTop = 0; }catch(_e){}
+
       // 初期状態でフィルタ適用（念のため）
       applyPickFilters();
     }
@@ -11919,6 +15274,9 @@
       };
 
       try{ dlg.showModal(); }catch(_e){ dlg.setAttribute('open',''); }
+      try{ dlg.scrollTop = 0; }catch(_e){}
+      try{ if(mid) mid.scrollTop = 0; }catch(_e){}
+      try{ box.scrollTop = 0; }catch(_e){}
     });
   }
 
@@ -13418,7 +16776,7 @@
   }
 
   async function fetchCellDetail(row, col){
-    const url = `https://donguri.5ch.io/teambattle?r=${row}&c=${col}&m=${mode}`;
+    const url = makeTeambattleUrl({ r: row, c: col, m: mode });
     try{
       const res = await fetch(url, {
         method: 'GET',
@@ -13480,6 +16838,17 @@
       cell.dataset.dbaCapitalCrown = '1';
     }else{
       delete cell.dataset.dbaCapitalCrown;
+    }
+  }
+
+  function setLayerCellCurrentMarker(row, col, on){
+    const content = dbaLayerCellContentMap.get(`${row},${col}`) || null;
+    const cell = content && content.parentElement ? content.parentElement : null;
+    if(!cell) return;
+    if(on){
+      cell.dataset.dbaCurrentMarker = '1';
+    }else{
+      delete cell.dataset.dbaCurrentMarker;
     }
   }
 
@@ -13695,6 +17064,312 @@
     }
   }
 
+  const DBA_CURRENT_CELL_MARKER_STATE = {
+    row: NaN,
+    col: NaN,
+    hasValue: false
+  };
+
+  const DBA_PENDING_CURRENT_CELL_MARKER_STATE = {
+    row: NaN,
+    col: NaN,
+    dueAt: 0,
+    hasValue: false
+  };
+
+  function setCurrentCellMarkerCache(row, col){
+    const r = Number(row);
+    const c = Number(col);
+    if(!Number.isFinite(r) || !Number.isFinite(c)) return false;
+    DBA_CURRENT_CELL_MARKER_STATE.row = r;
+    DBA_CURRENT_CELL_MARKER_STATE.col = c;
+    DBA_CURRENT_CELL_MARKER_STATE.hasValue = true;
+    return true;
+  }
+
+  function getCurrentCellMarkerCache(){
+    if(!DBA_CURRENT_CELL_MARKER_STATE.hasValue) return null;
+    const r = Number(DBA_CURRENT_CELL_MARKER_STATE.row);
+    const c = Number(DBA_CURRENT_CELL_MARKER_STATE.col);
+    if(!Number.isFinite(r) || !Number.isFinite(c)) return null;
+    return { row: r, col: c };
+  }
+
+  function clearPendingCurrentCellMarkerCache(){
+    DBA_PENDING_CURRENT_CELL_MARKER_STATE.row = NaN;
+    DBA_PENDING_CURRENT_CELL_MARKER_STATE.col = NaN;
+    DBA_PENDING_CURRENT_CELL_MARKER_STATE.dueAt = 0;
+    DBA_PENDING_CURRENT_CELL_MARKER_STATE.hasValue = false;
+  }
+
+  function setPendingCurrentCellMarkerCache(row, col, delayMs){
+    const r = Number(row);
+    const c = Number(col);
+    if(!Number.isFinite(r) || !Number.isFinite(c)) return false;
+
+    const delay = sanitizeCurrentMarkerDelayMs(delayMs);
+    DBA_PENDING_CURRENT_CELL_MARKER_STATE.row = r;
+    DBA_PENDING_CURRENT_CELL_MARKER_STATE.col = c;
+    DBA_PENDING_CURRENT_CELL_MARKER_STATE.dueAt = Date.now() + delay;
+    DBA_PENDING_CURRENT_CELL_MARKER_STATE.hasValue = true;
+    return true;
+  }
+
+  function flushPendingCurrentCellMarkerCache(force){
+    if(!DBA_PENDING_CURRENT_CELL_MARKER_STATE.hasValue) return null;
+
+    const r = Number(DBA_PENDING_CURRENT_CELL_MARKER_STATE.row);
+    const c = Number(DBA_PENDING_CURRENT_CELL_MARKER_STATE.col);
+    const dueAt = Number(DBA_PENDING_CURRENT_CELL_MARKER_STATE.dueAt || 0);
+    if(!Number.isFinite(r) || !Number.isFinite(c)){
+      clearPendingCurrentCellMarkerCache();
+      return null;
+    }
+
+    if(!force && Date.now() < dueAt){
+      return null;
+    }
+
+    clearPendingCurrentCellMarkerCache();
+    setCurrentCellMarkerCache(r, c);
+    return { row: r, col: c };
+  }
+
+  function readCurrentBattleCellCoordFromLiveWindow(){
+    try{
+      if(mode !== 'rb') return null;
+
+      const root = window.__AVATARS;
+      if(!root || typeof root !== 'object') return null;
+
+      const direct = (root.myAvatar && typeof root.myAvatar === 'object')
+        ? root.myAvatar
+        : ((root.selfAvatar && typeof root.selfAvatar === 'object') ? root.selfAvatar : null);
+
+      if(direct){
+        const r = Number(direct.row ?? direct.r ?? direct.bapRow);
+        const c = Number(direct.col ?? direct.c ?? direct.bapCol);
+        if(Number.isFinite(r) && Number.isFinite(c)){
+          return { row: r, col: c };
+        }
+      }
+
+      const rows = Array.isArray(root.avatars) ? root.avatars : [];
+      for(const av of rows){
+        if(!av || typeof av !== 'object') continue;
+        if(!(av.isSelf === true || av.self === true || av.mine === true)) continue;
+
+        const r = Number(av.row ?? av.r ?? av.bapRow);
+        const c = Number(av.col ?? av.c ?? av.bapCol);
+        if(Number.isFinite(r) && Number.isFinite(c)){
+          return { row: r, col: c };
+        }
+      }
+    }catch(_e){}
+
+    return null;
+  }
+
+  function readCurrentBattleCellCoordFromDocument(doc){
+    try{
+      if(mode !== 'rb') return null;
+      if(!doc) return null;
+
+      const payload = extractRbAvatarsPayloadFromDoc(doc);
+      if(!payload || typeof payload !== 'object') return null;
+
+      const direct = (payload.myAvatar && typeof payload.myAvatar === 'object')
+        ? payload.myAvatar
+        : ((payload.selfAvatar && typeof payload.selfAvatar === 'object') ? payload.selfAvatar : null);
+
+      if(direct){
+        const r = Number(
+          direct.row ??
+          direct.r ??
+          direct.bapRow
+        );
+        const c = Number(
+          direct.col ??
+          direct.c ??
+          direct.bapCol
+        );
+        if(Number.isFinite(r) && Number.isFinite(c)){
+          return { row: r, col: c };
+        }
+      }
+
+      const avatars = Array.isArray(payload.avatars) ? payload.avatars : [];
+      for(const av of avatars){
+        if(!av || typeof av !== 'object') continue;
+        if(!(av.isSelf === true || av.self === true || av.mine === true)) continue;
+
+        const r = Number(
+          av.row ??
+          av.r ??
+          av.bapRow
+        );
+        const c = Number(
+          av.col ??
+          av.c ??
+          av.bapCol
+        );
+        if(Number.isFinite(r) && Number.isFinite(c)){
+          return { row: r, col: c };
+        }
+      }
+
+      {
+        const avatarsKey = normalizeAvatarsPayload(payload);
+        const avInfo = avatarsKeyToMap(avatarsKey);
+        const self = avInfo && avInfo.selfAvatar ? avInfo.selfAvatar : null;
+        if(self){
+          const r = Number(self.row);
+          const c = Number(self.col);
+          if(Number.isFinite(r) && Number.isFinite(c)){
+            return { row: r, col: c };
+          }
+        }
+      }
+    }catch(_e){}
+
+    return null;
+  }
+
+  // 現在地座標の取得
+  function getCurrentBattleCellCoord(snapshot){
+    const snap = snapshot || null;
+
+    {
+      const live = readCurrentBattleCellCoordFromLiveWindow();
+      if(live){
+        setCurrentCellMarkerCache(live.row, live.col);
+        dbaLogCurrentCellResolved('live-window', live);
+        return live;
+      }
+    }
+
+    {
+      const fromDoc = readCurrentBattleCellCoordFromDocument(document);
+      if(fromDoc){
+        setCurrentCellMarkerCache(fromDoc.row, fromDoc.col);
+        dbaLogCurrentCellResolved('document', fromDoc);
+        return fromDoc;
+      }
+    }
+
+    if(mode === 'rb'){
+      const candidates = [
+        (snap && snap.selfAvatar && typeof snap.selfAvatar === 'object') ? snap.selfAvatar : null,
+        (snap && snap.myAvatar && typeof snap.myAvatar === 'object') ? snap.myAvatar : null,
+        (snap && snap.self && typeof snap.self === 'object') ? snap.self : null
+      ];
+
+      for(const self of candidates){
+        if(!self) continue;
+
+        const sr = Number(
+          self.row ??
+          self.r ??
+          self.bapRow
+        );
+        const sc = Number(
+          self.col ??
+          self.c ??
+          self.bapCol
+        );
+
+        if(Number.isFinite(sr) && Number.isFinite(sc)){
+          const rc = { row: sr, col: sc };
+          setCurrentCellMarkerCache(sr, sc);
+          dbaLogCurrentCellResolved('snapshot', rc);
+          return rc;
+        }
+      }
+    }
+
+    {
+      const flushed = flushPendingCurrentCellMarkerCache(false);
+      if(flushed){
+        dbaLogCurrentCellResolved('pending-cache', flushed);
+        return flushed;
+      }
+    }
+
+    const u = new URL(location.href);
+    const rawR = u.searchParams.get('r');
+    const rawC = u.searchParams.get('c');
+    if(rawR != null && rawC != null && rawR !== '' && rawC !== ''){
+      const r = Number(rawR);
+      const c = Number(rawC);
+      if(Number.isFinite(r) && Number.isFinite(c)){
+        const rc = { row: r, col: c };
+        setCurrentCellMarkerCache(r, c);
+        dbaLogCurrentCellResolved('url', rc);
+        return rc;
+      }
+    }
+
+    const cached = getCurrentCellMarkerCache();
+    if(cached){
+      dbaLogCurrentCellResolved('cache', cached);
+      return cached;
+    }
+
+    dbaLogCurrentCellResolved('none', null);
+    return null;
+
+    dbaLogCurrentCellResolved('none', null);
+    return null;
+  }
+
+  // 現在地マーカー描画
+  function renderCurrentCellMarker(snapshot){
+    const snap = snapshot || getBattlemapSnapshotFromDoc(document);
+    const rows = Math.max(0, Number(snap?.rows || 0));
+    const cols = Math.max(0, Number(snap?.cols || 0));
+
+    if(rows <= 0 || cols <= 0){
+      return;
+    }
+
+    const show = shouldShowCurrentCellMarker();
+    const cur = show ? getCurrentBattleCellCoord(snap) : null;
+    const cached = show ? getCurrentCellMarkerCache() : null;
+    const eff = cur || cached || null;
+    const curRow = eff ? Number(eff.row) : NaN;
+    const curCol = eff ? Number(eff.col) : NaN;
+
+    {
+      const sig = JSON.stringify({
+        show,
+        rows,
+        cols,
+        eff: eff ? { row: curRow, col: curCol } : null
+      });
+      if(isRtCoordDebugEnabled() && sig !== DBA_RT_COORD_DEBUG.lastRenderSig){
+        DBA_RT_COORD_DEBUG.lastRenderSig = sig;
+        dbaRtDbg('RENDER_MARKER', {
+          show,
+          rows,
+          cols,
+          eff: eff ? { row: curRow, col: curCol } : null
+        });
+      }
+    }
+
+    for(let r = 0; r < rows; r++){
+      for(let c = 0; c < cols; c++){
+        const on = (
+          show &&
+          Number.isFinite(curRow) &&
+          Number.isFinite(curCol) &&
+          r === curRow &&
+          c === curCol
+        );
+        setLayerCellCurrentMarker(r, c, on);
+      }
+    }
+  }
 
   function shouldShowRbCellRegulation(){
     try{
@@ -13708,7 +17383,16 @@
   function shouldShowRbCapitalCrown(){
     try{
       const s = loadSettings();
-      return !!(mode === 'rb' && s?.rbLayer?.showCapitalCrown);
+      return !!s?.rbLayer?.showCapitalCrown;
+    }catch(_e){
+      return false;
+    }
+  }
+
+  function shouldShowCurrentCellMarker(){
+    try{
+      const s = loadSettings();
+      return !!s?.rbLayer?.showCurrentCellMarker;
     }catch(_e){
       return false;
     }
@@ -14183,7 +17867,7 @@ function avatarsKeyToMap(avatarsKey){
       if(btn){
         btn.disabled = false;
         btn.dataset.dbaBusy = '0';
-        btn.textContent = '戦況情報';
+        btn.innerHTML = '戦況<br>情報';
       }
       if(showAlertOnError){
         alert('戦況情報の取得に失敗しました。');
@@ -14212,13 +17896,14 @@ function avatarsKeyToMap(avatarsKey){
       const snap = getCurrentBattlemapSnapshot();
       renderRbOriginalBorders(snap);
       renderRbCapitalCrowns(snap);
+      renderCurrentCellMarker(snap);
       endBattlemapLayerTextFreeze();
     }
 
     if(btn){
       btn.disabled = false;
       btn.dataset.dbaBusy = '0';
-      btn.textContent = '戦況情報';
+      btn.innerHTML = '戦況<br>情報';
     }
   }
 
@@ -14406,7 +18091,13 @@ function avatarsKeyToMap(avatarsKey){
       exploredSet: new Set(Array.from(snap.exploredSet || [])),
       hasCapital: !!snap.hasCapital,
       buildingsKey: String(snap.buildingsKey || ''),
-      avatarsKey: String(snap.avatarsKey || '')
+      avatarsKey: String(snap.avatarsKey || ''),
+      selfAvatar: (snap.selfAvatar && typeof snap.selfAvatar === 'object') ? {
+        row: Number(snap.selfAvatar.row),
+        col: Number(snap.selfAvatar.col),
+        team: Number(snap.selfAvatar.team || 0),
+        key: String(snap.selfAvatar.key || 'ac')
+      } : null
     };
   }
 
@@ -14441,7 +18132,8 @@ function avatarsKeyToMap(avatarsKey){
       exploredSet: new Set(),
       hasCapital: false,
       buildingsKey: '',
-      avatarsKey: ''
+      avatarsKey: '',
+      selfAvatar: null
     };
 
     if(mode === 'rb'){
@@ -14465,6 +18157,15 @@ function avatarsKeyToMap(avatarsKey){
       try{ out.terrainsKey = normalizeTerrainsPayload(parseJsValueLiteral(litTerr)); }catch(_e){ out.terrainsKey = ''; }
       try{ out.buildingsKey = normalizeBuildingsPayload(buildingsPayloadObj); }catch(_e){ out.buildingsKey = ''; }
       try{ out.avatarsKey = normalizeAvatarsPayload(avatarsPayloadObj); }catch(_e){ out.avatarsKey = ''; }
+      {
+        const avInfo = avatarsKeyToMap(out.avatarsKey);
+        out.selfAvatar = avInfo && avInfo.selfAvatar ? {
+          row: Number(avInfo.selfAvatar.row),
+          col: Number(avInfo.selfAvatar.col),
+          team: Number(avInfo.selfAvatar.team || 0),
+          key: String(avInfo.selfAvatar.key || 'ac')
+        } : null;
+      }
       out.visibleList = normalizeRcList(fowState.visible);
       out.exploredList = normalizeRcList(fowState.explored);
       out.visibleSet = new Set(out.visibleList.map((rc) => `${rc[0]}-${rc[1]}`));
@@ -14822,24 +18523,18 @@ function avatarsKeyToMap(avatarsKey){
       btn.textContent = '差分確認中…';
     }
 
-    const topUrl = meta?.topUrl || makeTeambattleUrl({ m: mode });
+    let topUrl = meta?.topUrl || makeTeambattleUrl({ m: mode });
     try{
       if(!doc) throw new Error('doc is null');
 
       // (2) 現在と最新を比較
       const curSnap = getCurrentBattlemapSnapshot();
-      const newSnap = meta?.snapshot || getBattlemapSnapshotFromDoc(doc);
-
-      // ★追加：クリック（短押し）でも header + チーム情報2テーブル を最新化
-      // （差分セルが0でも、上部の情報は更新したい）
-      await refreshHeaderAndTeamTablesFromFetchedDoc(doc, {
-        topUrl,
-        snapshot: newSnap
-      });
+      let activeDoc = doc;
+      let newSnap = meta?.snapshot || getBattlemapSnapshotFromDoc(activeDoc);
 
       if(curSnap.rows !== newSnap.rows || curSnap.cols !== newSnap.cols){
         if(btn) btn.textContent = '全更新（サイズ差）…';
-        await scanAllCellsAndRenderFromFetchedDoc(doc, {
+        await scanAllCellsAndRenderFromFetchedDoc(activeDoc, {
           topUrl,
           snapshot: newSnap,
           showAlertOnError
@@ -14847,11 +18542,74 @@ function avatarsKeyToMap(avatarsKey){
         return;
       }
 
-      const changed = diffChangedCells(curSnap, newSnap);
+      let changed = diffChangedCells(curSnap, newSnap);
+
+      // RBの試合境界付近では、最初の1回が「まだ旧試合マップ」のことがある。
+      // 差分0件かつ境界近辺の時だけ少し待って再取得し、新試合マップへの切り替わりを待つ。
+      if(mode === 'rb' && changed.length === 0){
+        const expectedElapsedSec = getExpectedElapsedSecondFromCurrentMatchState();
+        const shouldRetryBoundary =
+          Number.isFinite(expectedElapsedSec) &&
+          isNearMatchBoundary(
+            expectedElapsedSec,
+            DBA_BATTLEINFO_RB_BOUNDARY_RETRY_WINDOW_SEC
+          );
+
+        if(shouldRetryBoundary){
+          for(let i = 0; i < DBA_BATTLEINFO_RB_BOUNDARY_RETRY_DELAYS_MS.length; i++){
+            const waitMs = Number(DBA_BATTLEINFO_RB_BOUNDARY_RETRY_DELAYS_MS[i] || 0);
+            if(btn){
+              btn.textContent = `境界再確認中…(${i + 1}/${DBA_BATTLEINFO_RB_BOUNDARY_RETRY_DELAYS_MS.length})`;
+            }
+
+            await sleepMs(waitMs);
+
+            const latest = await fetchLatestTopPageDoc();
+            topUrl = latest.topUrl;
+            activeDoc = latest.doc;
+            newSnap = getBattlemapSnapshotFromDoc(activeDoc);
+
+            if(curSnap.rows !== newSnap.rows || curSnap.cols !== newSnap.cols){
+              if(btn) btn.textContent = '全更新（サイズ差）…';
+              await scanAllCellsAndRenderFromFetchedDoc(activeDoc, {
+                topUrl,
+                snapshot: newSnap,
+                showAlertOnError
+              });
+              return;
+            }
+
+            changed = diffChangedCells(curSnap, newSnap);
+            if(changed.length > 0){
+              break;
+            }
+
+            const retryElapsedSec = getExpectedElapsedSecondFromCurrentMatchState();
+            const stillNearBoundary =
+              Number.isFinite(retryElapsedSec) &&
+              isNearMatchBoundary(
+                retryElapsedSec,
+                DBA_BATTLEINFO_RB_BOUNDARY_RETRY_WINDOW_SEC
+              );
+
+            if(!stillNearBoundary){
+              break;
+            }
+          }
+        }
+      }
+
+      // ★追加：クリック（短押し）でも header + チーム情報2テーブル を最新化
+      // （差分セルが0でも、上部の情報は更新したい）
+      await refreshHeaderAndTeamTablesFromFetchedDoc(activeDoc, {
+        topUrl,
+        snapshot: newSnap
+      });
+
       const oldTexts = snapshotLayerTexts();
 
       if(btn) btn.textContent = 'マップ差し替え中…';
-      const refreshed = await refreshBattlemapFromFetchedDoc(doc, {
+      const refreshed = await refreshBattlemapFromFetchedDoc(activeDoc, {
         topUrl,
         snapshot: newSnap
       });
@@ -14871,12 +18629,13 @@ function avatarsKeyToMap(avatarsKey){
           const snap = getCurrentBattlemapSnapshot();
           renderRbOriginalBorders(snap);
           renderRbCapitalCrowns(snap);
+          renderCurrentCellMarker(snap);
           endBattlemapLayerTextFreeze();
         }
         if(btn){
           btn.disabled = false;
           btn.dataset.dbaBusy = '0';
-          btn.textContent = '戦況情報';
+          btn.innerHTML = '戦況<br>情報';
         }
         return;
       }
@@ -14888,12 +18647,13 @@ function avatarsKeyToMap(avatarsKey){
           const snap = getCurrentBattlemapSnapshot();
           renderRbOriginalBorders(snap);
           renderRbCapitalCrowns(snap);
+          renderCurrentCellMarker(snap);
           endBattlemapLayerTextFreeze();
         }
         if(btn){
           btn.disabled = false;
           btn.dataset.dbaBusy = '0';
-          btn.textContent = '戦況情報';
+          btn.innerHTML = '戦況<br>情報';
         }
         return;
       }
@@ -14920,20 +18680,21 @@ function avatarsKeyToMap(avatarsKey){
         const snap = getCurrentBattlemapSnapshot();
         renderRbOriginalBorders(snap);
         renderRbCapitalCrowns(snap);
+        renderCurrentCellMarker(snap);
         endBattlemapLayerTextFreeze();
       }
 
       if(btn){
         btn.disabled = false;
         btn.dataset.dbaBusy = '0';
-        btn.textContent = '戦況情報';
+        btn.innerHTML = '戦況<br>情報';
       }
     }catch(e){
       dbgLog('battleInfo', 'warn', 'CLICK update failed', { mode, error: String(e && e.message ? e.message : e) });
       if(btn){
         btn.disabled = false;
         btn.dataset.dbaBusy = '0';
-        btn.textContent = '戦況情報';
+        btn.innerHTML = '戦況<br>情報';
       }
       if(showAlertOnError){
         alert('戦況情報の取得に失敗しました。');
@@ -14952,7 +18713,27 @@ function avatarsKeyToMap(avatarsKey){
   }
 
   function waitAndApplyScale(){
-    const tryApply = () => {
+    let mo = null;
+    let retryTimer = 0;
+    let retryCount = 0;
+    let settled = false;
+
+    const clearRetryTimer = () => {
+      if(retryTimer){
+        clearTimeout(retryTimer);
+        retryTimer = 0;
+      }
+    };
+
+    const stopWatching = () => {
+      clearRetryTimer();
+      if(mo){
+        mo.disconnect();
+        mo = null;
+      }
+    };
+
+    const applyOnce = () => {
       const settings = loadSettings();
       if(mode === 'rb'){
         const sz = getEffectiveCellSizeForMode('rb', settings);
@@ -14972,14 +18753,49 @@ function avatarsKeyToMap(avatarsKey){
       return false;
     };
 
-    if(tryApply()) return;
+    const scheduleRetry = () => {
+      clearRetryTimer();
+      if(settled) return;
+      if(retryCount >= 8) return;
 
-    const mo = new MutationObserver(() => {
-      if(tryApply()){
-        mo.disconnect();
+      const delays = [0, 40, 120, 250, 500, 800, 1200, 1800];
+      const delay = delays[Math.min(retryCount, delays.length - 1)];
+      retryCount += 1;
+
+      retryTimer = setTimeout(() => {
+        retryTimer = 0;
+        if(settled) return;
+
+        const ok = applyOnce();
+        if(ok){
+          // ページ側の後続処理で上書きされる場合に備えて、
+          // 少しだけ再試行を続けて保存値を定着させる
+          if(retryCount < 8){
+            scheduleRetry();
+          }else{
+            settled = true;
+            stopWatching();
+          }
+          return;
+        }
+
+        scheduleRetry();
+      }, delay);
+    };
+
+    if(applyOnce()){
+      scheduleRetry();
+      return;
+    }
+
+    mo = new MutationObserver(() => {
+      if(applyOnce()){
+        scheduleRetry();
       }
     });
     mo.observe(document.documentElement, { childList: true, subtree: true });
+
+    scheduleRetry();
   }
 
   // =========================
@@ -15047,7 +18863,7 @@ function avatarsKeyToMap(avatarsKey){
       sep.style.fontSize = '1.1em';
       sep.style.lineHeight = '1.1em';
       sep.style.verticalAlign = 'text-top';
-      sep.textContent = '¦';
+      sep.textContent = '|';
 
       const heightLabel = document.createElement('span');
       heightLabel.className = 'dba-setting-cellsize-unit';
@@ -15107,7 +18923,7 @@ function avatarsKeyToMap(avatarsKey){
       note.style.whiteSpace = 'normal';
       note.style.overflowWrap = 'anywhere';
       note.style.wordBreak = 'break-word';
-      note.textContent = '【 案内 】⚠️項目は設定後に、全セル更新（「戦況情報」長押し）か、ブラウザによるページ再読み込みが必要なときもあります。';
+      note.textContent = '【 案内 】??項目は設定後に、全セル更新（「戦況情報」長押し）か、ブラウザによるページ再読み込みが必要なときもあります。';
 
       box.appendChild(note);
       mid.appendChild(box);
@@ -15171,26 +18987,73 @@ function avatarsKeyToMap(avatarsKey){
       mid.appendChild(box);
     })();
 
-    // 攻撃後の自動差分取得
+    // 戦闘オプション
     (function mkPostBattleAutoDiffBlock(){
       const row = document.createElement('div');
       row.className = 'dba-setting-row';
 
-      const lab = document.createElement('label');
-      lab.className = 'dba-setting-checkline';
+      const title = document.createElement('div');
+      title.className = 'dba-setting-block-title';
+      title.textContent = '戦闘オプション';
+      row.appendChild(title);
 
-      const input = document.createElement('input');
-      input.type = 'checkbox';
-      input.checked = !!settings?.postBattle?.autoDiffSync;
-      input.dataset.postBattleAutoDiff = '1';
+      const body = document.createElement('div');
+      body.className = 'dba-setting-subgroup';
 
-      const txt = document.createElement('span');
-      txt.className = 'dba-setting-checktext';
-      txt.textContent = '攻撃した後に自動で「戦況情報（差分取得）」を行う。\n※画面のちらつきが発生しやすくなります。';
+      const labAutoDiff = document.createElement('label');
+      labAutoDiff.className = 'dba-setting-checkline';
 
-      lab.appendChild(input);
-      lab.appendChild(txt);
-      row.appendChild(lab);
+      const inputAutoDiff = document.createElement('input');
+      inputAutoDiff.type = 'checkbox';
+      inputAutoDiff.checked = !!settings?.postBattle?.autoDiffSync;
+      inputAutoDiff.dataset.postBattleAutoDiff = '1';
+
+      const txtAutoDiff = document.createElement('span');
+      txtAutoDiff.className = 'dba-setting-checktext';
+      txtAutoDiff.textContent = '攻撃した後に自動で「戦況情報（差分取得）」を行う。';
+
+      labAutoDiff.appendChild(inputAutoDiff);
+      labAutoDiff.appendChild(txtAutoDiff);
+      body.appendChild(labAutoDiff);
+
+      const noteAutoDiff = document.createElement('div');
+      noteAutoDiff.className = 'dba-roster-opt-note';
+      noteAutoDiff.textContent = '画面のちらつきが発生しやすくなります。';
+      body.appendChild(noteAutoDiff);
+
+      const labSuppressFriendlyFire = document.createElement('label');
+      labSuppressFriendlyFire.className = 'dba-setting-checkline';
+
+      const inputSuppressFriendlyFire = document.createElement('input');
+      inputSuppressFriendlyFire.type = 'checkbox';
+      inputSuppressFriendlyFire.checked = !!settings?.postBattle?.suppressOwnCapitalFriendlyFire;
+      inputSuppressFriendlyFire.setAttribute('data-suppress-own-capital-friendly-fire', '1');
+
+      const txtSuppressFriendlyFire = document.createElement('span');
+      txtSuppressFriendlyFire.className = 'dba-setting-checktext';
+      txtSuppressFriendlyFire.textContent = '自チーム首都へのフレンドリファイアを抑止する。';
+
+      inputSuppressFriendlyFire.addEventListener('change', async () => {
+        if(!inputSuppressFriendlyFire.checked){
+          const ok = await openDisableOwnCapitalProtectionConfirmModal();
+          if(!ok){
+            inputSuppressFriendlyFire.checked = true;
+            return;
+          }
+        }
+        dirty = true;
+      });
+
+      labSuppressFriendlyFire.appendChild(inputSuppressFriendlyFire);
+      labSuppressFriendlyFire.appendChild(txtSuppressFriendlyFire);
+      body.appendChild(labSuppressFriendlyFire);
+
+      const note = document.createElement('div');
+      note.className = 'dba-roster-opt-note';
+      note.innerText = '仕様変更で突然機能しなくなる可能性があるので、過信しないでください。\nこの機能を解除する時には確認画面が出ます。';
+      body.appendChild(note);
+
+      row.appendChild(body);
       mid.appendChild(row);
     })();
 
@@ -15229,7 +19092,7 @@ function avatarsKeyToMap(avatarsKey){
       sub.appendChild(labBorder);
 
       const rowBorderOpacity = document.createElement('div');
-      rowBorderOpacity.className = 'dba-setting-row';
+      rowBorderOpacity.className = 'dba-setting-row-sub';
 
       const titleBorderOpacity = document.createElement('div');
       titleBorderOpacity.className = 'dba-setting-block-title';
@@ -15272,11 +19135,114 @@ function avatarsKeyToMap(avatarsKey){
 
       const txtCrown = document.createElement('span');
       txtCrown.className = 'dba-setting-checktext';
-      txtCrown.textContent = '首都セルに👑を表示する。';
+      txtCrown.textContent = '首都セルに??を表示する。';
 
       labCrown.appendChild(inputCrown);
       labCrown.appendChild(txtCrown);
       sub.appendChild(labCrown);
+
+      const labCurrentMarker = document.createElement('label');
+      labCurrentMarker.className = 'dba-setting-checkline';
+
+      const inputCurrentMarker = document.createElement('input');
+      inputCurrentMarker.type = 'checkbox';
+      inputCurrentMarker.checked = !!settings?.rbLayer?.showCurrentCellMarker;
+      inputCurrentMarker.dataset.rbShowCurrentCellMarker = '1';
+
+      const txtCurrentMarker = document.createElement('span');
+      txtCurrentMarker.className = 'dba-setting-checktext';
+      txtCurrentMarker.textContent = '現在地セルを指し示すマーカーを表示する。';
+
+      labCurrentMarker.appendChild(inputCurrentMarker);
+      labCurrentMarker.appendChild(txtCurrentMarker);
+      sub.appendChild(labCurrentMarker);
+
+      const markerColorRow = document.createElement('div');
+      markerColorRow.className = 'dba-setting-row-sub';
+      markerColorRow.style.marginTop = '4px';
+
+      const markerColorTitle = document.createElement('div');
+      markerColorTitle.className = 'dba-setting-block-title';
+      markerColorTitle.style.margin = '0 0 6px 26px';
+      markerColorTitle.textContent = 'マーカーの色名';
+      markerColorRow.appendChild(markerColorTitle);
+
+      const markerColorGroup = document.createElement('div');
+      markerColorGroup.className = 'dba-setting-radio-group';
+
+      const markerColorItems = [
+        { value: 'silver',  label: '銀色' },
+        { value: 'gold',    label: '金色' },
+        { value: 'purple',  label: '紫色' },
+        { value: 'crimson', label: '紅色' },
+        { value: 'cyan',    label: '水色' }
+      ];
+      const currentMarkerColor = sanitizeCurrentMarkerColorName(settings?.rbLayer?.currentCellMarkerColor);
+
+      for(const item of markerColorItems){
+        const line = document.createElement('label');
+        line.className = 'dba-setting-radio-line';
+
+        const inp = document.createElement('input');
+        inp.type = 'radio';
+        inp.name = 'dba-rb-current-marker-color';
+        inp.value = item.value;
+        inp.checked = (currentMarkerColor === item.value);
+        inp.dataset.rbCurrentCellMarkerColor = '1';
+
+        const txt = document.createElement('span');
+        txt.textContent = item.label;
+
+        line.appendChild(inp);
+        line.appendChild(txt);
+        markerColorGroup.appendChild(line);
+      }
+
+      markerColorRow.appendChild(markerColorGroup);
+      sub.appendChild(markerColorRow);
+
+      const markerDelayRow = document.createElement('div');
+      markerDelayRow.className = 'dba-setting-row-sub';
+      markerDelayRow.style.marginTop = '4px';
+
+      const markerDelayLine = document.createElement('label');
+      markerDelayLine.className = 'dba-setting-checkline';
+      markerDelayLine.style.cursor = 'default';
+
+      const markerDelayDummy = document.createElement('span');
+      markerDelayDummy.style.display = 'inline-block';
+      markerDelayDummy.style.width = '20px';
+      markerDelayDummy.style.height = '20px';
+      markerDelayDummy.style.flex = '0 0 20px';
+
+      const markerDelayTextWrap = document.createElement('span');
+      markerDelayTextWrap.className = 'dba-setting-checktext';
+
+      const markerDelayText = document.createElement('span');
+      markerDelayText.textContent = 'マーカーの移動を ';
+
+      const markerDelayInput = document.createElement('input');
+      markerDelayInput.type = 'number';
+      markerDelayInput.min = '0';
+      markerDelayInput.max = '5';
+      markerDelayInput.step = '0.1';
+      markerDelayInput.value = String(markerDelayMsToSec(settings?.rbLayer?.currentCellMarkerDelayMs));
+      markerDelayInput.dataset.rbCurrentCellMarkerDelaySec = '1';
+      markerDelayInput.style.width = '5em';
+      markerDelayInput.style.margin = '0 6px';
+      markerDelayInput.style.textAlign = 'center';
+
+      const markerDelayUnit = document.createElement('span');
+      markerDelayUnit.textContent = '秒 遅延させる。';
+
+      markerDelayTextWrap.appendChild(markerDelayText);
+      markerDelayTextWrap.appendChild(markerDelayInput);
+      markerDelayTextWrap.appendChild(markerDelayUnit);
+
+      markerDelayLine.appendChild(markerDelayDummy);
+      markerDelayLine.appendChild(markerDelayTextWrap);
+      markerDelayRow.appendChild(markerDelayLine);
+      sub.appendChild(markerDelayRow);
 
       const labReg = document.createElement('label');
       labReg.className = 'dba-setting-checkline';
@@ -15288,7 +19254,7 @@ function avatarsKeyToMap(avatarsKey){
 
       const txtReg = document.createElement('span');
       txtReg.className = 'dba-setting-checktext';
-      txtReg.textContent = '⚠️各セルごとのレギュレーションを表示する。';
+      txtReg.textContent = '??各セルごとのレギュレーションを表示する。';
 
       labReg.appendChild(inputReg);
       labReg.appendChild(txtReg);
@@ -15304,11 +19270,27 @@ function avatarsKeyToMap(avatarsKey){
 
       const txtNobody = document.createElement('span');
       txtNobody.className = 'dba-setting-checktext';
-      txtNobody.textContent = '⚠️未占領セルと占領不可地形セルの「誰もいない」を表示する。';
+      txtNobody.textContent = '??未占領セルと占領不可地形セルの「誰もいない」を表示する。';
 
       labNobody.appendChild(inputNobody);
       labNobody.appendChild(txtNobody);
       sub.appendChild(labNobody);
+
+      const labHideFnTooltip = document.createElement('label');
+      labHideFnTooltip.className = 'dba-setting-checkline';
+
+      const inputHideFnTooltip = document.createElement('input');
+      inputHideFnTooltip.type = 'checkbox';
+      inputHideFnTooltip.checked = !!settings?.rbLayer?.hideFnTooltip;
+      inputHideFnTooltip.dataset.rbHideFnTooltip = '1';
+
+      const txtHideFnTooltip = document.createElement('span');
+      txtHideFnTooltip.className = 'dba-setting-checktext';
+      txtHideFnTooltip.textContent = 'ヒントバルーンを表示しない。';
+
+      labHideFnTooltip.appendChild(inputHideFnTooltip);
+      labHideFnTooltip.appendChild(txtHideFnTooltip);
+      sub.appendChild(labHideFnTooltip);
 
       row.appendChild(sub);
       mid.appendChild(row);
@@ -15339,11 +19321,39 @@ function avatarsKeyToMap(avatarsKey){
 
       const txtStopAnim = document.createElement('span');
       txtStopAnim.className = 'dba-setting-checktext';
-      txtStopAnim.textContent = '⚠️境界線やアバターのアニメーションを停止する。';
+      txtStopAnim.textContent = '??境界線やアバターのアニメーションを停止する。';
 
       labStopAnim.appendChild(inputStopAnim);
       labStopAnim.appendChild(txtStopAnim);
       sub.appendChild(labStopAnim);
+
+      // 「軽量化」ボタン
+      const labShowLightBtn = document.createElement('label');
+      labShowLightBtn.className = 'dba-setting-checkline';
+
+      const inputShowLightBtn = document.createElement('input');
+      inputShowLightBtn.type = 'checkbox';
+      inputShowLightBtn.checked = !!settings?.functionButtons?.showLightRefreshButton;
+      inputShowLightBtn.dataset.showLightRefreshButton = '1';
+
+      const txtShowLightBtn = document.createElement('span');
+      txtShowLightBtn.className = 'dba-setting-checktext';
+      txtShowLightBtn.textContent = '??ファンクションセクションに「軽量化」ボタンを表示する。';
+
+      labShowLightBtn.appendChild(inputShowLightBtn);
+      labShowLightBtn.appendChild(txtShowLightBtn);
+      sub.appendChild(labShowLightBtn);
+
+      const noteShowLightBtn = document.createElement('div');
+      noteShowLightBtn.style.margin = '0 0 0 50px';
+      noteShowLightBtn.style.padding = '0';
+      noteShowLightBtn.style.fontSize = '0.92em';
+      noteShowLightBtn.style.lineHeight = '1.35';
+      noteShowLightBtn.style.opacity = '0.9';
+      noteShowLightBtn.style.textAlign = 'left';
+      noteShowLightBtn.textContent =
+        'ブラウザの「再読み込み」に近い動作ですが、普通の再読み込みよりも、ページを少しきれいな状態で開き直すためのボタンです。動作が重い時、表示がおかしい時、なんとなく不安定な時に使うと、改善することがあります。ブラウザ全体ではなく DBA を立て直したい時に「軽量化」ボタンがおすすめです。';
+      sub.appendChild(noteShowLightBtn);
 
       // 一定回数ごとの軽量化再読込
       const lab = document.createElement('label');
@@ -15356,7 +19366,7 @@ function avatarsKeyToMap(avatarsKey){
 
       const txt = document.createElement('span');
       txt.className = 'dba-setting-checktext';
-      txt.textContent = '⚠️「戦闘ログ」を指定回数受信するごとにページを再読み込み。';
+      txt.textContent = '??「戦闘ログ」を指定回数受信するごとに「軽量化」処理を行う。';
 
       lab.appendChild(input);
       lab.appendChild(txt);
@@ -15390,7 +19400,7 @@ function avatarsKeyToMap(avatarsKey){
       note.style.fontSize = '0.92em';
       note.style.lineHeight = '1.35';
       note.style.opacity = '0.9';
-      note.textContent = '※拡張機能のようにブラウザの Cache を直接消すのではなく、ページの再読み込みによって処理をリフレッシュするという代替策です。';
+      note.textContent = '「軽量化」機能を自動的・定期的に実行する機能です。「軽量化」ボタンを押すことが多い場合に有効化してください。';
 
       subline.appendChild(pre);
       subline.appendChild(cnt);
@@ -15432,13 +19442,62 @@ function avatarsKeyToMap(avatarsKey){
       mid.appendChild(row);
     })();
 
+    (function mkBaseFontRow(){
+      const row = document.createElement('div');
+      row.className = 'dba-setting-row';
+
+      const title = document.createElement('div');
+      title.style.fontSize = '1.05em';
+      title.style.fontWeight = '700';
+      title.style.textAlign = 'left';
+      title.style.margin = '0 0 8px 0';
+      title.textContent = '基準文字サイズ';
+
+      const group = document.createElement('div');
+      group.className = 'dba-setting-radio-group';
+
+      const currentBase = sanitizeBaseFontPx(settings?.ui?.baseFontPx, getDefaultBaseFontPxForDevice());
+
+      function mkRadio(px){
+        const lab = document.createElement('label');
+        lab.className = 'dba-setting-radio-line';
+
+        const input = document.createElement('input');
+        input.type = 'radio';
+        input.name = 'dba-base-font-size';
+        input.value = String(px);
+        input.checked = currentBase === px;
+        input.dataset.baseFontPx = '1';
+
+        const txt = document.createElement('span');
+        txt.textContent = `${px}px`;
+
+        input.addEventListener('change', () => {
+          if(!input.checked) return;
+          applyBaseFontSize(px);
+        });
+
+        lab.appendChild(input);
+        lab.appendChild(txt);
+        return lab;
+      }
+
+      group.appendChild(mkRadio(17));
+      group.appendChild(mkRadio(16));
+      group.appendChild(mkRadio(14));
+
+      row.appendChild(title);
+      row.appendChild(group);
+      mid.appendChild(row);
+    })();
+
     // レイヤー文字濃度（将来のテキスト/絵文字表示のための事前準備）
     (function mkOpacityRow(){
       const row = document.createElement('div');
       row.className = 'dba-setting-row';
 
       const lab = document.createElement('label');
-      lab.textContent = 'レイヤー文字濃度（100〜0）';
+      lab.textContent = 'レイヤー文字濃度（100?0）';
 
       const wrap = document.createElement('div');
       wrap.style.margin = '0 0 0 60px';
@@ -15596,13 +19655,18 @@ function avatarsKeyToMap(avatarsKey){
         rb: { width: 32, height: 32 },
         hc: { width: 30, height: 30 },
         l:  { width: 30, height: 30 },
+        baseFontPx: getDefaultBaseFontPxForDevice(),
         postBattleAutoDiff: false,
+        suppressOwnCapitalFriendlyFire: false,
         lightRefreshEnabled: false,
         lightRefreshBattleCount: DEFAULT_SETTINGS.lightRefresh.battleCount,
+        showLightRefreshButton: false,
         rbShowOriginalBorder: false,
         rbBorderOpacity: 100,
         rbStopAnimation: false,
         rbShowCapitalCrown: false,
+        rbShowCurrentCellMarker: false,
+        rbCurrentCellMarkerColor: 'silver',
         rbShowCellRegulation: false,
         rbShowNobodyHolder: false,
         layerTextOpacity: 100,
@@ -15613,12 +19677,20 @@ function avatarsKeyToMap(avatarsKey){
         const axis = inp.dataset.axis;
         out[k][axis] = Number.parseInt(inp.value, 10);
       }
+      const baseFont = dlg.querySelector('input[type="radio"][data-base-font-px="1"]:checked');
+      if(baseFont){
+        out.baseFontPx = Number.parseInt(baseFont.value, 10);
+      }
       const pb = dlg.querySelector('input[type="checkbox"][data-post-battle-auto-diff="1"]');
       if(pb) out.postBattleAutoDiff = !!pb.checked;
+      const soff = dlg.querySelector('input[type="checkbox"][data-suppress-own-capital-friendly-fire="1"]');
+      if(soff) out.suppressOwnCapitalFriendlyFire = !!soff.checked;
       const lre = dlg.querySelector('input[type="checkbox"][data-light-refresh-enabled="1"]');
       if(lre) out.lightRefreshEnabled = !!lre.checked;
       const lrc = dlg.querySelector('input[type="number"][data-light-refresh-battle-count="1"]');
       if(lrc) out.lightRefreshBattleCount = Number.parseInt(lrc.value, 10);
+      const slrb = dlg.querySelector('input[type="checkbox"][data-show-light-refresh-button="1"]');
+      if(slrb) out.showLightRefreshButton = !!slrb.checked;
       const rbBorder = dlg.querySelector('input[type="checkbox"][data-rb-show-original-border="1"]');
       if(rbBorder) out.rbShowOriginalBorder = !!rbBorder.checked;
       const rbBorderOpacity = dlg.querySelector('input[type="range"][data-rb-border-opacity="1"]');
@@ -15627,10 +19699,22 @@ function avatarsKeyToMap(avatarsKey){
       if(rbStopAnim) out.rbStopAnimation = !!rbStopAnim.checked;
       const rbCrown = dlg.querySelector('input[type="checkbox"][data-rb-show-capital-crown="1"]');
       if(rbCrown) out.rbShowCapitalCrown = !!rbCrown.checked;
+      const rbCurrentMarker = dlg.querySelector('input[type="checkbox"][data-rb-show-current-cell-marker="1"]');
+      if(rbCurrentMarker) out.rbShowCurrentCellMarker = !!rbCurrentMarker.checked;
+      const rbCurrentMarkerColor = dlg.querySelector('input[type="radio"][data-rb-current-cell-marker-color="1"]:checked');
+      if(rbCurrentMarkerColor){
+        out.rbCurrentCellMarkerColor = sanitizeCurrentMarkerColorName(rbCurrentMarkerColor.value);
+      }
+      const rbCurrentMarkerDelay = dlg.querySelector('input[type="number"][data-rb-current-cell-marker-delay-sec="1"]');
+      if(rbCurrentMarkerDelay){
+        out.rbCurrentCellMarkerDelayMs = markerDelaySecToMs(rbCurrentMarkerDelay.value);
+      }
       const rbReg = dlg.querySelector('input[type="checkbox"][data-rb-show-cell-regulation="1"]');
       if(rbReg) out.rbShowCellRegulation = !!rbReg.checked;
       const rbNobody = dlg.querySelector('input[type="checkbox"][data-rb-show-nobody-holder="1"]');
       if(rbNobody) out.rbShowNobodyHolder = !!rbNobody.checked;
+      const rbHideFnTooltip = dlg.querySelector('input[type="checkbox"][data-rb-hide-fn-tooltip="1"]');
+      if(rbHideFnTooltip) out.rbHideFnTooltip = !!rbHideFnTooltip.checked;
       const op = dlg.querySelector('input[type="range"][data-layer-opacity="1"]');
       if(op) out.layerTextOpacity = 100 - Number.parseInt(op.value, 10);
       const hd = dlg.querySelector('input[type="checkbox"][data-show-original-header="1"]');
@@ -15645,6 +19729,12 @@ function avatarsKeyToMap(avatarsKey){
         const eff = getEffectiveCellSizeForMode(k, s);
         inp.value = String(axis === 'width' ? eff.width : eff.height);
       }
+      {
+        const basePx = sanitizeBaseFontPx(s?.ui?.baseFontPx, getDefaultBaseFontPxForDevice());
+        for(const inp of dlg.querySelectorAll('input[type="radio"][data-base-font-px="1"]')){
+          inp.checked = Number.parseInt(inp.value, 10) === basePx;
+        }
+      }
       const lre = dlg.querySelector('input[type="checkbox"][data-light-refresh-enabled="1"]');
       if(lre){
         lre.checked = !!s?.lightRefresh?.enabled;
@@ -15652,6 +19742,10 @@ function avatarsKeyToMap(avatarsKey){
       const lrc = dlg.querySelector('input[type="number"][data-light-refresh-battle-count="1"]');
       if(lrc){
         lrc.value = String(sanitizeLightRefreshBattleCount(s?.lightRefresh?.battleCount));
+      }
+      const slrb = dlg.querySelector('input[type="checkbox"][data-show-light-refresh-button="1"]');
+      if(slrb){
+        slrb.checked = !!s?.functionButtons?.showLightRefreshButton;
       }
       const rbBorder = dlg.querySelector('input[type="checkbox"][data-rb-show-original-border="1"]');
       if(rbBorder){
@@ -15671,9 +19765,27 @@ function avatarsKeyToMap(avatarsKey){
       if(rbCrown){
         rbCrown.checked = !!s?.rbLayer?.showCapitalCrown;
       }
+      const rbCurrentMarker = dlg.querySelector('input[type="checkbox"][data-rb-show-current-cell-marker="1"]');
+      if(rbCurrentMarker){
+        rbCurrentMarker.checked = !!s?.rbLayer?.showCurrentCellMarker;
+      }
+      {
+        const currentMarkerColor = sanitizeCurrentMarkerColorName(s?.rbLayer?.currentCellMarkerColor);
+        for(const inp of dlg.querySelectorAll('input[type="radio"][data-rb-current-cell-marker-color="1"]')){
+          inp.checked = (sanitizeCurrentMarkerColorName(inp.value) === currentMarkerColor);
+        }
+      }
+      const rbCurrentMarkerDelay = dlg.querySelector('input[type="number"][data-rb-current-cell-marker-delay-sec="1"]');
+      if(rbCurrentMarkerDelay){
+        rbCurrentMarkerDelay.value = String(markerDelayMsToSec(s?.rbLayer?.currentCellMarkerDelayMs));
+      }
       const pb = dlg.querySelector('input[type="checkbox"][data-post-battle-auto-diff="1"]');
       if(pb){
         pb.checked = !!s?.postBattle?.autoDiffSync;
+      }
+      const soff = dlg.querySelector('input[type="checkbox"][data-suppress-own-capital-friendly-fire="1"]');
+      if(soff){
+        soff.checked = !!s?.postBattle?.suppressOwnCapitalFriendlyFire;
       }
       const rbReg = dlg.querySelector('input[type="checkbox"][data-rb-show-cell-regulation="1"]');
       if(rbReg){
@@ -15682,6 +19794,10 @@ function avatarsKeyToMap(avatarsKey){
       const rbNobody = dlg.querySelector('input[type="checkbox"][data-rb-show-nobody-holder="1"]');
       if(rbNobody){
         rbNobody.checked = !!s?.rbLayer?.showNobodyHolder;
+      }
+      const rbHideFnTooltip = dlg.querySelector('input[type="checkbox"][data-rb-hide-fn-tooltip="1"]');
+      if(rbHideFnTooltip){
+        rbHideFnTooltip.checked = !!s?.rbLayer?.hideFnTooltip;
       }
       const op = dlg.querySelector('input[type="range"][data-layer-opacity="1"]');
       if(op){
@@ -15714,26 +19830,41 @@ function avatarsKeyToMap(avatarsKey){
       cur.cellSize.hc.height = sanitizeCellPx(v.hc.height, DEFAULT_SETTINGS.cellSize.hc.height);
       cur.cellSize.l.width   = sanitizeCellPx(v.l.width,   DEFAULT_SETTINGS.cellSize.l.width);
       cur.cellSize.l.height  = sanitizeCellPx(v.l.height,  DEFAULT_SETTINGS.cellSize.l.height);
+      cur.ui.baseFontPx = sanitizeBaseFontPx(v.baseFontPx, getDefaultBaseFontPxForDevice());
       cur.postBattle.autoDiffSync = !!v.postBattleAutoDiff;
+      cur.postBattle.suppressOwnCapitalFriendlyFire = !!v.suppressOwnCapitalFriendlyFire;
       cur.lightRefresh.enabled = !!v.lightRefreshEnabled;
       cur.lightRefresh.battleCount = sanitizeLightRefreshBattleCount(v.lightRefreshBattleCount);
+      cur.functionButtons.showLightRefreshButton = !!v.showLightRefreshButton;
       cur.rbLayer.showOriginalBorder = !!v.rbShowOriginalBorder;
       cur.rbLayer.borderOpacity = sanitizeRbBorderOpacity(v.rbBorderOpacity);
       cur.rbLayer.stopAnimation = !!v.rbStopAnimation;
       cur.rbLayer.showCapitalCrown = !!v.rbShowCapitalCrown;
+      cur.rbLayer.showCurrentCellMarker = !!v.rbShowCurrentCellMarker;
+      cur.rbLayer.currentCellMarkerColor = sanitizeCurrentMarkerColorName(v.rbCurrentCellMarkerColor);
+      cur.rbLayer.currentCellMarkerDelayMs = sanitizeCurrentMarkerDelayMs(v.rbCurrentCellMarkerDelayMs);
       cur.rbLayer.showCellRegulation = !!v.rbShowCellRegulation;
       cur.layer.textOpacity = sanitizeOpacity(v.layerTextOpacity);
       cur.rbLayer.showNobodyHolder = !!v.rbShowNobodyHolder;
+      cur.rbLayer.hideFnTooltip = !!v.rbHideFnTooltip;
       cur.header.showOriginalHeader = !!v.showOriginalHeader;
 
       /// 範囲外入力はここで px に補正し、UIにも反映
       saveSettings(cur);
       setInputsFromSettings(cur);
+      hideFnTooltip();
 
-      // 反映
+      // 「設定」の反映
       applyCurrentModeScale();
+      applyCurrentCellMarkerThemeFromSettings(cur);
       reapplyOriginalHeaderVisibilityFromSettings();
+      applyLightRefreshButtonVisibility(cur);
       scheduleBattlemapLayerSync();
+      if(mode === 'rb'){
+        try{
+          renderCurrentCellMarker(getCurrentBattlemapSnapshot());
+        }catch(_e){}
+      }
 
       if(mode === 'rb'){
         const rbApi = window.__DBA_RB_API;
@@ -15837,7 +19968,12 @@ function avatarsKeyToMap(avatarsKey){
       e.preventDefault();
       e.stopPropagation();
       // 破棄して閉じる：設定値は保存しない、UIも復元
-      setInputsFromSettings(loadSettings());
+      {
+        const saved = loadSettings();
+        setInputsFromSettings(saved);
+        applyBaseFontSize(saved?.ui?.baseFontPx);
+        applyLayerTextOpacity(saved?.layer?.textOpacity);
+      }
       refreshInitial();
       try{ adlg.close(); }catch(_e){ adlg.removeAttribute('open'); }
       closeDirect();
@@ -15908,7 +20044,7 @@ function avatarsKeyToMap(avatarsKey){
     function syncRapidBtn(){
       const on = loadRapidAttackEnabled();
       btnRapid.dataset.on = on ? '1' : '0';
-      btnRapid.textContent = on ? 'ラピッド攻撃:ON' : 'ラピッド攻撃:OFF';
+      btnRapid.innerHTML = on ? 'ラピッド攻撃<br>ON' : 'ラピッド攻撃<br>OFF';
     }
     syncRapidBtn();
     btnRapid.addEventListener('click', (e) => {
@@ -15918,11 +20054,15 @@ function avatarsKeyToMap(avatarsKey){
       saveRapidAttackEnabled(next);
       syncRapidBtn();
     });
+    bindFnButtonTooltip(
+      btnRapid,
+      '「セル詳細」を経由せず 攻撃や移動 を行います'
+    );
 
     const btnRoster = document.createElement('button');
     btnRoster.type = 'button';
     btnRoster.className = 'dba-btn-fn';
-    btnRoster.textContent = '装備ロスター';
+    btnRoster.innerHTML = '装備<br>ロスター';
     btnRoster.id = 'dba-btn-roster';
     // 長押し（1.4秒）：ロスター名一覧ポップアップ（ボタン直下）
     // 短押し：従来通りロスター本体modal
@@ -15971,7 +20111,7 @@ function avatarsKeyToMap(avatarsKey){
     const btnBattleInfo = document.createElement('button');
     btnBattleInfo.type = 'button';
     btnBattleInfo.className = 'dba-btn-fn';
-    btnBattleInfo.textContent = '戦況情報';
+    btnBattleInfo.innerHTML = '戦況<br>情報';
     btnBattleInfo.id = 'dba-btn-battleinfo';
 
     // 長押し（1.4秒）で全セル巡回してレイヤーに表示
@@ -16044,7 +20184,7 @@ function avatarsKeyToMap(avatarsKey){
     function syncAutoEquipBtn(){
       const on = loadAutoEquipEnabled();
       btnAutoEquip.dataset.on = on ? '1' : '0';
-      btnAutoEquip.textContent = on ? 'オート装備:ON' : 'オート装備:OFF';
+      btnAutoEquip.innerHTML = on ? 'オート装備<br>ON' : 'オート装備<br>OFF';
     }
     syncAutoEquipBtn();
     btnAutoEquip.addEventListener('click', (e) => {
@@ -16054,6 +20194,10 @@ function avatarsKeyToMap(avatarsKey){
       saveAutoEquipEnabled(next);
       syncAutoEquipBtn();
     });
+    bindFnButtonTooltip(
+      btnAutoEquip,
+      '攻撃時「装備ロスター」の「オート装備設定」に応じて装備を変えます'
+    );
 
     buttonsRow.appendChild(btnSettings);
     buttonsRow.appendChild(btnAutoEquip);
@@ -16061,6 +20205,8 @@ function avatarsKeyToMap(avatarsKey){
     buttonsRow.appendChild(btnLightRefresh);
     buttonsRow.appendChild(btnRoster);
     buttonsRow.appendChild(btnBattleInfo);
+
+    applyLightRefreshButtonVisibility(btnLightRefresh);
 
     bar.appendChild(headerHost);
     bar.appendChild(progressHost);
@@ -16074,6 +20220,12 @@ function avatarsKeyToMap(avatarsKey){
     try{ migrateSaveDataToGen3IfNeeded(); }catch(_e){}
 
     addStyle(CSS);
+    installOwnCapitalAttackGlobalGuards();
+    try{
+      const s = loadSettings();
+      applyBaseFontSize(s?.ui?.baseFontPx);
+      applyCurrentCellMarkerThemeFromSettings(s);
+    }catch(_e){}
 
     const doInsert = async () => {
       // 二重挿入防止
