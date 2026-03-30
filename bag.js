@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Donguri Bag Enhancer
 // @namespace    https://donguri.5ch.io/
-// @version      10.0.6.0
+// @version      11.0.1.0
 // @description  5ちゃんねる「どんぐりシステム」の「アイテムバッグ」ページ機能改良スクリプト。
 // @author       福呼び草
 // @assistant    ChatGPT (OpenAI)
@@ -13,6 +13,12 @@
 // @match        https://donguri.5ch.io/chest
 // @match        https://donguri.5ch.io/battlechest
 // @match        https://donguri.5ch.io/itemwatch
+// @match        https://donguri.world/
+// @match        https://donguri.world
+// @match        https://donguri.world/bag
+// @match        https://donguri.world/chest
+// @match        https://donguri.world/battlechest
+// @match        https://donguri.world/itemwatch
 // @run-at       document-end
 // @grant        none
 // ==/UserScript==
@@ -23,7 +29,7 @@
   // ============================================================
   // スクリプト自身のバージョン（About 表示用）
   // ============================================================
-  const DBE_VERSION    = '10.0.6.0';
+  const DBE_VERSION    = '11.0.1.0';
 
   // ============================================================
   // 現在のどんぐりドメイン
@@ -112,7 +118,7 @@
       const host = ensureNameBadgeHost(nameCell);
       if (!host) return;
       const CLS   = {unknown:'dbe-badge-unknown', new:'dbe-badge-new', lock:'dbe-badge-lock'};
-      const TXT   = {unknown:'❓',                new:'🔰',            lock:'🔒'};
+      const TXT   = {unknown:'?',                new:'??',            lock:'??'};
       const ORDER = {unknown:'1',                 new:'2',             lock:'3'};
       const cls = CLS[type]; if (!cls) return;
       let el = host.querySelector('.'+cls);
@@ -230,7 +236,7 @@
   const HIDE_KEY       = 'donguriHideRecycleBtn';
   const SHOW_DELTA_KEY = 'donguriShowDeltaColumn';
 
-  // 新しい安定ID ↔ 既存キー のエイリアス）
+  // 新しい安定ID ? 既存キー のエイリアス）
   const DBE_KEYS = {
     unlockedColor: { id:'dbe-prm-panel0-setcol.ll-unlocked',        legacy:'unlockedColor',            def:'#ff6600'              },
     lockedColor:   { id:'dbe-prm-panel0-setcolor-cell-locked',      legacy:'lockedColor',              def:'#ffffff'              },
@@ -435,8 +441,9 @@
     ['チョコレートハンマー',       { kana:'チョコレートハンマー',         limited:true  }],
     ['桃花うちわ',                 { kana:'トウカウチワ',                 limited:true  }],
     ['純白報復の大槌',             { kana:'ジュンパクホウフクノオオヅチ', limited:true  }],
+    ['春暁花杖',                   { kana:'シュンギョウカジョウ',         limited:true  }],
   // レジストリ（イベント開催中の限定武器）
-    ['春暁花杖',                   { kana:'シュンギョウカジョウ',         limited:true, eventActive:true   }],
+  //  ['春暁花杖',                   { kana:'シュンギョウカジョウ',         limited:true, eventActive:true   }],
   ]);
 
   // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -494,8 +501,9 @@
     ['月影の告白ゆかた',           { kana:'ツキカゲノコクハクユカタ',     limited:true  }],
     ['乱れ桜の外套',               { kana:'ミダレザクラノガイトウ',       limited:true  }],
     ['白薔薇の誓約鎧',             { kana:'シロバラノセイヤクヨロイ',     limited:true  }],
+    ['命護りの春司衣',             { kana:'イノチマモリノハルツカサキヌ', limited:true  }],
   // レジストリ（イベント開催中の限定防具）
-    ['命護りの春司衣',             { kana:'イノチマモリノハルツカサキヌ', limited:true, eventActive:true }],
+  //  ['命護りの春司衣',             { kana:'イノチマモリノハルツカサキヌ', limited:true, eventActive:true }],
   ]);
 
   // ============================================================
@@ -570,7 +578,7 @@
   // ============================================================
   /**
   * @param {HTMLElement} th - ヘッダー th
-  * @param {'⬆'|'⬇'} arrow - 矢印
+  * @param {'?'|'?'} arrow - 矢印
   * @param {'left'|'right'} position - インジケーター位置
   * @param {string=} label - インジケータ内に表示するテキスト（例: 'Rarity','限定','カナ'）
   */
@@ -604,7 +612,7 @@
     span.style.fontWeight = 'bold';
 
     // インジケーター本体
-    const svg = ARROW_SVG[ arrow === '⬇' ? 'down' : 'up' ];
+    const svg = ARROW_SVG[ arrow === '?' ? 'down' : 'up' ];
     if (label) {
       // (SVG) テキスト の形で表示（ブラケット無し）、テキストは 0.8em
       span.innerHTML = `${svg}<span class="sort-label">${label}</span>`;
@@ -629,8 +637,8 @@
     // th に付いている class のうち、columnIds のいずれかを見つける
     const colClass = Array.from(th.classList).find(c => allColumnClasses.includes(c)) || null;
     lastSortedColumn  = colClass;
-    // '⬇' を正順、'⬆' を逆順とみなす
-    lastSortAscending = (arrow === '⬇');
+    // '?' を正順、'?' を逆順とみなす
+    lastSortAscending = (arrow === '?');
   }
 
   // --- 最後に使用したソート関数を記憶するマップ（先に初期化） ---
@@ -703,7 +711,7 @@
 
   // --- 最後にソートされた列と方向を記憶 ---
   let lastSortedColumn  = null;  // 最後にソートされた列の class 名 (columnIds のいずれか)
-  let lastSortAscending = null;  // true=正順(⬇), false=逆順(⬆)
+  let lastSortAscending = null;  // true=正順(?), false=逆順(?)
 
   // --- 状態管理変数 ---
   let lastClickedCellId = null;
@@ -2144,7 +2152,7 @@
     rowItemId.append(cbItemId, document.createTextNode('名称列と装備列の間にアイテムIDを表示する'));
     secSettings.appendChild(rowItemId);
 
-    // -- 解析失敗の見える化（❓付与） ---
+    // -- 解析失敗の見える化（?付与） ---
     const cbElemUnknown = document.createElement('input');
     cbElemUnknown.type = 'checkbox';
     cbElemUnknown.id   = 'dbe-prm-elem-unknown-include';
@@ -2158,7 +2166,7 @@
     rowElemUnknown.style.display = 'flex';
     rowElemUnknown.style.gap = '8px';
     rowElemUnknown.style.alignItems = 'center';
-    rowElemUnknown.append(cbElemUnknown, document.createTextNode('解析失敗した装備に❓を付与する'));
+    rowElemUnknown.append(cbElemUnknown, document.createTextNode('解析失敗した装備に?を付与する'));
 
     secSettings.appendChild(rowElemUnknown);
 
@@ -3148,7 +3156,7 @@
             DBE_CHEST._serverError  = false;
             // 自動実行フラグ ON（この間だけカウント対象）
             DBE_CHEST._autoRunning  = true;
-            // (4) onHold / onlyNew / 🔰 を開始時にクリア
+            // (4) onHold / onlyNew / ?? を開始時にクリア
             try{
               // onHold クラス除去
               document.querySelectorAll('tr.dbe-prm-Chest--onhold').forEach(tr=>tr.classList.remove('dbe-prm-Chest--onhold'));
@@ -3157,7 +3165,7 @@
                 tr.classList.remove('dbe-prm-Chest--onlynew');
                 if (tr.dataset) delete tr.dataset.dbeOnlynew;
               });
-              // 🔰（newbie）除去：name-badge API が存在すれば利用
+              // ??（newbie）除去：name-badge API が存在すれば利用
               if (typeof window.DBE_setNameBadge === 'object' && window.DBE_setNameBadge){
                 ['#weaponTable','#armorTable','#necklaceTable'].forEach(sel=>{
                   const tb = document.querySelector(sel);
@@ -3861,11 +3869,11 @@
         DBE_CHEST.qRecycle = [];
         DBE_CHEST.qUnlock = [];
       }catch(_){}
-      // 3) onHold を全て消去し、onlyNew マーキング済みの行に🔰を付与（要件(7-a)）
+      // 3) onHold を全て消去し、onlyNew マーキング済みの行に??を付与（要件(7-a)）
       try{
         // onHold 解除
         document.querySelectorAll('tr.dbe-prm-Chest--onhold').forEach(tr=>tr.classList.remove('dbe-prm-Chest--onhold'));
-        // onlyNew の行を検出（クラスまたは data 属性）→ 🔰 付与
+        // onlyNew の行を検出（クラスまたは data 属性）→ ?? 付与
         const onlyNewRows = document.querySelectorAll('tr.dbe-prm-Chest--onlynew,[data-dbe-onlynew="1"]');
         if (typeof window.DBE_setNameBadge === 'object' && window.DBE_setNameBadge){
           onlyNewRows.forEach(tr=>{
@@ -3873,7 +3881,7 @@
             if (nameTd) try{ window.DBE_setNameBadge.newbie(nameTd, true); }catch(_){}
           });
         }
-        // onlyNew マーキング自体は残す（🔰可視のため）。必要ならここで消す:
+        // onlyNew マーキング自体は残す（??可視のため）。必要ならここで消す:
         // onlyNewRows.forEach(tr=>{ tr.classList.remove('dbe-prm-Chest--onlynew'); if (tr.dataset) delete tr.dataset.dbeOnlynew; });
       }catch(_){}
       // 4) 進行UIの操作状態を「停止」見た目に強制変更（中断=無効 / 閉じる=有効）＋オーバーレイ解除
@@ -4326,10 +4334,10 @@
     if (!bNavi || !bChest || !bRecycle || !bSettings) {
       // 既存の子を一度クリア（壊れている可能性もあるため）
       while (dock.firstChild) dock.firstChild.remove();
-      bNavi     = makeBtn('dbe-MenuBar-navi',     '↕️');
-      bChest    = makeBtn('dbe-MenuBar-chest',    '🎁');
-      bRecycle  = makeBtn('dbe-MenuBar-recycle',  '♻️');
-      bSettings = makeBtn('dbe-MenuBar-settings', '⚙️');
+      bNavi     = makeBtn('dbe-MenuBar-navi',     '??');
+      bChest    = makeBtn('dbe-MenuBar-chest',    '??');
+      bRecycle  = makeBtn('dbe-MenuBar-recycle',  '??');
+      bSettings = makeBtn('dbe-MenuBar-settings', '??');
       dock.append(bNavi, bChest, bRecycle, bSettings);
     }
     // ラッパ（#dbe-MenuBar）を用意して dbe-Menu を格納
@@ -4639,7 +4647,7 @@
       };
     }
 
-    // エクスポート（JSON; 順序含め完全復元可能）— OSの保存ダイアログ使用（標準名のみ・記憶しない）
+    // エクスポート（JSON; 順序含め完全復元可能）? OSの保存ダイアログ使用（標準名のみ・記憶しない）
     async function dbeExportFilterCards(){
       try{
         const payload = {
@@ -5029,7 +5037,7 @@
       busy:false,
       iframe:null,
       pre:{wep:new Set(), amr:new Set()},   // 既存ID（新規判定用）
-      lastNew:{wep:new Set(), amr:new Set(), nec:new Set()}, // 直近の🔰保持（付替え用）
+      lastNew:{wep:new Set(), amr:new Set(), nec:new Set()}, // 直近の??保持（付替え用）
       qLock:[],                              // ロック用キュー [{table:'wep'|'amr', id:'123'}]
       qRecycle:[],                           // 分解用キュー（DOM の a[href*="/recycle/"] を順次 click）
       qUnlock:[],                            // 最終解除用キュー
@@ -5479,7 +5487,7 @@
     function updateNewbieBadgesAfterChest(kind, doc){
       // kind: 'normal'|'large'|'battle'
       if (kind==='battle'){
-        // ネックレスのみ：前の🔰を全消し → 今回の新規だけ付ける
+        // ネックレスのみ：前の??を全消し → 今回の新規だけ付ける
         clearNewbieBadgesInTable('necklaceTable');
         const currentIds = collectRowIdsFromTable('necklaceTable', document);
         // 直前の chest 前と比較して「増えた分」を新規とみなす
@@ -5602,7 +5610,7 @@
               if (DBE_CHEST.liveDom){ patchBagFromDoc(doc); } // 書き込み
               // ② onhold ロック＋ ルールでロック／分解対象をキュー化（可視DOMを基準に組み立て）
               buildLockQueuesAfterOpen(targetDoc);            // 読み→一部書きがあっても同一フレームで完結
-              // ③ 🔰（新規）バッジの付替えと ❓（解析失敗）の再評価
+              // ③ ??（新規）バッジの付替えと ?（解析失敗）の再評価
               try{ updateNewbieBadgesAfterChest(DBE_CHEST.type, targetDoc); }catch(_){}
               try{ refreshUnknownBadges(); }catch(_){}
               // ④ 以降の分岐決定も同フレーム内で行う
@@ -5894,12 +5902,12 @@
             });
           }
         }
-        // unknown があれば名称列に❓バッジを付与（重複付与防止）
+        // unknown があれば名称列に?バッジを付与（重複付与防止）
         if (unknownCnt>0 && iName>=0) {
           const nameCell = tr.cells[iName];
           if (nameCell && !nameCell.querySelector('.dbe-unk-badge')){
             const sp = document.createElement('span');
-            sp.textContent = '❓';
+            sp.textContent = '?';
             sp.className = 'dbe-unk-badge';
             Object.assign(sp.style,{ marginLeft:'0.3em', fontWeight:'bold' });
             nameCell.appendChild(sp);
@@ -6039,13 +6047,13 @@
           };
 
           // ☆ 追加：範囲（min/max）抽出ヘルパー（ATK/DEF 用）
-          // - まず「a-b」「a～b」「a〜b」のような範囲表記を優先
+          // - まず「a-b」「a～b」「a?b」のような範囲表記を優先
           // - 見つからなければ、セル中の独立した数値トークン先頭2つを使う
           const rangeFromCell = (td)=>{
             const raw = String(td?.textContent || '').normalize('NFKC');
 
             // 1) 範囲表記を優先
-            let m = raw.match(/(-?\d+(?:\.\d+)?)\s*(?:[~〜～\-−ー－]\s*)(-?\d+(?:\.\d+)?)/);
+            let m = raw.match(/(-?\d+(?:\.\d+)?)\s*(?:[~?～\-?ー－]\s*)(-?\d+(?:\.\d+)?)/);
             if (m){
               const a = parseFloat(m[1]);
               const b = parseFloat(m[2]);
@@ -7354,7 +7362,7 @@
     bodyEl.append(areaTop, areaForm);
 
     // ─────────────────────────────────────────────
-    // グリッド内に区切り線を挿入（《動作モード》〜《マリモ》の5か所の「間」）
+    // グリッド内に区切り線を挿入（《動作モード》?《マリモ》の5か所の「間」）
     // ─────────────────────────────────────────────
     function __mkSepRow(card){
       var d = document.createElement('div');
@@ -7580,7 +7588,7 @@
         // range: {min, max}
         var hasMin = Number.isFinite(raw.min);
         var hasMax = Number.isFinite(raw.max);
-        if (hasMin && hasMax) return head() + (raw.min + '〜' + raw.max);
+        if (hasMin && hasMax) return head() + (raw.min + '?' + raw.max);
         if (hasMin)           return head() + (raw.min + '以上');
         if (hasMax)           return head() + (raw.max + '以下');
         // ここまで該当なし → すべて
@@ -7761,7 +7769,7 @@
         }
         const hasMin = Number.isFinite(raw.min);
         const hasMax = Number.isFinite(raw.max);
-        if (hasMin && hasMax) return `${label}（${raw.min}〜${raw.max}）`;
+        if (hasMin && hasMax) return `${label}（${raw.min}?${raw.max}）`;
         if (hasMin)            return `${label}（${raw.min}以上）`;
         if (hasMax)            return `${label}（${raw.max}以下）`;
       }
@@ -7886,7 +7894,7 @@
           // 既存保存データの全角括弧（ ）は表示時に撤去
           rest = rest.replace(/[（）]/g, '');
           // 《グレード》の値と値の間に含まれる「／」だけを撤去（他セクションの区切りは保持）
-          // 先頭の《グレード》〜次の「／」までの区間を取り出して、その中の「／」を空にする
+          // 先頭の《グレード》?次の「／」までの区間を取り出して、その中の「／」を空にする
           rest = rest.replace(/(《グレード》)([^／]*?)(?=／|$)/, (_m, head, body)=> head + body.replace(/／/g,''));
           // 《ネックレス》：グレード（プラチナ/金/銀/青銅/銅）をRarityと同じ配色で着色
           const GR_MAP = { 'プラチナ':'UR', '金':'SSR', '銀':'SR', '青銅':'R', '銅':'N' };
@@ -8707,7 +8715,7 @@
           addRow(leftCol,rightCol);
         })();
 
-        // 3) プロパティ数（項目数）0〜7・以上/未満　※ Buff + DeBuff の合計
+        // 3) プロパティ数（項目数）0?7・以上/未満　※ Buff + DeBuff の合計
         const propState = { all:false, num:'', op:'以上' }; let propInput, propSel, propWrap;
         (function(){
           // 左側は「《プロパティ数》」と「不問」を縦に2段表示（ユーザー要望）
@@ -8753,7 +8761,7 @@
           addRow(leftCol,rightCol);
         })();
 
-        // 4) DeBuff（項目数）0〜7・以上/未満
+        // 4) DeBuff（項目数）0?7・以上/未満
         const debuffState = { all:false, num:'', op:'以上' }; let debuffInput, debuffSel, debuffWrap;
         (function(){
           const leftCol = mkLeft('《DeBuff》');
@@ -9168,7 +9176,7 @@
 
           // ② 保存健全性チェック（保存領域の存在保証＆例外安全化）
           //    - _rulesData 本体／各配列が欠けていてもここで初期化
-          //    - 保存〜再描画は try/catch/finally で囲ってUXを担保
+          //    - 保存?再描画は try/catch/finally で囲ってUXを担保
           try{
             if (!_rulesData || typeof _rulesData !== 'object'){
               window._rulesData = { nec:[], wep:[], amr:[] };
@@ -9208,7 +9216,7 @@
               });
               if (picks.length>0) grade = { list:picks };
             }
-            // prop count（0〜7 / 以上・未満）※ Buff + DeBuff の合計
+            // prop count（0?7 / 以上・未満）※ Buff + DeBuff の合計
             let prop = null;
             {
               const ckAll = card.querySelector(`#fc-${kind}-prop-all`);
@@ -9222,7 +9230,7 @@
                 if (Number.isFinite(num) && op){ prop = { num, op }; }
               }
             }
-            // debuff count（0〜7 / 以上・未満）
+            // debuff count（0?7 / 以上・未満）
             let debuff = null;
             {
               const ckAll = card.querySelector(`#fc-${kind}-debuff-all`);
@@ -9790,7 +9798,7 @@
     }catch(_){ return -1; }
   }
 
-  // --- 名称欄バッジ（❓🔰🔒）基盤：右寄せで整列するホストを用意し、個別バッジを管理 ---
+  // --- 名称欄バッジ（?????）基盤：右寄せで整列するホストを用意し、個別バッジを管理 ---
   function ensureNameBadgeHost(nameCell){
     if (!nameCell) return null;
     nameCell.style.position = nameCell.style.position || 'relative';
@@ -9821,12 +9829,12 @@
       lock:    'dbe-badge-lock',
     };
     const TXT = {
-      unknown: '❓',
-      new:     '🔰',
-      lock:    '🔒',
+      unknown: '?',
+      new:     '??',
+      lock:    '??',
     };
     const ORDER = {
-      // 並び順：❓ → 🔰 → 🔒
+      // 並び順：? → ?? → ??
       unknown: '1',
       new:     '2',
       lock:    '3',
@@ -9856,7 +9864,7 @@
     lock   : (td, on)=> setBadge(td,'lock',!!on),
   };
 
-  // ---- ❓（解析失敗）自動付与：属性列を見て unknown を検出・反映 ----
+  // ---- ?（解析失敗）自動付与：属性列を見て unknown を検出・反映 ----
   const KNOWN_ELEMS = ['火','氷','雷','風','地','水','光','闇','無','なし','None','NONE','none','-'];
 
   function findHeaderIndexByText(table, candidates){
@@ -9975,7 +9983,7 @@
     ['weaponTable','armorTable','necklaceTable'].forEach(refreshUnknownBadgesForTable);
   }
 
-  // --- 名称セル（1列目）に🔒を右寄せ表示／削除（「解錠」行のみ対象） ---
+  // --- 名称セル（1列目）に??を右寄せ表示／削除（「解錠」行のみ対象） ---
   function applyPadlockMarkers(show){
     const BADGE = dbeEnsureNameBadgeApi();
     ['necklaceTable','weaponTable','armorTable'].forEach(id=>{
@@ -10033,6 +10041,11 @@
       const y = window.pageYOffset + r.top + r.height/2 - window.innerHeight/2;
       window.scrollTo({ top: y, behavior: 'auto' });
     }
+    lastClickedCellId = null;
+    sessionStorage.removeItem(anchorKey);
+  }
+
+  function clearAnchorCellMemory(){
     lastClickedCellId = null;
     sessionStorage.removeItem(anchorKey);
   }
@@ -11191,7 +11204,7 @@
         rows.forEach(r => table.tBodies[0].appendChild(r));
 
         // インジケーターは右固定
-        updateSortIndicator(th, desc ? '⬆' : '⬇', 'right');
+        updateSortIndicator(th, desc ? '?' : '?', 'right');
       };
 
       th.addEventListener('click', () => {
@@ -11203,7 +11216,7 @@
 
         // 次回クリックは反転
         lockDesc = !lockDesc;
-        scrollToAnchorCell();
+        clearAnchorCellMemory();
       });
     }
 
@@ -11269,7 +11282,7 @@
       // 〓〓〓〓〓 ソート（△はプラス、▼はマイナス）＋ インジケーター表示 〓〓〓〓〓
       // ascNum=true：逆順（tot 大→小）、ascNum=false：正順（tot 小→大）
       let ascNum = true;
-      // ネックレス「増減」列の最後のソート方向を記憶（true=逆順(⬆), false=正順(⬇)）
+      // ネックレス「増減」列の最後のソート方向を記憶（true=逆順(?), false=正順(?)）
       let necklaceLastSortDirection = null;
       const sortByDelta = (useAsc) => {
         const rows = Array.from(table.tBodies[0].rows);
@@ -11285,8 +11298,8 @@
         rows.forEach(r => table.tBodies[0].appendChild(r));
         // インジケーター更新（このヘッダー行内の既存を除去してから付与）
         (headerRow.closest('tr')||headerRow).querySelectorAll('.sort-indicator, .sort-indicator-left').forEach(el => el.remove());
-        updateSortIndicator(dTh, useAsc ? '⬆' : '⬇', 'right');
-        scrollToAnchorCell();
+        updateSortIndicator(dTh, useAsc ? '?' : '?', 'right');
+        clearAnchorCellMemory();
       };
 
       dTh.addEventListener('click', () => {
@@ -11587,7 +11600,7 @@
               parseInt(b.cells[atkIdx].textContent.split('~')[0]) - parseInt(a.cells[atkIdx].textContent.split('~')[0]) ||
               parseInt(b.cells[mrimIdx].textContent) - parseInt(a.cells[mrimIdx].textContent)
             );
-            updateSortIndicator(atkTh, '⬆', 'right');
+            updateSortIndicator(atkTh, '?', 'right');
             break;
           // (2) 最高ATK値による正順
           case 1:
@@ -11596,7 +11609,7 @@
               parseInt(a.cells[atkIdx].textContent.split('~')[0]) - parseInt(b.cells[atkIdx].textContent.split('~')[0]) ||
               parseInt(a.cells[mrimIdx].textContent) - parseInt(b.cells[mrimIdx].textContent)
             );
-            updateSortIndicator(atkTh, '⬇', 'right');
+            updateSortIndicator(atkTh, '?', 'right');
             break;
           // (3) 最低ATK値による逆順
           case 2:
@@ -11605,7 +11618,7 @@
               parseInt(b.cells[atkIdx].textContent.split('~')[1]) - parseInt(a.cells[atkIdx].textContent.split('~')[1]) ||
               parseInt(b.cells[mrimIdx].textContent) - parseInt(a.cells[mrimIdx].textContent)
             );
-            updateSortIndicator(atkTh, '⬆', 'left');
+            updateSortIndicator(atkTh, '?', 'left');
             break;
           // (4) 最低ATK値による正順
           case 3:
@@ -11614,7 +11627,7 @@
               parseInt(a.cells[atkIdx].textContent.split('~')[1]) - parseInt(b.cells[atkIdx].textContent.split('~')[1]) ||
               parseInt(a.cells[mrimIdx].textContent) - parseInt(b.cells[mrimIdx].textContent)
             );
-            updateSortIndicator(atkTh, '⬇', 'left');
+            updateSortIndicator(atkTh, '?', 'left');
             break;
         }
         rows.forEach(r => table.tBodies[0].appendChild(r));
@@ -11628,7 +11641,7 @@
         dbeRememberSort(id, () => sortByAtk(appliedState), 'ATK');
 
         atkState = (atkState + 1) % 4;
-        scrollToAnchorCell();
+        clearAnchorCellMemory();
       });
     }
 
@@ -11649,7 +11662,7 @@
           return desc ? (bSpd - aSpd) : (aSpd - bSpd);
         });
         rows.forEach(r => table.tBodies[0].appendChild(r));
-        updateSortIndicator(spdTh, desc ? '⬆' : '⬇', 'right');
+        updateSortIndicator(spdTh, desc ? '?' : '?', 'right');
       };
 
       spdTh.addEventListener('click', () => {
@@ -11665,7 +11678,7 @@
 
         // 次回クリックは反転
         spdDesc = !spdDesc;
-        scrollToAnchorCell();
+        clearAnchorCellMemory();
       });
     }
 
@@ -11686,7 +11699,7 @@
           return desc ? (bCrit - aCrit) : (aCrit - bCrit);
         });
         rows.forEach(r => table.tBodies[0].appendChild(r));
-        updateSortIndicator(critTh, desc ? '⬆' : '⬇', 'right');
+        updateSortIndicator(critTh, desc ? '?' : '?', 'right');
       };
 
       critTh.addEventListener('click', () => {
@@ -11702,7 +11715,7 @@
 
         // 次回クリックは反転
         critDesc = !critDesc;
-        scrollToAnchorCell();
+        clearAnchorCellMemory();
       });
     }
 
@@ -11723,7 +11736,7 @@
           return desc ? (bMod - aMod) : (aMod - bMod);
         });
         rows.forEach(r => table.tBodies[0].appendChild(r));
-        updateSortIndicator(modTh, desc ? '⬆' : '⬇', 'right');
+        updateSortIndicator(modTh, desc ? '?' : '?', 'right');
       };
 
       modTh.addEventListener('click', () => {
@@ -11739,7 +11752,7 @@
 
         // 次回クリックは反転
         modDesc = !modDesc;
-        scrollToAnchorCell();
+        clearAnchorCellMemory();
       });
     }
 
@@ -11761,8 +11774,8 @@
           return desc ? bVal - aVal : aVal - bVal;
         });
         rows.forEach(r => table.tBodies[0].appendChild(r));
-        // 矢印表示：右隣に⬆／⬇
-        updateSortIndicator(rrimTh, desc ? '⬆' : '⬇', 'right');
+        // 矢印表示：右隣に?／?
+        updateSortIndicator(rrimTh, desc ? '?' : '?', 'right');
       };
 
       rrimTh.addEventListener('click', () => {
@@ -11773,7 +11786,7 @@
         dbeRememberSort(id, () => sortByRrim(appliedDesc), 'MRIM');
 
         rrimDesc = !rrimDesc;
-        scrollToAnchorCell();
+        clearAnchorCellMemory();
       });
     }
 
@@ -11797,7 +11810,7 @@
               parseInt(b.cells[defIdx].textContent.split('~')[0]) - parseInt(a.cells[defIdx].textContent.split('~')[0]) ||
               parseInt(b.cells[mrimIdx].textContent) - parseInt(a.cells[mrimIdx].textContent)
             );
-            updateSortIndicator(defTh, '⬆', 'right');
+            updateSortIndicator(defTh, '?', 'right');
             break;
           // (2) 最高DEF値による正順
           case 1:
@@ -11806,7 +11819,7 @@
               parseInt(a.cells[defIdx].textContent.split('~')[0]) - parseInt(b.cells[defIdx].textContent.split('~')[0]) ||
               parseInt(a.cells[mrimIdx].textContent) - parseInt(b.cells[mrimIdx].textContent)
             );
-            updateSortIndicator(defTh, '⬇', 'right');
+            updateSortIndicator(defTh, '?', 'right');
             break;
           // (3) 最低DEF値による逆順
           case 2:
@@ -11815,7 +11828,7 @@
               parseInt(b.cells[defIdx].textContent.split('~')[1]) - parseInt(a.cells[defIdx].textContent.split('~')[1]) ||
               parseInt(b.cells[mrimIdx].textContent) - parseInt(a.cells[mrimIdx].textContent)
             );
-            updateSortIndicator(defTh, '⬆', 'left');
+            updateSortIndicator(defTh, '?', 'left');
             break;
           // (4) 最低DEF値による正順
           case 3:
@@ -11824,7 +11837,7 @@
               parseInt(a.cells[defIdx].textContent.split('~')[1]) - parseInt(b.cells[defIdx].textContent.split('~')[1]) ||
               parseInt(a.cells[mrimIdx].textContent) - parseInt(b.cells[mrimIdx].textContent)
             );
-            updateSortIndicator(defTh, '⬇', 'left');
+            updateSortIndicator(defTh, '?', 'left');
             break;
         }
         rows.forEach(r => table.tBodies[0].appendChild(r));
@@ -11838,7 +11851,7 @@
         dbeRememberSort(id, () => sortByDef(appliedState), 'DEF');
 
         defState = (defState + 1) % 4;
-        scrollToAnchorCell();
+        clearAnchorCellMemory();
       });
     }
 
@@ -11859,7 +11872,7 @@
           return desc ? (bW - aW) : (aW - bW);
         });
         rows.forEach(r => table.tBodies[0].appendChild(r));
-        updateSortIndicator(wgtTh, desc ? '⬆' : '⬇', 'right');
+        updateSortIndicator(wgtTh, desc ? '?' : '?', 'right');
       };
 
       wgtTh.addEventListener('click', () => {
@@ -11875,7 +11888,7 @@
 
         // 次回クリックは反転
         wgtDesc = !wgtDesc;
-        scrollToAnchorCell();
+        clearAnchorCellMemory();
       });
     }
 
@@ -11896,7 +11909,7 @@
           return desc ? (bCrit - aCrit) : (aCrit - bCrit);
         });
         rows.forEach(r => table.tBodies[0].appendChild(r));
-        updateSortIndicator(critTh, desc ? '⬆' : '⬇', 'right');
+        updateSortIndicator(critTh, desc ? '?' : '?', 'right');
       };
 
       critTh.addEventListener('click', () => {
@@ -11912,7 +11925,7 @@
 
         // 次回クリックは反転
         critDesc = !critDesc;
-        scrollToAnchorCell();
+        clearAnchorCellMemory();
       });
     }
 
@@ -11933,7 +11946,7 @@
           return desc ? (bMod - aMod) : (aMod - bMod);
         });
         rows.forEach(r => table.tBodies[0].appendChild(r));
-        updateSortIndicator(modTh, desc ? '⬆' : '⬇', 'right');
+        updateSortIndicator(modTh, desc ? '?' : '?', 'right');
       };
 
       modTh.addEventListener('click', () => {
@@ -11949,7 +11962,7 @@
 
         // 次回クリックは反転
         modDesc = !modDesc;
-        scrollToAnchorCell();
+        clearAnchorCellMemory();
       });
     }
 
@@ -11969,7 +11982,7 @@
           return desc ? bVal - aVal : aVal - bVal;
         });
         rows.forEach(r => table.tBodies[0].appendChild(r));
-        updateSortIndicator(mrimTh, desc ? '⬆' : '⬇', 'right');
+        updateSortIndicator(mrimTh, desc ? '?' : '?', 'right');
       };
 
       mrimTh.addEventListener('click', () => {
@@ -11980,7 +11993,7 @@
         dbeRememberSort(id, () => sortByMrim(appliedDesc), 'MRIM');
 
         mrimDesc = !mrimDesc;
-        scrollToAnchorCell();
+        clearAnchorCellMemory();
       });
     }
   }
@@ -12330,17 +12343,17 @@
         const appliedState = elemState;
         sortByElemHeader(appliedState === 0);
         // インジケーター更新
-        updateSortIndicator(hdrs[elemCol], appliedState === 0 ? '⬆' : '⬇', 'right');
+        updateSortIndicator(hdrs[elemCol], appliedState === 0 ? '?' : '?', 'right');
         // ソート状態を保存
         const lastState = appliedState;
         dbeRememberSort(id, () => {
           sortByElemHeader(lastState === 0);
-          updateSortIndicator(hdrs[elemCol], lastState === 0 ? '⬆' : '⬇', 'right');
-          applyColor(); scrollToAnchorCell();
+          updateSortIndicator(hdrs[elemCol], lastState === 0 ? '?' : '?', 'right');
+          applyColor(); clearAnchorCellMemory();
         }, 'ELEM');
         elemState = elemState === 0 ? 1 : 0;
         applyColor();
-        scrollToAnchorCell();
+        clearAnchorCellMemory();
       });
 
       // --- ELEM列セルクリックによるフィルター→ソート→スクロール ---
@@ -12361,7 +12374,7 @@
         });
       });
 
-      // 〓〓〓〓〓〓 4 段階サイクル（①〜④）【v10.0.5.0】〓〓〓〓〓〓
+      // 〓〓〓〓〓〓 4 段階サイクル（①?④）【v10.0.5.0】〓〓〓〓〓〓
       // 対象：weaponTable の wepClm-Name / armorTable の amrClm-Name
       // 方針：
       //   - 名称列クリック時は「名称列だけ」を基準にソートする
@@ -12405,7 +12418,7 @@
         span.style.marginLeft = '0.35em';
         span.style.color = 'red';
         span.style.fontWeight = 'bold';
-        const svg = ARROW_SVG[arrow === '⬇' ? 'down' : 'up'];
+        const svg = ARROW_SVG[arrow === '?' ? 'down' : 'up'];
         span.innerHTML = `${svg}<span class="sort-label">${label}</span>`;
         nameTh.appendChild(span);
       }
@@ -12587,10 +12600,10 @@
         rows.forEach(r => body.appendChild(r));
 
         const indicators = [
-          { label:'限定', arrow:'⬇' },
-          { label:'限定', arrow:'⬆' },
-          { label:'カナ', arrow:'⬇' },
-          { label:'カナ', arrow:'⬆' },
+          { label:'限定', arrow:'?' },
+          { label:'限定', arrow:'?' },
+          { label:'カナ', arrow:'?' },
+          { label:'カナ', arrow:'?' },
         ];
         setNameSortIndicatorExact(indicators[phase].label, indicators[phase].arrow);
 
@@ -12615,7 +12628,7 @@
           ()=>applyCycleSort(Number((table.dataset.nameSortLastApplied || 'name:0').split(':')[1])),
           'NAME'
         );
-        scrollToAnchorCell();
+        clearAnchorCellMemory();
       });
 
       // 〓〓〓〓〓〓 テーブルソート状態の記憶 〓〓〓〓〓〓
