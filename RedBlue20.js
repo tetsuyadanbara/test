@@ -3533,7 +3533,7 @@
         stageProgressBarBody.textContent = stageProgressRounded + '%';
         stageProgressBarBody.style.width = stageProgress + '%';
         stageProgressBarInfo.textContent =
-          `進行区間: ${rbStageInfo.label}（${rbStageInfo.start}?${rbStageInfo.end}%）`;
+          `進行区間: ${rbStageInfo.label}（${rbStageInfo.start}~${rbStageInfo.end}%）`;
       } else {
         progressBarInfo.textContent = `${MODENAME}第${currentPeriod}期${str}`;
         stageProgressBarContainer.style.display = 'none';
