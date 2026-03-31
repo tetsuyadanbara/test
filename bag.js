@@ -4334,10 +4334,18 @@
     if (!bNavi || !bChest || !bRecycle || !bSettings) {
       // 既存の子を一度クリア（壊れている可能性もあるため）
       while (dock.firstChild) dock.firstChild.remove();
-      bNavi     = makeBtn('dbe-MenuBar-navi',     '??');
-      bChest    = makeBtn('dbe-MenuBar-chest',    '??');
-      bRecycle  = makeBtn('dbe-MenuBar-recycle',  '??');
-      bSettings = makeBtn('dbe-MenuBar-settings', '??');
+
+      // ラベルは Unicode escape で固定（GitHub/Bookmarklet 経由の文字化け対策）
+      bNavi     = makeBtn('dbe-MenuBar-navi',     '\u2139\uFE0F');   // ℹ️
+      bChest    = makeBtn('dbe-MenuBar-chest',    '\uD83C\uDF81');   // 🎁
+      bRecycle  = makeBtn('dbe-MenuBar-recycle',  '\u267B\uFE0F');   // ♻️
+      bSettings = makeBtn('dbe-MenuBar-settings', '\u2699\uFE0F');   // ⚙️
+
+      bNavi.title     = '情報';
+      bChest.title    = '宝箱';
+      bRecycle.title  = '分解';
+      bSettings.title = '設定';
+
       dock.append(bNavi, bChest, bRecycle, bSettings);
     }
     // ラッパ（#dbe-MenuBar）を用意して dbe-Menu を格納
