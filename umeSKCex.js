@@ -296,11 +296,20 @@
           startAutoJoin();
         })
 
-        const inputs = {
-          teamName: [input.cloneNode(),'チーム名'],
-          teamColor: [input.cloneNode(),'チームカラー'],
-          excludedTeams: [input.cloneNode(),'攻撃除外チーム']
+        function normalizeColorCsv(value) {
+          return value
+            .split(',')
+            .map(v => v.trim().replace(/^#/, '').replace(/[^0-9a-fA-F]/g, '').toUpperCase())
+            .filter(Boolean)
+            .join(',');
         }
+
+        const inputs = {
+          teamName: [input.cloneNode(), 'チーム名'],
+          teamColor: [input.cloneNode(), 'チームカラー'],
+          counterExcludedTeamNames: [input.cloneNode(), 'counter除外チーム名'],
+          counterExcludedTeamColors: [input.cloneNode(), 'counter除外カラー']
+        };
         for (const key of Object.keys(inputs)) {
           const label_ = label.cloneNode();
           const span_ = span.cloneNode();
@@ -311,69 +320,26 @@
           div.append(label_);
 
           inputs[key][0].value = settings[key] || '';
-          if (key === 'excludedTeams') {
-            inputs[key][0].placeholder = '例: まほろば, ライーヨー, 赤い彗星';
-          }
           inputs[key][0].addEventListener('input', ()=>{
-            inputs.teamColor[0].value = inputs.teamColor[0].value.replace(/[^0-9a-fA-F]/g,'');
+            if (key === 'teamColor' || key === 'counterExcludedTeamColors') {
+              inputs[key][0].value = normalizeColorCsv(inputs[key][0].value);
+            }
             settings[key] = inputs[key][0].value;
-            localStorage.setItem('aat_settings',JSON.stringify(settings));
-          })
+            localStorage.setItem('aat_settings', JSON.stringify(settings));
+          });
         }
 
         const description = document.createElement('p');
         description.style.fontSize = '90%';
-        description.innerText = 'チームカラーは小文字/大文字も正確に入力してください。（自陣の隣接タイル取得に必要）\n攻撃除外チームはカンマ区切りで複数指定できます。チーム名の代わりに6桁カラーコードでも指定できます。\nあらかじめ装備パネルからエリートも含め各ランクの装備を登録してください。（所持していない場合は除く）\n※装備を登録していないと成功率が低下します。'
-        div.append(description,closeButton);
+        description.innerText =
+          'チームカラーは小文字/大文字も正確に入力してください。（自陣の隣接タイル取得に必要）\n' +
+          'counter除外チーム名 / counter除外カラー は「,」区切りで複数指定できます。\n' +
+          '除外設定が有効になるのは umeR打止後の counter モードのみです。\n' +
+          'あらかじめ装備パネルからエリートも含め各ランクの装備を登録してください。（所持していない場合は除く）\n' +
+          '※装備を登録していないと成功率が低下します。';
+        div.append(description, closeButton);
         autoJoinSettingsDialog.append(div);
       })();
-
-      function parseExcludedTeams() {
-        return String(settings.excludedTeams || '')
-          .split(/[\n,、]+/)
-          .map(v => v.trim().replace(/^#/, ''))
-          .filter(Boolean);
-      }
-
-      function getCurrentTeamColorMap() {
-        const map = {};
-
-        if (settings.customColors && typeof settings.customColors === 'object') {
-          Object.entries(settings.customColors).forEach(([team, color]) => {
-            const teamName = String(team || '').trim();
-            const normalizedColor = String(color || '').replace(/[^0-9A-Fa-f]/g, '').toUpperCase();
-            if (teamName && normalizedColor.length === 6) {
-              map[teamName] = normalizedColor;
-            }
-          });
-        }
-
-        const teamTable = document.querySelector('table');
-        if (teamTable?.rows?.length) {
-          [...teamTable.rows].slice(1).forEach(row => {
-            const teamName = row.cells?.[1]?.textContent?.trim();
-            const rawColor = row.cells?.[0]?.textContent?.trim() || '';
-            const normalizedColor = rawColor.replace(/[^0-9A-Fa-f]/g, '').toUpperCase();
-            if (teamName && normalizedColor.length === 6) {
-              map[teamName] = normalizedColor;
-            }
-          });
-        }
-
-        return map;
-      }
-
-      function getExcludedTeamColors() {
-        const teamColorMap = getCurrentTeamColorMap();
-        return new Set(
-          parseExcludedTeams()
-            .map(v => {
-              if (/^[0-9A-Fa-f]{6}$/.test(v)) return v.toUpperCase();
-              return teamColorMap[v];
-            })
-            .filter(Boolean)
-        );
-      }
 
       //autoJoin
       (()=>{
@@ -2606,6 +2572,40 @@
         const counterMonitorMs = 5000;
         let counterMonitorLogged = false;
 
+        function normalizeTeamNameList(value) {
+          return String(value || '')
+            .split(',')
+            .map(v => v.trim())
+            .filter(Boolean);
+        }
+
+        function normalizeColorList(value) {
+          return String(value || '')
+            .split(',')
+            .map(v => v.trim().replace(/^#/, '').toUpperCase())
+            .filter(v => /^[0-9A-F]{6}$/.test(v));
+        }
+
+        function getCounterExcludedColorSet() {
+          const set = new Set(normalizeColorList(settings.counterExcludedTeamColors));
+
+          const excludedNames = new Set(normalizeTeamNameList(settings.counterExcludedTeamNames));
+          const teamTable = document.querySelector('table');
+
+          if (teamTable && excludedNames.size > 0) {
+            [...teamTable.rows].slice(1).forEach(row => {
+              const rowColor = row.cells[0]?.textContent?.trim().replace(/^#/, '').toUpperCase();
+              const rowTeamName = row.cells[1]?.textContent?.trim();
+
+              if (rowTeamName && excludedNames.has(rowTeamName) && /^[0-9A-F]{6}$/.test(rowColor)) {
+                set.add(rowColor);
+              }
+            });
+          }
+
+          return set;
+        }
+
         function shouldStopCounterMonitor(progress) {
           return progress === 47 || progress === 97;
         }
@@ -3300,105 +3300,129 @@
           return arr;
         }
 
-        const fixedExcludedColors = [
-          '00008B',//まほろば
-          'FFFF00',//ライーヨー
-          'FF0101',//赤い彗星
-        ];
-
-        const excludedTeamColors = new Set([
-          ...fixedExcludedColors,
-          ...getExcludedTeamColors()
-        ]);
-        const ownTeamColor = String(teamColor || '').replace('#', '').toUpperCase();
-
-        // 自軍 + 攻撃除外チームを除外するフィルタリング関数
+        //チームメンバーを除外するフィルタリング関数
         const filteredCells = (cells) => {
-          return cells.filter(([r, c]) => {
-            const key = `${r}-${c}`;
-            if (teamColorSet.has(key)) return false;
-
-            const color = String(cellColors[key] || '').replace('#', '').toUpperCase();
-            if (color && excludedTeamColors.has(color)) return false;
-
-            return true;
-          });
+          return cells.filter(([r, c]) => !teamColorSet.has(`${r}-${c}`));
         };
 
-        const nonAdjacentBase = cells.filter(([r, c]) => {
-          const key = `${r}-${c}`;
-          return !capitalSet.has(key) && !adjacentSet.has(key);
-        });
+        const isMorning = isMorningTime();
+        let nonAdjacentCells;
+        let regions;
 
-        const onceMoreCells = nonAdjacentBase.filter(([r, c]) => {
-          const key = `${r}-${c}`;
-          return key in cellColors && !teamColorSet.has(key);
-        });
+        if (isMorning) {
+          const nonAdjacentCells = cells.filter(([r, c]) => {
+            const key = `${r}-${c}`;
+            return !capitalSet.has(key) && !adjacentSet.has(key);
+          });
 
-        // 1. どこのチームにも属してないマス
-        const group1 = shuffle(filteredCells(nonAdjacentBase.filter(([r, c]) => {
-          const key = `${r}-${c}`;
-          return !cellColors[key];
-        })));
-
-        // 2. 敵チームの首都および首都の上下左右ではないマス
-        const group2 = shuffle(nonAdjacentBase.filter(([r, c]) => {
-          const key = `${r}-${c}`;
-          if (!cellColors[key]) return false;
-
-          const color = cellColors[key].replace('#','').toUpperCase();
-          return color !== ownTeamColor && !excludedTeamColors.has(color);
-        }));
-
-        // 3. 敵チームの首都の上下左右のマス
-        const group3 = shuffle(cells.filter(([r, c]) => {
-          const key = `${r}-${c}`;
-          if (capitalSet.has(key)) return false;
-          if (!adjacentSet.has(key)) return false;
-
-          if (!cellColors[key]) return true;
-          const color = cellColors[key].replace('#', '').toUpperCase();
-          return color !== ownTeamColor && !excludedTeamColors.has(color);
-        }));
-
-        // 4. 敵チームの首都
-        const group4 = shuffle(cells.filter(([r, c]) => {
-          const key = `${r}-${c}`;
-          if (!capitalSet.has(key)) return false;
-          if (!cellColors[key]) return false;
-
-          const color = cellColors[key].replace('#', '').toUpperCase();
-          return color !== ownTeamColor && !excludedTeamColors.has(color);
-        }));
-
-        // 1~4を結合
-        if (autoJoinMode === 'counter') {
-          const g2 = await priorityGuardCells(group2, true);
-          const g3 = await priorityGuardCells(group3, true);
-          const g4 = await priorityGuardCells(group4, true);
-          nonAdjacentCells = [...g2, ...g3, ...g4];
+          const onceMoreCells = nonAdjacentCells.filter(([r, c]) => {
+            const key = `${r}-${c}`;
+            return key in cellColors && !teamColorSet.has(key);
+          });
 
           regions = {
-            nonAdjacent: nonAdjacentCells,
-            capitalAdjacent: [],
-            teamAdjacent: [],
-            mapEdge: [],
-            onceMore: []
-          };
-        } else {
-          const g1 = await priorityGuardCells(group1);
-          const g2 = await priorityGuardCells(group2);
-          const g3 = await priorityGuardCells(group3);
-          const g4 = await priorityGuardCells(group4);
-          nonAdjacentCells = [...g1, ...g2, ...g3, ...g4];
-
-          regions = {
-            nonAdjacent: nonAdjacentCells,
+            nonAdjacent: shuffle(filteredCells(nonAdjacentCells)),
             capitalAdjacent: shuffle(filteredCells(capitalAdjacentCells)),
             teamAdjacent: shuffle(filteredCells(teamAdjacentCells)),
             mapEdge: shuffle(filteredCells(mapEdgeCells)),
             onceMore: shuffle(filteredCells(onceMoreCells))
           };
+        } else {
+          const nonAdjacentBase = cells.filter(([r, c]) => {
+            const key = `${r}-${c}`;
+            return !capitalSet.has(key) && !adjacentSet.has(key);
+          });
+
+          const onceMoreCells = nonAdjacentBase.filter(([r, c]) => {
+            const key = `${r}-${c}`;
+            return key in cellColors && !teamColorSet.has(key);
+          });
+
+          const excludedColors = [
+            '00008B',//まほろば
+            'FFFF00',//ライーヨー
+            'FF0101',//赤い彗星
+            'FFFFE0',//プリングルズ
+            '696969'//尻子玉
+          ];
+
+          const isCounter = autoJoinMode === 'counter';
+          const counterExcludedColors = isCounter
+            ? new Set([
+                ...excludedColors.map(v => String(v).toUpperCase()),
+                ...[...getCounterExcludedColorSet()].map(v => String(v).toUpperCase())
+              ])
+            : new Set();
+
+          const isCounterExcludedColor = (color) => {
+            if (!isCounter) return false;
+            return counterExcludedColors.has(String(color || '').replace(/^#/, '').toUpperCase());
+          };
+
+          // 1. どこのチームにも属してないマス
+          const group1 = shuffle(nonAdjacentBase.filter(([r, c]) => {
+            const key = `${r}-${c}`;
+            return !cellColors[key];
+          }));
+
+          // 2. 敵チームの首都および首都の上下左右ではないマス
+          const group2 = shuffle(nonAdjacentBase.filter(([r, c]) => {
+            const key = `${r}-${c}`;
+            if (!cellColors[key]) return false;
+            const color = cellColors[key].replace('#', '').toUpperCase();
+            return color !== String(teamColor).toUpperCase() && !isCounterExcludedColor(color);
+          }));
+
+          // 3. 敵チームの首都の上下左右のマス
+          const group3 = shuffle(cells.filter(([r, c]) => {
+            const key = `${r}-${c}`;
+            if (capitalSet.has(key)) return false;
+            if (!adjacentSet.has(key)) return false;
+
+            if (!cellColors[key]) return true;
+            const color = cellColors[key].replace('#', '').toUpperCase();
+            return color !== String(teamColor).toUpperCase() && !isCounterExcludedColor(color);
+          }));
+
+          // 4. 敵チームの首都
+          const group4 = shuffle(cells.filter(([r, c]) => {
+            const key = `${r}-${c}`;
+            if (!capitalSet.has(key)) return false;
+            if (!cellColors[key]) return false;
+            const color = cellColors[key].replace('#', '').toUpperCase();
+            return color !== String(teamColor).toUpperCase() && !isCounterExcludedColor(color);
+          }));
+
+          // 1~4を結合
+          if (autoJoinMode === 'counter') {
+            const g2 = await priorityGuardCells(group2, true);
+            const g3 = await priorityGuardCells(group3, true);
+            const g4 = await priorityGuardCells(group4, true);
+            nonAdjacentCells = [...g2, ...g3, ...g4];
+
+            regions = {
+              nonAdjacent: nonAdjacentCells,
+              capitalAdjacent: [],
+              teamAdjacent: [],
+              mapEdge: [],
+              onceMore: []
+            };
+          } else {
+            const g1 = await priorityGuardCells(group1);
+            const g2 = await priorityGuardCells(group2);
+            const g3 = await priorityGuardCells(group3);
+            const g4 = await priorityGuardCells(group4);
+            nonAdjacentCells = [...g1, ...g2, ...g3, ...g4];
+
+            regions = {
+//            nonAdjacent: shuffle(nonAdjacentCells),
+              nonAdjacent: nonAdjacentCells,
+              capitalAdjacent: shuffle(capitalAdjacentCells),
+              teamAdjacent: shuffle(teamAdjacentCells),
+              mapEdge: shuffle(mapEdgeCells),
+              onceMore: shuffle(filteredCells(onceMoreCells))
+            };
+          }
         }
         return regions;
       } catch (e) {
