@@ -1592,32 +1592,57 @@
 
             for (const target of [autoEquipItems, autoEquipItemsAutojoin]) {
               for (const key of Object.keys(target)) {
-                target[key] = target[key].filter(v => validKeys.has(v))
+                target[key] = target[key].filter(v => validKeys.has(v));
               }
             }
             localStorage.setItem('autoEquipItems', JSON.stringify(autoEquipItems));
             localStorage.setItem('autoEquipItemsAutojoin', JSON.stringify(autoEquipItemsAutojoin));
           }
         });
+
         const copyButton = button.cloneNode();
         copyButton.textContent = 'コピー';
-        copyButton.addEventListener('click', ()=>{navigator.clipboard.writeText(textarea.value).then(alert('copy'));})
+        copyButton.addEventListener('click', ()=>{
+          navigator.clipboard.writeText(textarea.value).then(()=>alert('copy'));
+        });
+
+        const iphoneCopyButton = button.cloneNode();
+        iphoneCopyButton.textContent = 'iPhone用';
+        iphoneCopyButton.addEventListener('click', ()=>{
+          try {
+            const json = JSON.parse(textarea.value || '{}');
+            const sortedEntries = Object.entries(sortEquipPresetsObject(json));
+
+            const oneLineText = `{ ${sortedEntries
+              .map(([key, value]) => `"${key.replace(/"/g,'\\"')}": ${JSON.stringify(value)}`)
+              .join(', ')} }`;
+
+            navigator.clipboard.writeText(oneLineText).then(()=>alert('iphone copy'));
+          } catch (e) {
+            alert('JSON書式エラー');
+          }
+        });
+
         const closeButton = button.cloneNode();
         closeButton.textContent = '閉じる';
-        closeButton.addEventListener('click', ()=>{backupDialog.close()})
-        div.append(saveButton, copyButton, closeButton);
+        closeButton.addEventListener('click', ()=>{backupDialog.close()});
+
+        div.append(saveButton, copyButton, iphoneCopyButton, closeButton);
         backupDialog.append(textarea, div);
+
         backupButton.addEventListener('click', ()=>{
           const data = localStorage.getItem('equipPresets');
           if(data) {
-            const json = JSON.parse(data);
+            const json = sortEquipPresetsObject(JSON.parse(data));
             const formattedString = Object.entries(json)
-              .map(([key, value]) => {return `  "${key.replace(/"/g,'\\"')}": ${JSON.stringify(value)}`;})
+              .map(([key, value]) => `  "${key.replace(/"/g,'\\"')}": ${JSON.stringify(value)}`)
               .join(',\n');
             textarea.value = `{\n${formattedString}\n}`;
+          } else {
+            textarea.value = '{}';
           }
           backupDialog.showModal();
-        })
+        });
       })();
 
       [removeButton].forEach(button => {
@@ -1726,6 +1751,20 @@
     p.style.margin = '2px';
     p.style.height = '28px';
 
+    const sortModeButton = button.cloneNode();
+    sortModeButton.textContent = '名前順';
+    sortModeButton.style.width = '4em';
+    sortModeButton.style.height = '42px';
+    sortModeButton.style.fontSize = '';
+    sortModeButton.addEventListener('click', ()=>{
+      currentEquipSort = currentEquipSort === 'name' ? 'mod' : 'name';
+      sortModeButton.textContent =
+        currentEquipSort === 'mod' ? 'mod順' :
+        currentEquipSort === 'header' ? '列順' :
+        '名前順';
+      applyEquipSort();
+    });
+
     const equipSwitchButton = button.cloneNode();
     equipSwitchButton.textContent = '?武器';
     equipSwitchButton.style.width = '4em';
@@ -1759,6 +1798,27 @@
     registerButton.style.height = '42px';
     registerButton.style.fontSize = '';
 
+    const applyNecklaceToAllButton = button.cloneNode();
+    applyNecklaceToAllButton.textContent = 'ネックレス変更';
+    applyNecklaceToAllButton.style.width = '9em';
+    applyNecklaceToAllButton.style.minWidth = '9em';
+    applyNecklaceToAllButton.style.height = '42px';
+    applyNecklaceToAllButton.style.fontSize = '';
+    applyNecklaceToAllButton.style.whiteSpace = 'nowrap';
+    applyNecklaceToAllButton.addEventListener('click', ()=>{
+      if (!selectedEquips.id[2] || !selectedEquips.rank[2]) {
+        alert('先にネックレス一覧で反映したいネックレスを選択してください');
+        return;
+      }
+
+      const ok = confirm('選択中のネックレスを全ての装備プリセットへ反映しますか？');
+      if (!ok) return;
+
+      const updatedCount = applyNecklaceToAllPresets(selectedEquips.id[2], selectedEquips.rank[2]);
+      document.querySelector('.equip-preset-selected').textContent = `ネックレスを ${updatedCount} 件へ反映`;
+      alert(`ネックレスを ${updatedCount} 件のプリセットへ反映しました`);
+    });
+
     (()=>{
       const dialog = document.createElement('dialog');
       dialog.style.background = '#fff';
@@ -1779,16 +1839,16 @@
         saveEquipPreset(presetNameInput.value.substring(0,32), selectedEquips);
         dialog.close();
         presetNameInput.value = '';
-      })
+      });
       presetNameInput.addEventListener('keydown', (e)=>{
         if (e.key === "Enter") {
-          e.preventDefault(); // これが無いとdialogが閉じない
+          e.preventDefault();
           if(presetNameInput.value.trim() === '') return;
           saveEquipPreset(presetNameInput.value.substring(0,32), selectedEquips);
           dialog.close();
           presetNameInput.value = '';
         }
-      })
+      });
       const cancelButton = button.cloneNode();
       cancelButton.textContent = 'キャンセル';
       cancelButton.addEventListener('click', ()=>{dialog.close()});
@@ -1803,22 +1863,242 @@
       });
     })();
 
-    bar.append(rankSelect, equipSwitchButton, registerButton, p);
+    bar.append(rankSelect, sortModeButton, equipSwitchButton, registerButton, applyNecklaceToAllButton, p);
     equipField.append(bar, tableContainer, closeButton);
     panel.append(equipField);
 
     let weaponTable, armorTable, necklaceTable;
     let selectedEquips = {id:[], rank:[]};
+    let currentEquipSort = 'name';
 
-    function sortTable(table){
+    function isModSortableTable(table) {
+      return table && (table.id === 'weaponTable' || table.id === 'armorTable');
+    }
+
+    function getCellNumberValue(row, cellIndex) {
+      const cell = row?.cells?.[cellIndex];
+      if (!cell) return Number.NEGATIVE_INFINITY;
+
+      const text = (cell.textContent || '').replace(/,/g, '');
+      const matches = text.match(/-?\d+(?:\.\d+)?/g);
+      if (!matches || matches.length === 0) return Number.NEGATIVE_INFINITY;
+
+      return Number(matches[matches.length - 1]);
+    }
+
+    function getEquipModValue(row) {
+      return getCellNumberValue(row, 7);
+    }
+
+    const elemColors = {
+      '火':'#FFEEEE',
+      '氷':'#EEEEFF',
+      '雷':'#FFFFEE',
+      '風':'#EEFFEE',
+      '地':'#FFF0E0',
+      '水':'#EEFFFF',
+      '光':'#FFFFF0',
+      '闇':'#F0E0FF',
+      'なし':'#FFFFFF'
+    };
+
+    const elemOrder = {
+      '火':0,
+      '氷':1,
+      '雷':2,
+      '風':3,
+      '地':4,
+      '水':5,
+      '光':6,
+      '闇':7,
+      'なし':8
+    };
+
+    function escapeRegExp(text) {
+      return String(text).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    }
+
+    function colorizeNecklaceDebuffCell(cell) {
+      if (!cell) return;
+
+      const debuffKeywords = [
+        '静まった','弱まった','制限された','ぼやけた','減速した',
+        '減少した','砕けた','薄まった','緩んだ','侵食された','鈍らせた'
+      ];
+
+      let html = cell.innerHTML;
+      debuffKeywords.forEach(keyword => {
+        const re = new RegExp(escapeRegExp(keyword), 'g');
+        html = html.replace(re, `<span style="color:red;">${keyword}</span>`);
+      });
+      cell.innerHTML = html;
+    }
+
+    function colorizeEquipElementCell(cell) {
+      if (!cell) return;
+
+      const raw = (cell.textContent || '').trim();
+      const elem = (raw.match(/[^\d]+$/) || ['なし'])[0].trim();
+      cell.style.backgroundColor = elemColors[elem] || '';
+      cell.style.color = '#000';
+    }
+
+    function getCellElementOrderValue(row, cellIndex) {
+      const cell = row?.cells?.[cellIndex];
+      if (!cell) return Number.MAX_SAFE_INTEGER;
+
+      const raw = (cell.textContent || '').trim();
+      const elem = (raw.match(/[^\d]+$/) || ['なし'])[0].trim();
+      return Object.prototype.hasOwnProperty.call(elemOrder, elem)
+        ? elemOrder[elem]
+        : Number.MAX_SAFE_INTEGER;
+    }
+
+    function getSortableColumnsForTable(table) {
+      if (!table) return {};
+
+      if (table.id === 'weaponTable') {
+        return {
+          3: { kind: 'number', label: 'ATK' },
+          4: { kind: 'number', label: 'SPD' },
+          5: { kind: 'percent', label: 'CRIT' },
+          6: { kind: 'elem',   label: 'ELEM' },
+          7: { kind: 'mod',    label: 'MOD' }
+        };
+      }
+
+      if (table.id === 'armorTable') {
+        return {
+          3: { kind: 'number', label: 'DEF' },
+          4: { kind: 'number', label: 'WT' },
+          5: { kind: 'percent', label: 'CRIT' },
+          6: { kind: 'elem',   label: 'ELEM' },
+          7: { kind: 'mod',    label: 'MOD' }
+        };
+      }
+
+      return {};
+    }
+
+    function sortTable(table, mode = currentEquipSort){
+      if (!table) return;
+
       const tbody = table.querySelector('tbody');
+      if (!tbody) return;
+
       const rows = Array.from(tbody.rows);
+      const useModSort = mode === 'mod' && isModSortableTable(table);
+      const headerMode = mode === 'header'
+        ? {
+            kind: table.dataset.sortKind || '',
+            columnIndex: Number(table.dataset.sortColumnIndex),
+            direction: table.dataset.sortDirection || ''
+          }
+        : null;
+
       rows.sort((a,b) => {
-        const nameA = a.cells[0].textContent;
-        const nameB = b.cells[0].textContent;
-        return nameA.localeCompare(nameB);
-      })
+        if (
+          headerMode &&
+          headerMode.kind &&
+          Number.isFinite(headerMode.columnIndex) &&
+          headerMode.direction
+        ) {
+          let valueA;
+          let valueB;
+
+          if (headerMode.kind === 'elem') {
+            valueA = getCellElementOrderValue(a, headerMode.columnIndex);
+            valueB = getCellElementOrderValue(b, headerMode.columnIndex);
+          } else {
+            valueA = getCellNumberValue(a, headerMode.columnIndex);
+            valueB = getCellNumberValue(b, headerMode.columnIndex);
+          }
+
+          if (valueA !== valueB) {
+            return headerMode.direction === 'asc'
+              ? valueA - valueB
+              : valueB - valueA;
+          }
+        } else if (useModSort) {
+          const modA = getEquipModValue(a);
+          const modB = getEquipModValue(b);
+          if (modA !== modB) return modB - modA;
+        }
+
+        const nameA = a.cells[0].textContent.trim();
+        const nameB = b.cells[0].textContent.trim();
+        return nameA.localeCompare(nameB, 'ja', { numeric: true });
+      });
+
       rows.forEach(row => tbody.appendChild(row));
+    }
+
+    function applyEquipSort() {
+      [weaponTable, armorTable, necklaceTable].forEach(table => {
+        if (!table) return;
+        sortTable(table, currentEquipSort);
+      });
+    }
+
+    function sanitizeImportedEquipTable(table, index) {
+      if (!table) return;
+
+      table.querySelectorAll('[onclick]').forEach(el => {
+        el.removeAttribute('onclick');
+      });
+
+      const headerRows = table.tHead
+        ? Array.from(table.tHead.rows)
+        : (table.rows[0] ? [table.rows[0]] : []);
+
+      headerRows.forEach(row => {
+        if (row.cells[1]) row.cells[1].style.display = 'none';
+        if (row.cells[2]) row.cells[2].style.display = 'none';
+
+        if (index !== 2) {
+          if (row.cells[9]) row.cells[9].style.display = 'none';
+        } else {
+          if (row.cells[5]) row.cells[5].style.display = 'none';
+        }
+      });
+    }
+
+    function bindEquipHeaderSort(table) {
+      if (!table || table.dataset.headerSortBound === '1') return;
+
+      const headerRow = table.querySelector('thead tr') || table.querySelector('tr');
+      if (!headerRow) return;
+
+      const sortableColumns = getSortableColumnsForTable(table);
+
+      Object.entries(sortableColumns).forEach(([cellIndexText, meta]) => {
+        const cellIndex = Number(cellIndexText);
+        const cell = headerRow.cells?.[cellIndex];
+        if (!cell) return;
+
+        cell.style.cursor = 'pointer';
+        cell.title = `${meta.label}でソート`;
+
+        cell.addEventListener('click', () => {
+          const prevIndex = Number(table.dataset.sortColumnIndex ?? -1);
+          const prevDirection = table.dataset.sortDirection || '';
+
+          let nextDirection = meta.kind === 'elem' ? 'asc' : 'desc';
+          if (prevIndex === cellIndex) {
+            nextDirection = prevDirection === 'desc' ? 'asc' : 'desc';
+          }
+
+          table.dataset.sortKind = meta.kind;
+          table.dataset.sortColumnIndex = String(cellIndex);
+          table.dataset.sortDirection = nextDirection;
+
+          currentEquipSort = 'header';
+          sortModeButton.textContent = '列順';
+          sortTable(table, 'header');
+        });
+      });
+
+      table.dataset.headerSortBound = '1';
     }
 
     async function showEquipList(){
@@ -1836,10 +2116,12 @@
           if(!weaponTable || !armorTable || !necklaceTable) throw new Error('failed to find weapon/armor table');
 
           [weaponTable,armorTable,necklaceTable].forEach((table,index) => {
+            sanitizeImportedEquipTable(table, index);
             sortTable(table);
             table.style.color = '#000';
             table.style.margin = '0';
-            const rows = table.querySelectorAll('tr');
+
+            const rows = table.querySelectorAll('tbody > tr');
             rows.forEach(row => {
               const id = row.cells[1].querySelector('a')?.href.replace('https://donguri.5ch.io/equip/','');
               row.cells[0].style.textDecorationLine = 'underline';
@@ -1847,16 +2129,20 @@
               row.cells[0].dataset.id = id;
               row.cells[1].style.display = 'none';
               row.cells[2].style.display = 'none';
+
               if(index !== 2) {
+                colorizeEquipElementCell(row.cells[6]);
                 const modLink = row.cells[7].querySelector('a');
                 if(modLink) modLink.target = '_blank';
                 row.cells[9].style.display = 'none';
               } else if (index === 2) {
+                colorizeNecklaceDebuffCell(row.cells[3]);
                 row.cells[3].style.whiteSpace = 'nowrap';
                 const ul = row.cells[3].querySelector('ul');
                 if(ul) ul.style.padding = '0';
                 row.cells[5].style.display = 'none';
               }
+
               row.cells[0].addEventListener('click', (event)=>{
                 if(!event.target.closest('td')) return;
                 const target = event.target.closest('td');
@@ -1866,9 +2152,11 @@
                 selectedEquips.id[index] = id;
                 selectedEquips.rank[index] = rank;
                 document.querySelector('.equip-preset-selected').textContent = selectedEquips.id;
-              })
-            })
-          })
+              });
+            });
+
+            bindEquipHeaderSort(table);
+          });
           tableContainer.append(weaponTable, armorTable, necklaceTable);
         } catch(e) {
           console.error(e);
@@ -1876,56 +2164,146 @@
         }
       }
 
+      sortModeButton.textContent =
+        currentEquipSort === 'mod' ? 'mod順' :
+        currentEquipSort === 'header' ? '列順' :
+        '名前順';
+
       equipSwitchButton.textContent = '?武器';
       weaponTable.style.display = '';
       armorTable.style.display = 'none';
       necklaceTable.style.display = 'none';
+      applyEquipSort();
       filterItemsByRank(rankSelect.value);
       document.querySelector('.equip-preset-selected').textContent = '';
       equipField.showModal();
     }
+
     function filterItemsByRank (rank){
       [weaponTable, armorTable].forEach(table => {
         table.querySelectorAll('tbody > tr').forEach(row => {
           const itemName = row.cells[0].textContent;
           row.style.display = itemName.includes(`[${rank}]`) ? null : 'none';
-        })
-      })
+        });
+      });
     }
+    function getPresetPrefixOrderTools() {
+      const presetPrefixOrder = ['N', 'R', 'SR', 'SSR', 'UR', 'Ne', 'Re', 'SRe', 'SSRe', 'URe'];
+      const prefixOrderMap = Object.fromEntries(
+        presetPrefixOrder.map((prefix, index) => [prefix, index])
+      );
+      const prefixMatchRegex = /^(SSRe|SRe|URe|SSR|UR|SR|Ne|Re|N|R)/;
+
+      function getPresetPrefix(name) {
+        const match = String(name || '').match(prefixMatchRegex);
+        return match ? match[1] : null;
+      }
+
+      return { prefixOrderMap, getPresetPrefix };
+    }
+
+    function sortEquipPresetsObject(equipPresets) {
+      const source = equipPresets && typeof equipPresets === 'object' ? equipPresets : {};
+      const { prefixOrderMap, getPresetPrefix } = getPresetPrefixOrderTools();
+
+      const sortedEntries = Object.entries(source).sort(([keyA], [keyB]) => {
+        const prefixA = getPresetPrefix(keyA);
+        const prefixB = getPresetPrefix(keyB);
+
+        const orderA = prefixA != null ? prefixOrderMap[prefixA] : Number.MAX_SAFE_INTEGER;
+        const orderB = prefixB != null ? prefixOrderMap[prefixB] : Number.MAX_SAFE_INTEGER;
+
+        if (orderA !== orderB) return orderA - orderB;
+        return keyA.localeCompare(keyB, 'ja', { numeric: true });
+      });
+
+      return Object.fromEntries(sortedEntries);
+    }
+
+    function applyNecklaceToAllPresets(necklaceId, necklaceRank) {
+      let equipPresets = JSON.parse(localStorage.getItem('equipPresets')) || {};
+      const presetNames = Object.keys(equipPresets);
+
+      if (presetNames.length === 0) return 0;
+
+      presetNames.forEach((presetName) => {
+        const preset = equipPresets[presetName] || {};
+        const ids = Array.isArray(preset.id) ? [...preset.id] : [];
+        const ranks = Array.isArray(preset.rank) ? [...preset.rank] : [];
+
+        ids[2] = necklaceId ?? null;
+        ranks[2] = necklaceRank ?? null;
+
+        equipPresets[presetName] = {
+          ...preset,
+          id: ids,
+          rank: ranks
+        };
+      });
+
+      equipPresets = sortEquipPresetsObject(equipPresets);
+      localStorage.setItem('equipPresets', JSON.stringify(equipPresets));
+      showEquipPreset();
+      return presetNames.length;
+    }
+
     function saveEquipPreset(name, obj){
       let equipPresets = JSON.parse(localStorage.getItem('equipPresets')) || {};
       equipPresets[name] = obj;
+      equipPresets = sortEquipPresetsObject(equipPresets);
       localStorage.setItem('equipPresets', JSON.stringify(equipPresets));
       showEquipPreset();
     }
+
     function showEquipPreset(){
       let equipPresets = JSON.parse(localStorage.getItem('equipPresets')) || {};
+
+      const { prefixOrderMap, getPresetPrefix } = getPresetPrefixOrderTools();
+
       const liTemplate = document.createElement('li');
       liTemplate.style.display = 'flex';
       liTemplate.style.justifyContent = 'space-between';
       liTemplate.style.borderBottom = 'solid 1px #000';
       liTemplate.style.color = '#428bca';
       liTemplate.style.cursor = 'pointer';
+
       const span1 = document.createElement('span');
       span1.style.flexGrow = '1';
       span1.style.whiteSpace = 'nowrap';
       span1.style.overflow = 'hidden';
+
       const span2 = document.createElement('span');
       span2.style.whiteSpace = 'nowrap';
       span2.style.textAlign = 'right';
       span2.style.overflow = 'hidden';
       span2.style.fontSize = '90%';
+
       liTemplate.append(span1,span2);
+
       const fragment = document.createDocumentFragment();
-      Object.entries(equipPresets).forEach(([key, value])=>{
+
+      const sortedEntries = Object.entries(equipPresets).sort(([keyA], [keyB]) => {
+        const prefixA = getPresetPrefix(keyA);
+        const prefixB = getPresetPrefix(keyB);
+
+        const orderA = prefixA != null ? prefixOrderMap[prefixA] : Number.MAX_SAFE_INTEGER;
+        const orderB = prefixB != null ? prefixOrderMap[prefixB] : Number.MAX_SAFE_INTEGER;
+
+        if (orderA !== orderB) return orderA - orderB;
+        return keyA.localeCompare(keyB, 'ja', { numeric: true });
+      });
+
+      sortedEntries.forEach(([key, value])=>{
         const li = liTemplate.cloneNode(true);
         const span = li.querySelectorAll('span');
         span[0].textContent = key;
         span[1].textContent = value.rank.join(',');
         fragment.append(li);
-      })
+      });
+
       presetList.replaceChildren(fragment);
     }
+
     function importEquipPresets(text){
       try{
         if(text.trim() === ''){
@@ -1934,7 +2312,8 @@
           return true;
         }
         const json = JSON.parse(text);
-        localStorage.setItem('equipPresets', JSON.stringify(json));
+        const sortedJson = sortEquipPresetsObject(json);
+        localStorage.setItem('equipPresets', JSON.stringify(sortedJson));
         showEquipPreset();
         return true;
       } catch (e) {
@@ -1943,15 +2322,13 @@
         }
         return false;
       }
-
     }
-
 
     function removePresetItems(presetName) {
       const userConfirmed = confirm(presetName + ' を削除しますか？');
       if(!userConfirmed) return;
       const stat = document.querySelector('.equip-preset-stat');
-      const equipPresets = JSON.parse(localStorage.getItem('equipPresets')) || {};
+      let equipPresets = JSON.parse(localStorage.getItem('equipPresets')) || {};
       const autoEquipItems = JSON.parse(localStorage.getItem('autoEquipItems')) || {};
       const autoEquipItemsAutojoin = JSON.parse(localStorage.getItem('autoEquipItemsAutojoin')) || {};
 
@@ -1970,6 +2347,7 @@
           autoEquipItemsAutojoin[key] = autoEquipItemsAutojoin[key].filter(v => v !== presetName);
         }
       }
+      equipPresets = sortEquipPresetsObject(equipPresets);
       localStorage.setItem('equipPresets', JSON.stringify(equipPresets));
       localStorage.setItem('autoEquipItems', JSON.stringify(autoEquipItems));
       localStorage.setItem('autoEquipItemsAutojoin', JSON.stringify(autoEquipItemsAutojoin));
