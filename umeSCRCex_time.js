@@ -2061,7 +2061,10 @@
         }
       }
 
-      sortModeButton.textContent = currentEquipSort === 'mod' ? 'mod順' : '名前順';
+      sortModeButton.textContent =
+        currentEquipSort === 'mod' ? 'mod順' :
+        currentEquipSort === 'header' ? '列順' :
+        '名前順';
       equipSwitchButton.textContent = '?武器';
       weaponTable.style.display = '';
       armorTable.style.display = 'none';
