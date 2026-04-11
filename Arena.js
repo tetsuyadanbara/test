@@ -608,12 +608,45 @@
     return ordered;
   }
 
+  function getPresetPrefixOrderTools() {
+    const presetPrefixOrder = ['N', 'R', 'SR', 'SSR', 'UR', 'Ne', 'Re', 'SRe', 'SSRe', 'URe'];
+    const prefixOrderMap = Object.fromEntries(
+      presetPrefixOrder.map((prefix, index) => [prefix, index])
+    );
+    const prefixMatchRegex = /^(SSRe|SRe|URe|SSR|UR|SR|Ne|Re|N|R)/;
+
+    function getPresetPrefix(name) {
+      const match = String(name || '').match(prefixMatchRegex);
+      return match ? match[1] : null;
+    }
+
+    return { prefixOrderMap, getPresetPrefix };
+  }
+
+  function sortEquipPresetsObject(source) {
+    const src = (source && typeof source === 'object') ? source : {};
+    const { prefixOrderMap, getPresetPrefix } = getPresetPrefixOrderTools();
+
+    const sortedEntries = Object.entries(src).sort(([keyA], [keyB]) => {
+      const prefixA = getPresetPrefix(keyA);
+      const prefixB = getPresetPrefix(keyB);
+
+      const orderA = prefixA != null ? prefixOrderMap[prefixA] : Number.MAX_SAFE_INTEGER;
+      const orderB = prefixB != null ? prefixOrderMap[prefixB] : Number.MAX_SAFE_INTEGER;
+
+      if (orderA !== orderB) return orderA - orderB;
+      return keyA.localeCompare(keyB, 'ja', { numeric: true });
+    });
+
+    return Object.fromEntries(sortedEntries);
+  }
+
   function getEquipPresetsStore() {
     return JSON.parse(localStorage.getItem('equipPresets') || '{}');
   }
 
   function getEquipPresetEntries() {
-    return Object.entries(getEquipPresetsStore());
+    return Object.entries(sortEquipPresetsObject(getEquipPresetsStore()));
   }
 
   function getEquipPresetForRegion(region, settings = loadLocalSettings()) {
@@ -632,33 +665,44 @@
     const presetName = norm(name);
     if (!presetName) return false;
 
-    const equipPresets = getEquipPresetsStore();
+    let equipPresets = getEquipPresetsStore();
     equipPresets[presetName] = {
       id: Array.isArray(obj.id) ? [...obj.id] : [],
       rank: Array.isArray(obj.rank) ? [...obj.rank] : []
     };
+    equipPresets = sortEquipPresetsObject(equipPresets);
     localStorage.setItem('equipPresets', JSON.stringify(equipPresets));
     return true;
   }
 
+  function applyNecklaceToAllPresets(necklaceId, necklaceRank) {
+    let equipPresets = getEquipPresetsStore();
+    const presetNames = Object.keys(equipPresets);
+
+    if (presetNames.length === 0) return 0;
+
+    presetNames.forEach((presetName) => {
+      const preset = equipPresets[presetName] || {};
+      const ids = Array.isArray(preset.id) ? [...preset.id] : [];
+      const ranks = Array.isArray(preset.rank) ? [...preset.rank] : [];
+
+      ids[2] = necklaceId ?? null;
+      ranks[2] = necklaceRank ?? null;
+
+      equipPresets[presetName] = {
+        ...preset,
+        id: ids,
+        rank: ranks
+      };
+    });
+
+    equipPresets = sortEquipPresetsObject(equipPresets);
+    localStorage.setItem('equipPresets', JSON.stringify(equipPresets));
+    return presetNames.length;
+  }
+
   function normalizeEquipPresetsForBackup(source) {
-    const src = (source && typeof source === 'object') ? source : {};
-    const ordered = {};
-    const preferredOrder = ['N', 'R', 'SR', 'SSR', 'UR'];
-
-    preferredOrder.forEach(key => {
-      if (Object.prototype.hasOwnProperty.call(src, key)) {
-        ordered[key] = src[key];
-      }
-    });
-
-    Object.keys(src).forEach(key => {
-      if (!Object.prototype.hasOwnProperty.call(ordered, key)) {
-        ordered[key] = src[key];
-      }
-    });
-
-    return ordered;
+    return sortEquipPresetsObject(source);
   }
 
   function exportEquipPresetsText() {
@@ -691,7 +735,7 @@
       }
 
       const parsed = JSON.parse(raw);
-      const normalized = normalizeEquipPresetsForBackup(parsed);
+      const normalized = sortEquipPresetsObject(parsed);
       localStorage.setItem('equipPresets', JSON.stringify(normalized));
       return { ok: true, reason: '装備プリセットを復元しました' };
     } catch (error) {
@@ -724,6 +768,26 @@
     }
 
     return -1;
+  }
+
+  function escapeRegExp(text) {
+    return String(text).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  }
+
+  function colorizeNecklaceDebuffCell(cell) {
+    if (!cell) return;
+
+    const debuffKeywords = [
+      '静まった','弱まった','制限された','ぼやけた','減速した',
+      '減少した','砕けた','薄まった','緩んだ','侵食された','鈍らせた'
+    ];
+
+    let html = cell.innerHTML;
+    debuffKeywords.forEach(keyword => {
+      const re = new RegExp(escapeRegExp(keyword), 'g');
+      html = html.replace(re, `<span style="color:red;">${keyword}</span>`);
+    });
+    cell.innerHTML = html;
   }
 
   function getEquipSortMode(tabName = 'weapon') {
@@ -895,6 +959,10 @@
             if (index !== 2) {
               if (row.cells[9]) row.cells[9].style.display = 'none';
             } else {
+              colorizeNecklaceDebuffCell(row.cells[3]);
+              if (row.cells[3]) row.cells[3].style.whiteSpace = 'nowrap';
+              const ul = row.cells[3]?.querySelector('ul');
+              if (ul) ul.style.padding = '0';
               if (row.cells[5]) row.cells[5].style.display = 'none';
             }
 
@@ -1453,6 +1521,7 @@
         </select>
         <input type="text" class="dar-equip-preset-name" placeholder="プリセット名" style="width:320px; height:46px; font-size:24px;">
         <button type="button" class="dar-equip-save" style="height:52px; font-size:24px;">保存</button>
+        <button type="button" class="dar-equip-apply-necklace-all" style="height:52px; font-size:24px;">ネックレス変更</button>
         <button type="button" class="dar-equip-done" style="height:52px; font-size:24px;">閉じる</button>
         <p class="dar-equip-selected" style="margin:10px 0 0 0; min-height:36px; font-size:24px;"></p>
         <div class="dar-equip-save-status" style="min-height:28px; color:#444; font-size:21px;"></div>
@@ -1716,6 +1785,25 @@
       if (presetNameInput) presetNameInput.value = '';
       darSelectedEquips = { id: [], rank: [] };
       if (selectedLabel) selectedLabel.textContent = '';
+    });
+
+    panel.querySelector('.dar-equip-apply-necklace-all')?.addEventListener('click', async () => {
+      const selectedLabel = panel.querySelector('.dar-equip-selected');
+      const saveStatus = panel.querySelector('.dar-equip-save-status');
+
+      if (!darSelectedEquips.id[2] || !darSelectedEquips.rank[2]) {
+        if (saveStatus) saveStatus.textContent = '先にネックレスタブで反映したいネックレスを選択してください';
+        return;
+      }
+
+      const ok = confirm('選択中のネックレスを全ての装備プリセットへ反映しますか？');
+      if (!ok) return;
+
+      const updatedCount = applyNecklaceToAllPresets(darSelectedEquips.id[2], darSelectedEquips.rank[2]);
+      await refreshPanel(lastArenaRows, null, await loadState(), loadLocalSettings());
+
+      if (saveStatus) saveStatus.textContent = `ネックレスを ${updatedCount} 件のプリセットへ反映しました`;
+      if (selectedLabel) selectedLabel.textContent = `ネックレス反映: ${darSelectedEquips.id[2]}`;
     });
 
     panel.querySelector('.dar-save')?.addEventListener('click', async () => {
