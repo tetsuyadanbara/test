@@ -294,67 +294,33 @@
         closeButton.addEventListener('click',()=>{
           autoJoinSettingsDialog.close();
           startAutoJoin();
-        });
+        })
 
-        const inputConfigs = {
-          teamName: { label: 'チーム名', type: 'text', defaultValue: '' },
-          teamColor: { label: 'チームカラー', type: 'text', defaultValue: '' },
-
-          rbStage1Progress: { label: '第1戦 0～16%', type: 'number', defaultValue: '2', min: '0', max: '16' },
-          rbStage1Jitter:   { label: '第1戦 揺らぎ±', type: 'number', defaultValue: '1', min: '0', max: '16' },
-
-          rbStage2Progress: { label: '第2戦 17～33%', type: 'number', defaultValue: '18', min: '17', max: '33' },
-          rbStage2Jitter:   { label: '第2戦 揺らぎ±', type: 'number', defaultValue: '1', min: '0', max: '16' },
-
-          rbStage3Progress: { label: '第3戦 34～50%', type: 'number', defaultValue: '35', min: '34', max: '50' },
-          rbStage3Jitter:   { label: '第3戦 揺らぎ±', type: 'number', defaultValue: '1', min: '0', max: '16' },
-
-          rbStage4Progress: { label: '第4戦 51～66%', type: 'number', defaultValue: '52', min: '51', max: '66' },
-          rbStage4Jitter:   { label: '第4戦 揺らぎ±', type: 'number', defaultValue: '1', min: '0', max: '16' },
-
-          rbStage5Progress: { label: '第5戦 67～83%', type: 'number', defaultValue: '68', min: '67', max: '83' },
-          rbStage5Jitter:   { label: '第5戦 揺らぎ±', type: 'number', defaultValue: '1', min: '0', max: '16' },
-
-          rbStage6Progress: { label: '第6戦 84～100%', type: 'number', defaultValue: '85', min: '84', max: '100' },
-          rbStage6Jitter:   { label: '第6戦 揺らぎ±', type: 'number', defaultValue: '1', min: '0', max: '16' }
-        };
-
-        for (const [key, config] of Object.entries(inputConfigs)) {
+        const inputs = {
+          teamName: [input.cloneNode(),'チーム名'],
+          teamColor: [input.cloneNode(),'チームカラー']
+        }
+        for (const key of Object.keys(inputs)) {
           const label_ = label.cloneNode();
           const span_ = span.cloneNode();
           const span2_ = span2.cloneNode();
-          const input_ = input.cloneNode();
-
-          input_.type = config.type;
-          if (config.min != null) input_.min = config.min;
-          if (config.max != null) input_.max = config.max;
-          input_.value = settings[key] ?? config.defaultValue;
-
-          span_.textContent = config.label;
-          span2_.append(input_);
+          span_.textContent = inputs[key][1];
+          span2_.append(inputs[key][0]);
           label_.append(span_, span2_);
           div.append(label_);
 
-          input_.addEventListener('input', ()=>{
-            if (key === 'teamColor') {
-              input_.value = input_.value.replace(/[^0-9a-fA-F]/g,'');
-            } else if (config.type === 'number') {
-              input_.value = input_.value.replace(/[^\d-]/g,'');
-            }
-            settings[key] = input_.value;
-            localStorage.setItem('aat_settings', JSON.stringify(settings));
-          });
+          inputs[key][0].value = settings[key] || '';
+          inputs[key][0].addEventListener('input', ()=>{
+            inputs.teamColor[0].value = inputs.teamColor[0].value.replace(/[^0-9a-fA-F]/g,'');
+            settings[key] = inputs[key][0].value;
+            localStorage.setItem('aat_settings',JSON.stringify(settings));
+          })
         }
 
         const description = document.createElement('p');
         description.style.fontSize = '90%';
-        description.innerText =
-          'RedBlue は各戦ごとに「どこで撃つか(%)」と「揺らぎ±」を設定できます。\n' +
-          '第1戦: 0～16 / 第2戦: 17～33 / 第3戦: 34～50 / 第4戦: 51～66 / 第5戦: 67～83 / 第6戦: 84～100\n' +
-          'チームカラーは小文字/大文字も正確に入力してください。（自陣の隣接タイル取得に必要）\n' +
-          'あらかじめ装備パネルからエリートも含め各ランクの装備を登録してください。（所持していない場合は除く）\n' +
-          '※装備を登録していないと成功率が低下します。';
-        div.append(description, closeButton);
+        description.innerText = 'チームカラーは小文字/大文字も正確に入力してください。（自陣の隣接タイル取得に必要）\nあらかじめ装備パネルからエリートも含め各ランクの装備を登録してください。（所持していない場合は除く）\n※装備を登録していないと成功率が低下します。'
+        div.append(description,closeButton);
         autoJoinSettingsDialog.append(div);
       })();
 
@@ -3254,77 +3220,13 @@
   let autoJoinIntervalId;
   let isAutoJoinRunning = false;
   const sleep = s => new Promise(r=>setTimeout(r,s));
-
-  const RB_STAGE_CONFIGS = [
-    { key: 'rbStage1Progress', jitterKey: 'rbStage1Jitter', min: 0,  max: 16,  defaultProgress: 2,  defaultJitter: 1, label: '第1戦' },
-    { key: 'rbStage2Progress', jitterKey: 'rbStage2Jitter', min: 17, max: 33,  defaultProgress: 18, defaultJitter: 1, label: '第2戦' },
-    { key: 'rbStage3Progress', jitterKey: 'rbStage3Jitter', min: 34, max: 50,  defaultProgress: 35, defaultJitter: 1, label: '第3戦' },
-    { key: 'rbStage4Progress', jitterKey: 'rbStage4Jitter', min: 51, max: 66,  defaultProgress: 52, defaultJitter: 1, label: '第4戦' },
-    { key: 'rbStage5Progress', jitterKey: 'rbStage5Jitter', min: 67, max: 83,  defaultProgress: 68, defaultJitter: 1, label: '第5戦' },
-    { key: 'rbStage6Progress', jitterKey: 'rbStage6Jitter', min: 84, max: 100, defaultProgress: 85, defaultJitter: 1, label: '第6戦' }
-  ];
-
-  function clampNumber(value, min, max, fallback) {
-    const n = Number(value);
-    if (!Number.isFinite(n)) return fallback;
-    return Math.max(min, Math.min(max, Math.round(n)));
-  }
-
-  function getRBStageIndexByProgress(progress) {
-    const p = Number(progress);
-    if (p <= 16) return 0;
-    if (p <= 33) return 1;
-    if (p <= 50) return 2;
-    if (p <= 66) return 3;
-    if (p <= 83) return 4;
-    return 5;
-  }
-
-  function getRBStageSetting(stageIndex) {
-    const cfg = RB_STAGE_CONFIGS[stageIndex];
-    return {
-      ...cfg,
-      progress: clampNumber(settings[cfg.key], cfg.min, cfg.max, cfg.defaultProgress),
-      jitter: clampNumber(settings[cfg.jitterKey], 0, 16, cfg.defaultJitter)
-    };
-  }
-
-  function getRBStageTargetProgress(stageIndex, withJitter = true) {
-    const cfg = getRBStageSetting(stageIndex);
-    if (!withJitter || cfg.jitter <= 0) return cfg.progress;
-
-    const delta = Math.floor(Math.random() * (cfg.jitter * 2 + 1)) - cfg.jitter;
-    return clampNumber(cfg.progress + delta, cfg.min, cfg.max, cfg.progress);
-  }
-
-  function getRBNextStagePlan(currentProgress, withJitter = true) {
-    const currentStageIndex = getRBStageIndexByProgress(currentProgress);
-    const nextStageIndex = (currentStageIndex + 1) % RB_STAGE_CONFIGS.length;
-    const cfg = getRBStageSetting(nextStageIndex);
-    const nextProgress = getRBStageTargetProgress(nextStageIndex, withJitter);
-
-    return {
-      nextProgress,
-      jitter: cfg.jitter,
-      label: `→ ${nextProgress}±${cfg.jitter}%`,
-      stageLabel: cfg.label,
-      stageIndex: nextStageIndex
-    };
-  }
-
-  function getRBNextStageProjectedProgress(currentProgress) {
-    const currentStageIndex = getRBStageIndexByProgress(currentProgress);
-    const nextStageIndex = (currentStageIndex + 1) % RB_STAGE_CONFIGS.length;
-    const cfg = getRBStageSetting(nextStageIndex);
-    let projected = cfg.progress;
-
-    if (projected <= currentProgress) {
-      projected += 100;
-    }
-    return projected;
-  }
-
   async function autoJoin() {
+    const dialog = document.querySelector('.auto-join');
+
+    const logArea = dialog.querySelector('.auto-join-log');
+    const headers = { 'Content-Type': 'application/x-www-form-urlencoded' };
+    let teamColor = settings.teamColor;
+    let teamName = settings.teamName;
 
     function logMessage(region, message, next) {
       const date = new Date();
@@ -3539,9 +3441,20 @@
             }
 
             if (success) {
-              const rbNext = getRBNextStagePlan(currentProgress, true);
-              nextProgress = rbNext.nextProgress;
-              next = rbNext.label;
+              if (currentProgress < 16) {
+                nextProgress = Math.floor(Math.random() * 4) + 18;//23～29±1
+               } else if (currentProgress < 33) {
+                nextProgress = Math.floor(Math.random() * 4) + 35;//40～46±1
+               } else if (currentProgress < 50) {
+                nextProgress = Math.floor(Math.random() * 4) + 52;//56～62±1
+               } else if (currentProgress < 66) {
+                nextProgress = Math.floor(Math.random() * 4) + 68;//73～79±1
+               } else if (currentProgress < 83) {
+                nextProgress = Math.floor(Math.random() * 4) + 85;//90～96±1
+               } else {
+                nextProgress = Math.floor(Math.random() * 4) + 2;//6～12±1
+               }
+              next = `→ ${nextProgress}±1%`;
               isAutoJoinRunning = false;
             } else if (processType === 'return') {
               next = '';
@@ -3602,9 +3515,20 @@
           }
         }
         if (!success && regions[cellType].length === 0) {
-          const rbNext = getRBNextStagePlan(currentProgress, true);
-          nextProgress = rbNext.nextProgress;
-          const next = rbNext.label;
+              if (currentProgress < 16) {
+                nextProgress = Math.floor(Math.random() * 4) + 18;//23～29±1
+               } else if (currentProgress < 33) {
+                nextProgress = Math.floor(Math.random() * 4) + 35;//40～46±1
+               } else if (currentProgress < 50) {
+                nextProgress = Math.floor(Math.random() * 4) + 52;//56～62±1
+               } else if (currentProgress < 66) {
+                nextProgress = Math.floor(Math.random() * 4) + 68;//73～79±1
+               } else if (currentProgress < 83) {
+                nextProgress = Math.floor(Math.random() * 4) + 85;//90～96±1
+               } else {
+                nextProgress = Math.floor(Math.random() * 4) + 2;//6～12±1
+               }
+          const next = `→ ${nextProgress}±1%`;
           isAutoJoinRunning = false;
           logMessage(null, '攻撃可能なタイルが見つかりませんでした。', next);
           return;
@@ -3849,8 +3773,21 @@
           margin = 10;
         } else {
           if (location.href.includes('/teambattle?m=rb')) {
-             const projectedTarget = getRBNextStageProjectedProgress(currentProgress);
-             totalSec = (projectedTarget - currentProgress) * 600 / 16.6;
+             if (currentProgress <= 16) {
+               totalSec = (18 - currentProgress) * 600 / 16.6;
+             } else if (currentProgress <= 33) {
+               totalSec = (35 - currentProgress) * 600 / 16.6;
+             } else if (currentProgress <= 50) {
+               totalSec = (52 - currentProgress) * 600 / 16.6;
+             } else if (currentProgress <= 66) {
+               totalSec = (68 - currentProgress) * 600 / 16.6;
+             } else if (currentProgress <= 83) {
+               totalSec = (85 - currentProgress) * 600 / 16.6;
+             } else if (currentProgress <= 100) {
+               totalSec = (102 - currentProgress) * 600 / 16.6;
+             } else {
+               totalSec = 20 + (2 * 600 / 16.6);
+             }
           } else {
           totalSec = (currentProgress < 50) ? (50 - currentProgress) * 36 : (100 - currentProgress) * 36 + 10;
           }
