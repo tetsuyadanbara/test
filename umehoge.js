@@ -1152,8 +1152,8 @@
       panel.style.minWidth = '20vw';
       panel.style.maxWidth = '100vw';
     } else {
-      panel.style.width = '400px';
-      panel.style.maxWidth = '75vw';
+      panel.style.width = '720px';
+      panel.style.maxWidth = '95vw';
     }
 
     if (settings.equipPanelHeight) {
@@ -1262,7 +1262,7 @@
       const addButton = button.cloneNode();
       addButton.textContent = '追加';
       addButton.addEventListener('click', async()=>{
-        selectedEquips = {id:[], rank:[]};
+        selectedEquips = createEmptySelectedEquips();
         addButton.disabled = true;
         await showEquipList();
         addButton.disabled = false;
@@ -1399,32 +1399,57 @@
 
             for (const target of [autoEquipItems, autoEquipItemsAutojoin]) {
               for (const key of Object.keys(target)) {
-                target[key] = target[key].filter(v => validKeys.has(v))
+                target[key] = target[key].filter(v => validKeys.has(v));
               }
             }
             localStorage.setItem('autoEquipItems', JSON.stringify(autoEquipItems));
             localStorage.setItem('autoEquipItemsAutojoin', JSON.stringify(autoEquipItemsAutojoin));
           }
         });
+
         const copyButton = button.cloneNode();
         copyButton.textContent = 'コピー';
-        copyButton.addEventListener('click', ()=>{navigator.clipboard.writeText(textarea.value).then(alert('copy'));})
+        copyButton.addEventListener('click', ()=>{
+          navigator.clipboard.writeText(textarea.value).then(()=>alert('copy'));
+        });
+
+        const iphoneCopyButton = button.cloneNode();
+        iphoneCopyButton.textContent = 'iPhone用';
+        iphoneCopyButton.addEventListener('click', ()=>{
+          try {
+            const json = JSON.parse(textarea.value || '{}');
+            const sortedEntries = Object.entries(sortEquipPresetsObject(json));
+
+            const oneLineText = `{ ${sortedEntries
+              .map(([key, value]) => `"${key.replace(/"/g,'\\"')}": ${JSON.stringify(value)}`)
+              .join(', ')} }`;
+
+            navigator.clipboard.writeText(oneLineText).then(()=>alert('iphone copy'));
+          } catch (e) {
+            alert('JSON書式エラー');
+          }
+        });
+
         const closeButton = button.cloneNode();
         closeButton.textContent = '閉じる';
-        closeButton.addEventListener('click', ()=>{backupDialog.close()})
-        div.append(saveButton, copyButton, closeButton);
+        closeButton.addEventListener('click', ()=>{backupDialog.close()});
+
+        div.append(saveButton, copyButton, iphoneCopyButton, closeButton);
         backupDialog.append(textarea, div);
+
         backupButton.addEventListener('click', ()=>{
           const data = localStorage.getItem('equipPresets');
           if(data) {
-            const json = JSON.parse(data);
+            const json = sortEquipPresetsObject(JSON.parse(data));
             const formattedString = Object.entries(json)
-              .map(([key, value]) => {return `  "${key.replace(/"/g,'\\"')}": ${JSON.stringify(value)}`;})
+              .map(([key, value]) => `  "${key.replace(/"/g,'\\"')}": ${JSON.stringify(value)}`)
               .join(',\n');
             textarea.value = `{\n${formattedString}\n}`;
+          } else {
+            textarea.value = '{}';
           }
           backupDialog.showModal();
-        })
+        });
       })();
 
       [removeButton].forEach(button => {
@@ -1533,6 +1558,20 @@
     p.style.margin = '2px';
     p.style.height = '28px';
 
+    const sortModeButton = button.cloneNode();
+    sortModeButton.textContent = '名前順';
+    sortModeButton.style.width = '4em';
+    sortModeButton.style.height = '42px';
+    sortModeButton.style.fontSize = '';
+    sortModeButton.addEventListener('click', ()=>{
+      currentEquipSort = currentEquipSort === 'name' ? 'mod' : 'name';
+      sortModeButton.textContent =
+        currentEquipSort === 'mod' ? 'mod順' :
+        currentEquipSort === 'header' ? '列順' :
+        '名前順';
+      applyEquipSort();
+    });
+
     const equipSwitchButton = button.cloneNode();
     equipSwitchButton.textContent = '?武器';
     equipSwitchButton.style.width = '4em';
@@ -1566,7 +1605,49 @@
     registerButton.style.height = '42px';
     registerButton.style.fontSize = '';
 
-    (()=>{
+    const applyNecklaceToAllButton = button.cloneNode();
+    applyNecklaceToAllButton.textContent = 'ネックレス変更';
+    applyNecklaceToAllButton.style.width = '9em';
+    applyNecklaceToAllButton.style.minWidth = '9em';
+    applyNecklaceToAllButton.style.height = '42px';
+    applyNecklaceToAllButton.style.fontSize = '';
+    applyNecklaceToAllButton.style.whiteSpace = 'nowrap';
+    applyNecklaceToAllButton.addEventListener('click', ()=>{
+      if (!selectedEquips.id[2] || !selectedEquips.rank[2]) {
+        alert('先にネックレス一覧で反映したいネックレスを選択してください');
+        return;
+      }
+
+      const ok = confirm('選択中のネックレスを全ての装備プリセットへ反映しますか？');
+      if (!ok) return;
+
+      const updatedCount = applyNecklaceToAllPresets(selectedEquips.id[2], selectedEquips.rank[2]);
+      document.querySelector('.equip-preset-selected').textContent = `ネックレスを ${updatedCount} 件へ反映`;
+      alert(`ネックレスを ${updatedCount} 件のプリセットへ反映しました`);
+    });
+
+    const renameAllButton = button.cloneNode();
+    renameAllButton.textContent = '現セット変換';
+    renameAllButton.style.width = '7em';
+    renameAllButton.style.fontSize = '';
+    renameAllButton.style.whiteSpace = 'nowrap';
+    renameAllButton.addEventListener('click', ()=>{
+      if (!weaponTable || !armorTable || !necklaceTable) {
+        alert('先に装備一覧を開いてください');
+        return;
+      }
+
+      const ok = confirm('保存済みプリセット名を現在の正式名称ルールへ一括変換しますか？');
+      if (!ok) return;
+
+      const result = renameAllPresetNamesToAuto();
+      alert(result.message);
+
+      const stat = document.querySelector('.equip-preset-stat');
+      if (stat) stat.textContent = result.message;
+    });
+
+    (()=> {
       const dialog = document.createElement('dialog');
       dialog.style.background = '#fff';
       dialog.style.border = 'solid 1px #000';
@@ -1576,24 +1657,45 @@
       presetNameInput.placeholder = 'プリセット名';
       presetNameInput.style.background = '#fff';
       presetNameInput.style.color = '#000';
+      presetNameInput.style.width = '70vw';
+      presetNameInput.style.minWidth = '32em';
+      presetNameInput.style.maxWidth = '88vw';
+      presetNameInput.style.boxSizing = 'border-box';
+      presetNameInput.dataset.autoName = '';
+
       const p = document.createElement('p');
       p.textContent = '同名のプリセットが存在する場合は上書きされます。';
       p.style.margin = '0';
+
       const confirmButton = button.cloneNode();
       confirmButton.textContent = '保存';
       confirmButton.addEventListener('click', ()=>{
-        if(presetNameInput.value.trim() === '') return;
-        saveEquipPreset(presetNameInput.value.substring(0,32), selectedEquips);
+        const autoName = applyAutoPresetNameToInput(presetNameInput);
+        const presetName = ((presetNameInput.value || '').trim() || autoName || '').substring(0,64);
+
+        if(presetName === '') return;
+
+        saveEquipPreset(presetName, selectedEquips);
         dialog.close();
         presetNameInput.value = '';
+        presetNameInput.dataset.autoName = '';
+        selectedEquips = createEmptySelectedEquips();
+        document.querySelector('.equip-preset-selected').textContent = '';
       })
       presetNameInput.addEventListener('keydown', (e)=>{
         if (e.key === "Enter") {
-          e.preventDefault(); // これが無いとdialogが閉じない
-          if(presetNameInput.value.trim() === '') return;
-          saveEquipPreset(presetNameInput.value.substring(0,32), selectedEquips);
+          e.preventDefault();
+          const autoName = applyAutoPresetNameToInput(presetNameInput);
+          const presetName = ((presetNameInput.value || '').trim() || autoName || '').substring(0,64);
+
+          if(presetName === '') return;
+
+          saveEquipPreset(presetName, selectedEquips);
           dialog.close();
           presetNameInput.value = '';
+          presetNameInput.dataset.autoName = '';
+          selectedEquips = createEmptySelectedEquips();
+          document.querySelector('.equip-preset-selected').textContent = '';
         }
       })
       const cancelButton = button.cloneNode();
@@ -1606,26 +1708,455 @@
           alert('装備が未選択です');
           return;
         }
+        applyAutoPresetNameToInput(presetNameInput);
         dialog.showModal();
       });
     })();
 
-    bar.append(rankSelect, equipSwitchButton, registerButton, p);
+    bar.append(rankSelect, sortModeButton, equipSwitchButton, registerButton, applyNecklaceToAllButton, renameAllButton, p);
     equipField.append(bar, tableContainer, closeButton);
     panel.append(equipField);
 
     let weaponTable, armorTable, necklaceTable;
-    let selectedEquips = {id:[], rank:[]};
+    let selectedEquips = createEmptySelectedEquips();
+    let currentEquipSort = 'name';
 
-    function sortTable(table){
+    function isModSortableTable(table) {
+      return table && (table.id === 'weaponTable' || table.id === 'armorTable');
+    }
+
+    function getCellNumberValue(row, cellIndex) {
+      const cell = row?.cells?.[cellIndex];
+      if (!cell) return Number.NEGATIVE_INFINITY;
+
+      const text = (cell.textContent || '').replace(/,/g, '');
+      const matches = text.match(/-?\d+(?:\.\d+)?/g);
+      if (!matches || matches.length === 0) return Number.NEGATIVE_INFINITY;
+
+      return Number(matches[matches.length - 1]);
+    }
+
+    function createEmptySelectedEquips() {
+      return { id: [], rank: [], name: [], elem: [], mod: [] };
+    }
+
+    function stripLeadingRankTag(text = '') {
+      return String(text || '')
+        .replace(/^\s*\[[^\]]+\]\s*/, '')
+        .replace(/\s*【[^】]+】/g, '')
+        .replace(/\s*\[(?:N|R|SR|SSR|UR|Ne|Re|SRe|SSRe|URe)\]\s*/g, '')
+        .replace(/\s*\[(?:\d+|\d+\s*of\s*\d+)\]\s*/gi, '')
+        .replace(/\s+/g, ' ')
+        .trim();
+    }
+
+    function normalizeEquipElementText(text = '') {
+      const raw = String(text || '').trim();
+      if (!raw) return 'なし';
+      const matched = (raw.match(/[^\d]+$/) || ['なし'])[0];
+      return matched.trim() || 'なし';
+    }
+
+    function getEnhancedPresetPrefix(rank = '', weaponMod = Number.NEGATIVE_INFINITY) {
+      const normalizedRank = String(rank || '').trim();
+      const mod = Number.isFinite(Number(weaponMod)) ? Number(weaponMod) : Number.NEGATIVE_INFINITY;
+
+      if (normalizedRank === 'N') return mod >= 5 ? 'Ne' : 'N';
+      if (normalizedRank === 'R') return mod >= 9 ? 'Re' : 'R';
+      if (normalizedRank === 'SR') return mod >= 13 ? 'SRe' : 'SR';
+      if (normalizedRank === 'SSR') return mod >= 17 ? 'SSRe' : 'SSR';
+      if (normalizedRank === 'UR') return mod >= 21 ? 'URe' : 'UR';
+      return normalizedRank;
+    }
+
+    function buildDisplayPresetPart(slotIndex, itemName = '', elemText = '') {
+      const cleanName = stripLeadingRankTag(itemName);
+      if (!cleanName) return '';
+
+      if (slotIndex === 2) {
+        return cleanName;
+      }
+
+      return `${cleanName}[${normalizeEquipElementText(elemText)}]`;
+    }
+
+    function buildAutoPresetNameFromSelection(source = selectedEquips) {
+      const prefix = getEnhancedPresetPrefix(source?.rank?.[0] || '', source?.mod?.[0]);
+      const weaponName = source?.name?.[0] || '';
+      const armorName = source?.name?.[1] || '';
+      const parts = [weaponName, armorName].filter(Boolean);
+
+      return `${prefix ? `[${prefix}] ` : ''}${parts.join('・')}`.trim();
+    }
+
+    function stripTrailingNecklaceSegment(name = '') {
+      const text = String(name || '').trim();
+      if (!text) return '';
+
+      const segments = text.split('・').map(s => s.trim()).filter(Boolean);
+      if (segments.length >= 3) {
+        segments.pop();
+        return segments.join('・').trim();
+      }
+
+      return text;
+    }
+
+    function applyAutoPresetNameToInput(input = equipField.querySelector('input[placeholder="プリセット名"]')) {
+      if (!input) return '';
+
+      const autoName = buildAutoPresetNameFromSelection(selectedEquips);
+      const prevAutoName = (input.dataset.autoName || '').trim();
+      const currentValue = (input.value || '').trim();
+
+      if (!currentValue || currentValue === prevAutoName) {
+        input.value = autoName;
+      }
+
+      input.dataset.autoName = autoName;
+      return autoName;
+    }
+
+    function updateSelectedEquipSummary() {
+      const label = document.querySelector('.equip-preset-selected');
+      const input = equipField.querySelector('input[placeholder="プリセット名"]');
+      const autoName = applyAutoPresetNameToInput(input);
+
+      if (label) {
+        label.textContent = autoName || selectedEquips.id.filter(Boolean).join(', ');
+      }
+    }
+
+    function buildEquipCatalog() {
+      const catalog = new Map();
+      const tables = [weaponTable, armorTable, necklaceTable];
+
+      tables.forEach((table, slotIndex) => {
+        if (!table) return;
+
+        table.querySelectorAll('tbody > tr').forEach(row => {
+          if (!row.cells?.[0]) return;
+
+          const link = row.cells[1]?.querySelector('a');
+          const id =
+            row.cells[0].dataset.id ||
+            link?.href?.replace('https://donguri.5ch.io/equip/','') ||
+            '';
+
+          if (!id) return;
+
+          const itemText = row.cells[0].textContent || '';
+          const rankMatch = itemText.match(/\[(.+?)\]/);
+          const rank = rankMatch ? rankMatch[1] : '';
+          const elem = slotIndex === 2 ? '' : normalizeEquipElementText(row.cells[6]?.textContent || '');
+          const mod = slotIndex === 0 ? getEquipModValue(row) : Number.NEGATIVE_INFINITY;
+
+          catalog.set(String(id), {
+            slotIndex,
+            rank,
+            name: buildDisplayPresetPart(slotIndex, itemText, elem),
+            mod
+          });
+        });
+      });
+
+      return catalog;
+    }
+
+    function makeUniquePresetName(baseName, usedNames) {
+      const seed = (String(baseName || '').trim() || '装備セット').substring(0, 64);
+
+      if (!usedNames.has(seed)) {
+        usedNames.add(seed);
+        return seed;
+      }
+
+      let n = 2;
+      while (usedNames.has(`${seed} (${n})`)) {
+        n++;
+      }
+
+      const uniqueName = `${seed} (${n})`.substring(0, 64);
+      usedNames.add(uniqueName);
+      return uniqueName;
+    }
+
+    function renameAllPresetNamesToAuto() {
+      const equipPresets = JSON.parse(localStorage.getItem('equipPresets')) || {};
+      const entries = Object.entries(equipPresets);
+      if (entries.length === 0) {
+        return { ok: false, message: '装備プリセットがありません' };
+      }
+
+      const catalog = buildEquipCatalog();
+      const renamed = {};
+      const nameMap = {};
+      const usedNames = new Set();
+
+      entries.forEach(([oldName, preset]) => {
+        const temp = createEmptySelectedEquips();
+        const ids = Array.isArray(preset?.id) ? preset.id.map(v => v == null ? null : String(v)) : [];
+        const ranks = Array.isArray(preset?.rank) ? [...preset.rank] : [];
+
+        ids.forEach((id, slotIndex) => {
+          if (!id) return;
+
+          const meta = catalog.get(String(id));
+          temp.id[slotIndex] = String(id);
+          temp.rank[slotIndex] = meta?.rank || ranks[slotIndex] || '';
+
+          if (meta) {
+            temp.name[slotIndex] = meta.name || '';
+            temp.mod[slotIndex] = meta.mod;
+          }
+        });
+
+        const autoName = buildAutoPresetNameFromSelection(temp);
+        const fallbackName = stripTrailingNecklaceSegment(oldName);
+        const finalName = makeUniquePresetName(autoName || fallbackName || oldName, usedNames);
+
+        renamed[finalName] = {
+          id: Array.isArray(preset?.id) ? [...preset.id] : [],
+          rank: Array.isArray(preset?.rank) ? [...preset.rank] : []
+        };
+        nameMap[oldName] = finalName;
+      });
+
+      const autoEquipItems = JSON.parse(localStorage.getItem('autoEquipItems')) || {};
+      const autoEquipItemsAutojoin = JSON.parse(localStorage.getItem('autoEquipItemsAutojoin')) || {};
+
+      const remapArray = (arr) =>
+        Array.from(new Set((Array.isArray(arr) ? arr : []).map(name => nameMap[name] || name)));
+
+      Object.keys(autoEquipItems).forEach(key => {
+        autoEquipItems[key] = remapArray(autoEquipItems[key]);
+      });
+      Object.keys(autoEquipItemsAutojoin).forEach(key => {
+        autoEquipItemsAutojoin[key] = remapArray(autoEquipItemsAutojoin[key]);
+      });
+
+      localStorage.setItem('equipPresets', JSON.stringify(sortEquipPresetsObject(renamed)));
+      localStorage.setItem('autoEquipItems', JSON.stringify(autoEquipItems));
+      localStorage.setItem('autoEquipItemsAutojoin', JSON.stringify(autoEquipItemsAutojoin));
+      showEquipPreset();
+
+      return { ok: true, message: `プリセット名を ${entries.length} 件変換しました` };
+    }
+
+    function getEquipModValue(row) {
+      return getCellNumberValue(row, 7);
+    }
+
+    const elemColors = {
+      '火':'#FFEEEE',
+      '氷':'#EEEEFF',
+      '雷':'#FFFFEE',
+      '風':'#EEFFEE',
+      '地':'#FFF0E0',
+      '水':'#EEFFFF',
+      '光':'#FFFFF0',
+      '闇':'#F0E0FF',
+      'なし':'#FFFFFF'
+    };
+
+　　const elemOrder = {
+      '風':0,
+      '火':1,
+      '水':2,
+      '雷':3,
+      '地':4,
+      '氷':5,
+      '光':6,
+      '闇':7,
+      'なし':8
+    };
+
+    function escapeRegExp(text) {
+      return String(text).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    }
+
+    function colorizeNecklaceDebuffCell(cell) {
+      if (!cell) return;
+
+      const debuffKeywords = [
+        '静まった','弱まった','制限された','ぼやけた','減速した',
+        '減少した','砕けた','薄まった','緩んだ','侵食された','鈍らせた'
+      ];
+
+      let html = cell.innerHTML;
+      debuffKeywords.forEach(keyword => {
+        const re = new RegExp(escapeRegExp(keyword), 'g');
+        html = html.replace(re, `<span style="color:red;">${keyword}</span>`);
+      });
+      cell.innerHTML = html;
+    }
+
+    function colorizeEquipElementCell(cell) {
+      if (!cell) return;
+
+      const raw = (cell.textContent || '').trim();
+      const elem = (raw.match(/[^\d]+$/) || ['なし'])[0].trim();
+      cell.style.backgroundColor = elemColors[elem] || '';
+      cell.style.color = '#000';
+    }
+
+    function getCellElementOrderValue(row, cellIndex) {
+      const cell = row?.cells?.[cellIndex];
+      if (!cell) return Number.MAX_SAFE_INTEGER;
+
+      const raw = (cell.textContent || '').trim();
+      const elem = (raw.match(/[^\d]+$/) || ['なし'])[0].trim();
+      return Object.prototype.hasOwnProperty.call(elemOrder, elem)
+        ? elemOrder[elem]
+        : Number.MAX_SAFE_INTEGER;
+    }
+
+    function getSortableColumnsForTable(table) {
+      if (!table) return {};
+
+      if (table.id === 'weaponTable') {
+        return {
+          3: { kind: 'number', label: 'ATK' },
+          4: { kind: 'number', label: 'SPD' },
+          5: { kind: 'percent', label: 'CRIT' },
+          6: { kind: 'elem',   label: 'ELEM' },
+          7: { kind: 'mod',    label: 'MOD' }
+        };
+      }
+
+      if (table.id === 'armorTable') {
+        return {
+          3: { kind: 'number', label: 'DEF' },
+          4: { kind: 'number', label: 'WT' },
+          5: { kind: 'percent', label: 'CRIT' },
+          6: { kind: 'elem',   label: 'ELEM' },
+          7: { kind: 'mod',    label: 'MOD' }
+        };
+      }
+
+      return {};
+    }
+
+    function sortTable(table, mode = currentEquipSort){
+      if (!table) return;
+
       const tbody = table.querySelector('tbody');
+      if (!tbody) return;
+
       const rows = Array.from(tbody.rows);
+      const useModSort = mode === 'mod' && isModSortableTable(table);
+
+      const headerMode = mode === 'header'
+        ? {
+            kind: table.dataset.sortKind || '',
+            columnIndex: Number(table.dataset.sortColumnIndex),
+            direction: table.dataset.sortDirection || ''
+          }
+        : null;
+
       rows.sort((a,b) => {
-        const nameA = a.cells[0].textContent;
-        const nameB = b.cells[0].textContent;
-        return nameA.localeCompare(nameB);
-      })
+        if (
+          headerMode &&
+          headerMode.kind &&
+          Number.isFinite(headerMode.columnIndex) &&
+          headerMode.direction
+        ) {
+          let valueA;
+          let valueB;
+
+          if (headerMode.kind === 'elem') {
+            valueA = getCellElementOrderValue(a, headerMode.columnIndex);
+            valueB = getCellElementOrderValue(b, headerMode.columnIndex);
+          } else {
+            valueA = getCellNumberValue(a, headerMode.columnIndex);
+            valueB = getCellNumberValue(b, headerMode.columnIndex);
+          }
+
+          if (valueA !== valueB) {
+            return headerMode.direction === 'asc'
+              ? valueA - valueB
+              : valueB - valueA;
+          }
+        } else if (useModSort) {
+          const modA = getEquipModValue(a);
+          const modB = getEquipModValue(b);
+          if (modA !== modB) return modB - modA;
+        }
+
+        const nameA = a.cells[0].textContent.trim();
+        const nameB = b.cells[0].textContent.trim();
+        return nameA.localeCompare(nameB, 'ja', { numeric: true });
+      });
+
       rows.forEach(row => tbody.appendChild(row));
+    }
+
+    function applyEquipSort() {
+      [weaponTable, armorTable, necklaceTable].forEach(table => {
+        if (!table) return;
+        sortTable(table, currentEquipSort);
+      });
+    }
+
+    function sanitizeImportedEquipTable(table, index) {
+      if (!table) return;
+
+      table.querySelectorAll('[onclick]').forEach(el => {
+        el.removeAttribute('onclick');
+      });
+
+      const headerRows = table.tHead
+        ? Array.from(table.tHead.rows)
+        : (table.rows[0] ? [table.rows[0]] : []);
+
+      headerRows.forEach(row => {
+        if (row.cells[1]) row.cells[1].style.display = 'none';
+        if (row.cells[2]) row.cells[2].style.display = 'none';
+
+        if (index !== 2) {
+          if (row.cells[9]) row.cells[9].style.display = 'none';
+        } else {
+          if (row.cells[5]) row.cells[5].style.display = 'none';
+        }
+      });
+    }
+
+    function bindEquipHeaderSort(table) {
+      if (!table || table.dataset.headerSortBound === '1') return;
+
+      const headerRow = table.querySelector('thead tr') || table.querySelector('tr');
+      if (!headerRow) return;
+
+      const sortableColumns = getSortableColumnsForTable(table);
+
+      Object.entries(sortableColumns).forEach(([cellIndexText, meta]) => {
+        const cellIndex = Number(cellIndexText);
+        const cell = headerRow.cells?.[cellIndex];
+        if (!cell) return;
+
+        cell.style.cursor = 'pointer';
+        cell.title = `${meta.label}でソート`;
+
+        cell.addEventListener('click', () => {
+          const prevIndex = Number(table.dataset.sortColumnIndex ?? -1);
+          const prevDirection = table.dataset.sortDirection || '';
+
+          let nextDirection = meta.kind === 'elem' ? 'asc' : 'desc';
+          if (prevIndex === cellIndex) {
+            nextDirection = prevDirection === 'desc' ? 'asc' : 'desc';
+          }
+
+          table.dataset.sortKind = meta.kind;
+          table.dataset.sortColumnIndex = String(cellIndex);
+          table.dataset.sortDirection = nextDirection;
+
+          currentEquipSort = 'header';
+          sortModeButton.textContent = '列順';
+          sortTable(table, 'header');
+        });
+      });
+
+      table.dataset.headerSortBound = '1';
     }
 
     async function showEquipList(){
@@ -1643,10 +2174,12 @@
           if(!weaponTable || !armorTable || !necklaceTable) throw new Error('failed to find weapon/armor table');
 
           [weaponTable,armorTable,necklaceTable].forEach((table,index) => {
+            sanitizeImportedEquipTable(table, index);
             sortTable(table);
             table.style.color = '#000';
             table.style.margin = '0';
-            const rows = table.querySelectorAll('tr');
+
+            const rows = table.querySelectorAll('tbody > tr');
             rows.forEach(row => {
               const id = row.cells[1].querySelector('a')?.href.replace('https://donguri.5ch.io/equip/','');
               row.cells[0].style.textDecorationLine = 'underline';
@@ -1654,28 +2187,43 @@
               row.cells[0].dataset.id = id;
               row.cells[1].style.display = 'none';
               row.cells[2].style.display = 'none';
+
               if(index !== 2) {
+                colorizeEquipElementCell(row.cells[6]);
                 const modLink = row.cells[7].querySelector('a');
                 if(modLink) modLink.target = '_blank';
                 row.cells[9].style.display = 'none';
               } else if (index === 2) {
+                colorizeNecklaceDebuffCell(row.cells[3]);
                 row.cells[3].style.whiteSpace = 'nowrap';
                 const ul = row.cells[3].querySelector('ul');
                 if(ul) ul.style.padding = '0';
                 row.cells[5].style.display = 'none';
               }
+
               row.cells[0].addEventListener('click', (event)=>{
                 if(!event.target.closest('td')) return;
                 const target = event.target.closest('td');
                 const itemName = target.textContent;
-                const rank = itemName.match(/\[(.+?)\]/)[1];
+                const rankMatch = itemName.match(/\[(.+?)\]/);
+                const rank = rankMatch ? rankMatch[1] : '';
                 const id = target.dataset.id;
+                const elemText = index === 2 ? '' : (row.cells[6]?.textContent || '');
+                const displayName = buildDisplayPresetPart(index, itemName, elemText);
+                const modValue = index === 0 ? getEquipModValue(row) : Number.NEGATIVE_INFINITY;
+
                 selectedEquips.id[index] = id;
                 selectedEquips.rank[index] = rank;
-                document.querySelector('.equip-preset-selected').textContent = selectedEquips.id;
-              })
-            })
-          })
+                selectedEquips.name[index] = displayName;
+                selectedEquips.elem[index] = normalizeEquipElementText(elemText);
+                selectedEquips.mod[index] = modValue;
+
+                updateSelectedEquipSummary();
+              });
+            });
+
+            bindEquipHeaderSort(table);
+          });
           tableContainer.append(weaponTable, armorTable, necklaceTable);
         } catch(e) {
           console.error(e);
@@ -1683,10 +2231,16 @@
         }
       }
 
+      sortModeButton.textContent =
+        currentEquipSort === 'mod' ? 'mod順' :
+        currentEquipSort === 'header' ? '列順' :
+        '名前順';
+
       equipSwitchButton.textContent = '?武器';
       weaponTable.style.display = '';
       armorTable.style.display = 'none';
       necklaceTable.style.display = 'none';
+      applyEquipSort();
       filterItemsByRank(rankSelect.value);
       document.querySelector('.equip-preset-selected').textContent = '';
       equipField.showModal();
@@ -1699,40 +2253,125 @@
         })
       })
     }
+    function getPresetPrefixOrderTools() {
+      const presetPrefixOrder = ['N', 'R', 'SR', 'SSR', 'UR', 'Ne', 'Re', 'SRe', 'SSRe', 'URe'];
+      const prefixOrderMap = Object.fromEntries(
+        presetPrefixOrder.map((prefix, index) => [prefix, index])
+      );
+      const prefixMatchRegex = /^\[(SSRe|SRe|URe|SSR|UR|SR|Ne|Re|N|R)\]|^(SSRe|SRe|URe|SSR|UR|SR|Ne|Re|N|R)/;
+
+      function getPresetPrefix(name) {
+        const match = String(name || '').match(prefixMatchRegex);
+        return match ? (match[1] || match[2]) : null;
+      }
+
+      return { prefixOrderMap, getPresetPrefix };
+    }
+
+    function sortEquipPresetsObject(equipPresets) {
+      const source = equipPresets && typeof equipPresets === 'object' ? equipPresets : {};
+      const { prefixOrderMap, getPresetPrefix } = getPresetPrefixOrderTools();
+
+      const sortedEntries = Object.entries(source).sort(([keyA], [keyB]) => {
+        const prefixA = getPresetPrefix(keyA);
+        const prefixB = getPresetPrefix(keyB);
+
+        const orderA = prefixA != null ? prefixOrderMap[prefixA] : Number.MAX_SAFE_INTEGER;
+        const orderB = prefixB != null ? prefixOrderMap[prefixB] : Number.MAX_SAFE_INTEGER;
+
+        if (orderA !== orderB) return orderA - orderB;
+        return keyA.localeCompare(keyB, 'ja', { numeric: true });
+      });
+
+      return Object.fromEntries(sortedEntries);
+    }
+
+    function applyNecklaceToAllPresets(necklaceId, necklaceRank) {
+      let equipPresets = JSON.parse(localStorage.getItem('equipPresets')) || {};
+      const presetNames = Object.keys(equipPresets);
+
+      if (presetNames.length === 0) return 0;
+
+      presetNames.forEach((presetName) => {
+        const preset = equipPresets[presetName] || {};
+        const ids = Array.isArray(preset.id) ? [...preset.id] : [];
+        const ranks = Array.isArray(preset.rank) ? [...preset.rank] : [];
+
+        ids[2] = necklaceId ?? null;
+        ranks[2] = necklaceRank ?? null;
+
+        equipPresets[presetName] = {
+          ...preset,
+          id: ids,
+          rank: ranks
+        };
+      });
+
+      equipPresets = sortEquipPresetsObject(equipPresets);
+      localStorage.setItem('equipPresets', JSON.stringify(equipPresets));
+      showEquipPreset();
+      return presetNames.length;
+    }
+
     function saveEquipPreset(name, obj){
       let equipPresets = JSON.parse(localStorage.getItem('equipPresets')) || {};
-      equipPresets[name] = obj;
+      equipPresets[name] = {
+        id: Array.isArray(obj?.id) ? [...obj.id] : [],
+        rank: Array.isArray(obj?.rank) ? [...obj.rank] : []
+      };
+      equipPresets = sortEquipPresetsObject(equipPresets);
       localStorage.setItem('equipPresets', JSON.stringify(equipPresets));
       showEquipPreset();
     }
+
     function showEquipPreset(){
       let equipPresets = JSON.parse(localStorage.getItem('equipPresets')) || {};
+      const { prefixOrderMap, getPresetPrefix } = getPresetPrefixOrderTools();
+
       const liTemplate = document.createElement('li');
       liTemplate.style.display = 'flex';
       liTemplate.style.justifyContent = 'space-between';
       liTemplate.style.borderBottom = 'solid 1px #000';
       liTemplate.style.color = '#428bca';
       liTemplate.style.cursor = 'pointer';
+
       const span1 = document.createElement('span');
       span1.style.flexGrow = '1';
       span1.style.whiteSpace = 'nowrap';
       span1.style.overflow = 'hidden';
+
       const span2 = document.createElement('span');
       span2.style.whiteSpace = 'nowrap';
       span2.style.textAlign = 'right';
       span2.style.overflow = 'hidden';
       span2.style.fontSize = '90%';
-      liTemplate.append(span1,span2);
+
+      liTemplate.append(span1, span2);
+
       const fragment = document.createDocumentFragment();
-      Object.entries(equipPresets).forEach(([key, value])=>{
+
+      const sortedEntries = Object.entries(equipPresets).sort(([keyA], [keyB]) => {
+        const prefixA = getPresetPrefix(keyA);
+        const prefixB = getPresetPrefix(keyB);
+
+        const orderA = prefixA != null ? prefixOrderMap[prefixA] : Number.MAX_SAFE_INTEGER;
+        const orderB = prefixB != null ? prefixOrderMap[prefixB] : Number.MAX_SAFE_INTEGER;
+
+        if (orderA !== orderB) return orderA - orderB;
+        return keyA.localeCompare(keyB, 'ja', { numeric: true });
+      });
+
+      sortedEntries.forEach(([key, value]) => {
         const li = liTemplate.cloneNode(true);
         const span = li.querySelectorAll('span');
         span[0].textContent = key;
         span[1].textContent = value.rank.join(',');
         fragment.append(li);
-      })
+      });
+
       presetList.replaceChildren(fragment);
     }
+
     function importEquipPresets(text){
       try{
         if(text.trim() === ''){
@@ -1741,7 +2380,8 @@
           return true;
         }
         const json = JSON.parse(text);
-        localStorage.setItem('equipPresets', JSON.stringify(json));
+        const sortedJson = sortEquipPresetsObject(json);
+        localStorage.setItem('equipPresets', JSON.stringify(sortedJson));
         showEquipPreset();
         return true;
       } catch (e) {
@@ -1750,15 +2390,13 @@
         }
         return false;
       }
-
     }
-
 
     function removePresetItems(presetName) {
       const userConfirmed = confirm(presetName + ' を削除しますか？');
       if(!userConfirmed) return;
       const stat = document.querySelector('.equip-preset-stat');
-      const equipPresets = JSON.parse(localStorage.getItem('equipPresets')) || {};
+      let equipPresets = JSON.parse(localStorage.getItem('equipPresets')) || {};
       const autoEquipItems = JSON.parse(localStorage.getItem('autoEquipItems')) || {};
       const autoEquipItemsAutojoin = JSON.parse(localStorage.getItem('autoEquipItemsAutojoin')) || {};
 
@@ -1777,6 +2415,7 @@
           autoEquipItemsAutojoin[key] = autoEquipItemsAutojoin[key].filter(v => v !== presetName);
         }
       }
+      equipPresets = sortEquipPresetsObject(equipPresets);
       localStorage.setItem('equipPresets', JSON.stringify(equipPresets));
       localStorage.setItem('autoEquipItems', JSON.stringify(autoEquipItems));
       localStorage.setItem('autoEquipItemsAutojoin', JSON.stringify(autoEquipItemsAutojoin));
@@ -1806,6 +2445,12 @@
   async function setPresetItems (presetName) {
     let currentEquip = JSON.parse(localStorage.getItem('current_equip')) || [];
     const stat = document.querySelector('.equip-preset-stat');
+
+    if (!stat) {
+      console.warn('[setPresetItems] .equip-preset-stat not found');
+      return false;
+    }
+
     if (stat.textContent === '装備中...') return;
     const equipPresets = JSON.parse(localStorage.getItem('equipPresets')) || {};
     const fetchPromises = equipPresets[presetName].id
@@ -2627,10 +3272,13 @@
     }
 
 
-    let nextProgress;
+    let nextProgress = null;
     async function attackRegion () {
       await drawProgressBar();
-      if (isAutoJoinRunning || Math.abs(nextProgress - currentProgress) > 1 || currentProgress === 50 || currentProgress === 100) {
+      if (isAutoJoinRunning) {
+        return;
+      }
+      if (nextProgress !== null && currentProgress !== nextProgress) {
         return;
       }
 
@@ -2659,16 +3307,49 @@
       const excludeSet = new Set();
       let loop = 0;
       let earn = 0;
+      let capturedRegion = null;
+      let adjacentRetryCount = 0;
 
-      let cellType;
-      if (regions.nonAdjacent.length > 0) {
-        cellType = 'nonAdjacent';
-      } else if (regions.teamAdjacent.length > 0) {
-        cellType = 'teamAdjacent';
-      } else if (regions.capitalAdjacent.length > 0) {
-        cellType = 'capitalAdjacent';
-      } else {
-        cellType = 'mapEdge';
+      function pickOpenCellType(regions, excludeSet) {
+        const order = ['nonAdjacent', 'capitalAdjacent', 'mapEdge', 'teamAdjacent', 'onceMore'];
+        for (const key of order) {
+          const list = (regions[key] || []).filter(e => !excludeSet.has(e.join(',')));
+          if (list.length > 0) return key;
+        }
+        return 'mapEdge';
+      }
+
+      function buildNeighborTargets(refreshedRegions, baseRegion, excludeSet) {
+        if (!baseRegion) {
+          return (refreshedRegions.teamAdjacent || []).filter(e => !excludeSet.has(e.join(',')));
+        }
+
+        const [r, c] = baseRegion;
+        const neighborSet = new Set([
+          [r - 1, c],
+          [r + 1, c],
+          [r, c - 1],
+          [r, c + 1]
+        ].map(v => v.join(',')));
+
+        const uniq = new Map();
+        for (const list of Object.values(refreshedRegions)) {
+          if (!Array.isArray(list)) continue;
+          for (const pos of list) {
+            if (!Array.isArray(pos)) continue;
+            const key = pos.join(',');
+            if (neighborSet.has(key) && !excludeSet.has(key)) {
+              uniq.set(key, pos);
+            }
+          }
+        }
+        return [...uniq.values()];
+      }
+
+      let cellType = pickOpenCellType(regions, excludeSet);
+
+      function earnLabel() {
+        return earn > 0 ? '【' + earn + 'マス】' : '';
       }
 
       while(dialog.open) {
@@ -2702,19 +3383,34 @@
               sleepTime = 1;
               message = '【' + earn + 'マス】(' + loop + '発目) '+ lastLine;
               processType = 'continue';
-            } else if (text.startsWith('アリーナチャレンジ開始')||text.startsWith('リーダーになった')) {
-              if (text.includes('新しいアリーナリーダーです')||text.startsWith('リーダーになった')) {
-                if (earn < 1){
-                  loop += 1;
-                  earn += 1;
-                  sleepTime = 1;
-                  message = '【' + earn + 'マス】(' + loop + '発目) '+ lastLine;
+           } else if (text.startsWith('アリーナチャレンジ開始') || text.startsWith('リーダーになった')) {
+              let captured =
+                text.includes('新しいアリーナリーダーです') ||
+                text.startsWith('リーダーになった');
+
+              let refreshedRegions = null;
+              if (!captured) {
+                refreshedRegions = await getRegions();
+                regions = refreshedRegions;
+                captured = !Object.values(refreshedRegions).some(list =>
+                  Array.isArray(list) && list.some(([r, c]) => r === region[0] && c === region[1])
+                );
+              }
+
+              if (captured) {
+                loop += 1;
+                earn += 1;
+                sleepTime = 1;
+                capturedRegion = [...region];
+                adjacentRetryCount = 0;
+
+                if (earn < 2) {
+                  cellType = 'teamAdjacent';
+                  message = earnLabel() + '(' + loop + '発目) ' + lastLine;
                   processType = 'reload';
                 } else {
-                  loop += 1;
-                  earn += 1;
                   success = true;
-                  message = '[打止] 【' + earn + 'マス】(' + loop + '発目) '+ lastLine;
+                  message = '[打止] 【' + earn + 'マス】(' + loop + '発目) ' + lastLine;
                   processType = 'return';
                 }
                 i++;
@@ -2722,9 +3418,11 @@
                 loop += 1;
                 sleepTime = 1;
                 excludeSet.delete(region.join(','));
-                message = '【' + earn + 'マス】(' + loop + '発目) '+ lastLine;
+                message = '【' + earn + 'マス】(' + loop + '発目) ' + lastLine;
                 processType = 'reload';
               }
+
+              regions = refreshedRegions;
             } else if (messageType === 'onemoretime') {
               sleepTime = 90;
               excludeSet.delete(region.join(','));
@@ -2732,17 +3430,33 @@
               cellType = 'onceMore';
               processType = 'reload';
             } else if (messageType === 'breaktime') {
-              success = true;
-              message = lastLine;
-              processType = 'return';
+              if (earn >= 2) {
+                success = true;
+                message = lastLine;
+                processType = 'return';
+              } else {
+                sleepTime = 90;
+                excludeSet.delete(region.join(','));
+                cellType = 'teamAdjacent';
+                message = '【' + earn + 'マス】(' + loop + '発目) ' + lastLine;
+                processType = 'reload';
+              }
               i++;
             } else if (messageType === 'toofast') {
               sleepTime = 3;
               processType = 'continue';
             } else if (messageType === 'retry') {
-              success = true;
-              message = '[打止] 【' + earn + 'マス】(' + loop + '発目) ' + lastLine;
-              processType = 'return';
+              if (earn >= 2) {
+                success = true;
+                message = '[打止] 【' + earn + 'マス】(' + loop + '発目) ' + lastLine;
+                processType = 'return';
+              } else {
+                sleepTime = 1;
+                excludeSet.delete(region.join(','));
+                cellType = 'teamAdjacent';
+                message = '【' + earn + 'マス】(' + loop + '発目) ' + lastLine;
+                processType = 'reload';
+              }
               i++;
             } else if (messageType === 'guardError') {
               message = lastLine;
@@ -2811,13 +3525,13 @@
                   nextProgress = 2;
                 }
               } else {
-                if (currentProgress < 51) {
-                  nextProgress = 99;
+                if (currentProgress < 50) {
+                  nextProgress = 98;
                 } else {
-                  nextProgress = 49;
+                  nextProgress = 48;
                 }
               }
-              next = `→ ${nextProgress}±1%`;
+              next = `→ ${nextProgress}%`;
               isAutoJoinRunning = false;
 //            logMessage(null, '[打止] 終了です。', next);
             } else if (processType === 'return') {
@@ -2832,11 +3546,23 @@
 
             if (processType === 'break') {
               regions = await getRegions();
+              if (earn >= 1 && capturedRegion) {
+                regions.teamAdjacent = buildNeighborTargets(regions, capturedRegion, excludeSet);
+                cellType = 'teamAdjacent';
+              } else {
+                cellType = pickOpenCellType(regions, excludeSet);
+              }
               break;
             } else if (processType === 'return') {
               return;
             } else if (processType === 'reload') {
               regions = await getRegions();
+              if (earn >= 1 && capturedRegion) {
+                regions.teamAdjacent = buildNeighborTargets(regions, capturedRegion, excludeSet);
+                cellType = 'teamAdjacent';
+              } else {
+                cellType = pickOpenCellType(regions, excludeSet);
+              }
               break;
             }
           } catch (e){
@@ -2884,6 +3610,20 @@
         }
 
         if (!success && regions[cellType].length === 0) {
+          if (earn >= 1 && capturedRegion && cellType === 'teamAdjacent' && adjacentRetryCount < 5) {
+            adjacentRetryCount += 1;
+            logMessage(
+              capturedRegion,
+              earnLabel() + ' 隣接タイル再取得中 (' + adjacentRetryCount + '/5)',
+              '→ 1s'
+            );
+            await sleep(1000);
+            regions = await getRegions();
+            regions.teamAdjacent = buildNeighborTargets(regions, capturedRegion, excludeSet);
+            cellType = 'teamAdjacent';
+            continue;
+          }
+
           if (location.href.includes('/teambattle?m=rb')) {
             if (currentProgress < 16) {
                nextProgress = 19;
@@ -2900,14 +3640,13 @@
               }
             } else {
               if (currentProgress < 50) {
-                nextProgress = 99;
+                nextProgress = 98;
               } else {
-                nextProgress = 49;
+                nextProgress = 48;
               }
             }
-            const next = `→ ${nextProgress}±1%`;
+            const next = `→ ${nextProgress}%`;
             isAutoJoinRunning = false;
-            //loop += 1;
             logMessage(null, '[打止] 攻撃可能なタイルが見つかりませんでした。(計' + loop + '発)', next);
             return;
         }
@@ -3081,7 +3820,11 @@
         if(!headerText.includes('どんぐりチーム戦い')) return Promise.reject(`title.ng`);
         const table = doc.querySelector('table');
         if(!table) throw new Error('table.ng');
-        const equipCond = table.querySelector('td small').textContent;
+
+        const equipCondElm = table.querySelector('td small');
+        if(!equipCondElm) throw new Error('equipCond.ng');
+
+        const equipCond = equipCondElm.textContent;
         const rank = equipCond
           .replace('エリート','e')
           .replace(/.+から|\w+-|まで|だけ|警備員|警|\s|\[|\]|\|/g,'');
@@ -3108,21 +3851,48 @@
     if (!isAutoJoinRunning) {
       attackRegion();
     }
-    autoJoinIntervalId = setInterval(attackRegion,30000);
+    autoJoinIntervalId = setInterval(attackRegion,5000);
   };
 
   async function drawProgressBar(){
     try {
       const res = await fetch('https://donguri.5ch.io/');
       if (!res.ok) throw new Error(res.status);
+
       const text = await res.text();
       const doc = new DOMParser().parseFromString(text, 'text/html');
-      const container = doc.querySelector('div.stat-block:nth-child(2)>div:nth-child(5)').cloneNode(true);
-      currentPeriod = Number(container.firstChild.textContent.match(/\d+/)[0]);
-      currentProgress = parseInt(container.lastElementChild.textContent);
-      let str,min,totalSec,sec,margin;
 
-      if (currentProgress === 0 || currentProgress === 50 || (location.href.includes('/teambattle?m=rb') && (currentProgress === 16 || currentProgress === 33 || currentProgress === 66 || currentProgress === 83))) {
+      const containerSrc = doc.querySelector('div.stat-block:nth-child(2)>div:nth-child(5)');
+      const statBlock = doc.querySelector('.stat-block');
+
+      if (!containerSrc || !statBlock) {
+        console.warn('[drawProgressBar] progress container/stat-block not found');
+        return;
+      }
+
+      const container = containerSrc.cloneNode(true);
+      const periodText = container.firstChild?.textContent || '';
+      const progressText = container.lastElementChild?.textContent || '';
+
+      const periodMatch = periodText.match(/\d+/);
+      const parsedProgress = parseInt(progressText, 10);
+
+      if (!periodMatch || Number.isNaN(parsedProgress)) {
+        console.warn('[drawProgressBar] invalid progress text', { periodText, progressText });
+        return;
+      }
+
+      currentPeriod = Number(periodMatch[0]);
+      currentProgress = parsedProgress;
+
+      let str, min, totalSec, sec, margin;
+
+      if (
+        currentProgress === 0 ||
+        currentProgress === 50 ||
+        (location.href.includes('/teambattle?m=rb') &&
+          (currentProgress === 16 || currentProgress === 33 || currentProgress === 66 || currentProgress === 83))
+      ) {
         str = '（マップ更新）';
       } else {
         if (currentProgress === 100) {
@@ -3131,38 +3901,46 @@
           margin = 10;
         } else {
           if (location.href.includes('/teambattle?m=rb')) {
-             if (currentProgress <= 16) {
-               totalSec = (16 - currentProgress) * 600 / 16.6;
-             } else if (currentProgress <= 33) {
-               totalSec = (33 - currentProgress) * 600 / 16.6;
-             } else if (currentProgress <= 50) {
-               totalSec = (50 - currentProgress) * 600 / 16.6;
-             } else if (currentProgress <= 66) {
-               totalSec = (66 - currentProgress) * 600 / 16.6;
-             } else if (currentProgress <= 83) {
-               totalSec = (83 - currentProgress) * 600 / 16.6;
-             } else if (currentProgress <= 100) {
-               totalSec = (100 - currentProgress) * 600 / 16.6;
-             }
+            if (currentProgress <= 16) {
+              totalSec = (16 - currentProgress) * 600 / 16.6;
+            } else if (currentProgress <= 33) {
+              totalSec = (33 - currentProgress) * 600 / 16.6;
+            } else if (currentProgress <= 50) {
+              totalSec = (50 - currentProgress) * 600 / 16.6;
+            } else if (currentProgress <= 66) {
+              totalSec = (66 - currentProgress) * 600 / 16.6;
+            } else if (currentProgress <= 83) {
+              totalSec = (83 - currentProgress) * 600 / 16.6;
+            } else if (currentProgress <= 100) {
+              totalSec = (100 - currentProgress) * 600 / 16.6;
+            }
           } else {
-          totalSec = (currentProgress < 50) ? (50 - currentProgress) * 36 : (100 - currentProgress) * 36 + 10;
+            totalSec = (currentProgress < 50)
+              ? (50 - currentProgress) * 36
+              : (100 - currentProgress) * 36 + 10;
           }
+
           totalSec = Math.floor(totalSec);
           min = Math.trunc(totalSec / 60);
           sec = totalSec % 60;
           margin = 20;
         }
-        str = '（残り' + min + '分' + sec + '秒 \xb1' + margin + '秒）';
+
+        str = '（残り' + min + '分' + sec + '秒 ±' + margin + '秒）';
       }
+
       progressBarBody.textContent = currentProgress + '%';
       progressBarBody.style.width = currentProgress + '%';
       progressBarInfo.textContent = `${MODENAME}第${currentPeriod}期${str}`;
 
-      const statBlock = doc.querySelector('.stat-block');
-      wood = statBlock.textContent.match(/木材の数: (\d+)/)[1];
-      steel = statBlock.textContent.match(/鉄の数: (\d+)/)[1];
+      const statText = statBlock.textContent || '';
+      const woodMatch = statText.match(/木材の数: (\d+)/);
+      const steelMatch = statText.match(/鉄の数: (\d+)/);
+
+      if (woodMatch) wood = woodMatch[1];
+      if (steelMatch) steel = steelMatch[1];
     } catch (e) {
-      console.error(e+' drawProgressBar()')
+      console.error(e + ' drawProgressBar()');
     }
   }
 
