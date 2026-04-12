@@ -1345,8 +1345,8 @@
       panel.style.minWidth = '20vw';
       panel.style.maxWidth = '100vw';
     } else {
-      panel.style.width = '400px';
-      panel.style.maxWidth = '75vw';
+      panel.style.width = '720px';
+      panel.style.maxWidth = '95vw';
     }
 
     if (settings.equipPanelHeight) {
@@ -1455,7 +1455,7 @@
       const addButton = button.cloneNode();
       addButton.textContent = '追加';
       addButton.addEventListener('click', async()=>{
-        selectedEquips = {id:[], rank:[]};
+        selectedEquips = createEmptySelectedEquips();
         addButton.disabled = true;
         await showEquipList();
         addButton.disabled = false;
@@ -1819,6 +1819,27 @@
       alert(`ネックレスを ${updatedCount} 件のプリセットへ反映しました`);
     });
 
+    const renameAllButton = button.cloneNode();
+    renameAllButton.textContent = '現セット変換';
+    renameAllButton.style.width = '7em';
+    renameAllButton.style.fontSize = '';
+    renameAllButton.style.whiteSpace = 'nowrap';
+    renameAllButton.addEventListener('click', ()=>{
+      if (!weaponTable || !armorTable || !necklaceTable) {
+        alert('先に装備一覧を開いてください');
+        return;
+      }
+
+      const ok = confirm('保存済みプリセット名を現在の正式名称ルールへ一括変換しますか？');
+      if (!ok) return;
+
+      const result = renameAllPresetNamesToAuto();
+      alert(result.message);
+
+      const stat = document.querySelector('.equip-preset-stat');
+      if (stat) stat.textContent = result.message;
+    });
+
     (()=>{
       const dialog = document.createElement('dialog');
       dialog.style.background = '#fff';
@@ -1829,24 +1850,45 @@
       presetNameInput.placeholder = 'プリセット名';
       presetNameInput.style.background = '#fff';
       presetNameInput.style.color = '#000';
+      presetNameInput.style.width = '70vw';
+      presetNameInput.style.minWidth = '32em';
+      presetNameInput.style.maxWidth = '88vw';
+      presetNameInput.style.boxSizing = 'border-box';
+      presetNameInput.dataset.autoName = '';
+
       const p = document.createElement('p');
       p.textContent = '同名のプリセットが存在する場合は上書きされます。';
       p.style.margin = '0';
+
       const confirmButton = button.cloneNode();
       confirmButton.textContent = '保存';
       confirmButton.addEventListener('click', ()=>{
-        if(presetNameInput.value.trim() === '') return;
-        saveEquipPreset(presetNameInput.value.substring(0,32), selectedEquips);
+        const autoName = applyAutoPresetNameToInput(presetNameInput);
+        const presetName = ((presetNameInput.value || '').trim() || autoName || '').substring(0,64);
+
+        if(presetName === '') return;
+
+        saveEquipPreset(presetName, selectedEquips);
         dialog.close();
         presetNameInput.value = '';
+        presetNameInput.dataset.autoName = '';
+        selectedEquips = createEmptySelectedEquips();
+        document.querySelector('.equip-preset-selected').textContent = '';
       });
       presetNameInput.addEventListener('keydown', (e)=>{
         if (e.key === "Enter") {
           e.preventDefault();
-          if(presetNameInput.value.trim() === '') return;
-          saveEquipPreset(presetNameInput.value.substring(0,32), selectedEquips);
+          const autoName = applyAutoPresetNameToInput(presetNameInput);
+          const presetName = ((presetNameInput.value || '').trim() || autoName || '').substring(0,64);
+
+          if(presetName === '') return;
+
+          saveEquipPreset(presetName, selectedEquips);
           dialog.close();
           presetNameInput.value = '';
+          presetNameInput.dataset.autoName = '';
+          selectedEquips = createEmptySelectedEquips();
+          document.querySelector('.equip-preset-selected').textContent = '';
         }
       });
       const cancelButton = button.cloneNode();
@@ -1859,16 +1901,17 @@
           alert('装備が未選択です');
           return;
         }
+        applyAutoPresetNameToInput(presetNameInput);
         dialog.showModal();
       });
     })();
 
-    bar.append(rankSelect, sortModeButton, equipSwitchButton, registerButton, applyNecklaceToAllButton, p);
+    bar.append(rankSelect, sortModeButton, equipSwitchButton, registerButton, applyNecklaceToAllButton, renameAllButton, p);
     equipField.append(bar, tableContainer, closeButton);
     panel.append(equipField);
 
     let weaponTable, armorTable, necklaceTable;
-    let selectedEquips = {id:[], rank:[]};
+    let selectedEquips = createEmptySelectedEquips();
     let currentEquipSort = 'name';
 
     function isModSortableTable(table) {
@@ -1884,6 +1927,213 @@
       if (!matches || matches.length === 0) return Number.NEGATIVE_INFINITY;
 
       return Number(matches[matches.length - 1]);
+    }
+
+    function createEmptySelectedEquips() {
+      return { id: [], rank: [], name: [], elem: [], mod: [] };
+    }
+
+    function stripLeadingRankTag(text = '') {
+      return String(text || '')
+        .replace(/^\s*\[[^\]]+\]\s*/, '')
+        .replace(/\s*【[^】]+】/g, '')
+        .replace(/\s*\[(?:N|R|SR|SSR|UR|Ne|Re|SRe|SSRe|URe)\]\s*/g, '')
+        .replace(/\s*\[(?:\d+|\d+\s*of\s*\d+)\]\s*/gi, '')
+        .replace(/\s+/g, ' ')
+        .trim();
+    }
+
+    function normalizeEquipElementText(text = '') {
+      const raw = String(text || '').trim();
+      if (!raw) return 'なし';
+      const matched = (raw.match(/[^\d]+$/) || ['なし'])[0];
+      return matched.trim() || 'なし';
+    }
+
+    function getEnhancedPresetPrefix(rank = '', weaponMod = Number.NEGATIVE_INFINITY) {
+      const normalizedRank = String(rank || '').trim();
+      const mod = Number.isFinite(Number(weaponMod)) ? Number(weaponMod) : Number.NEGATIVE_INFINITY;
+
+      if (normalizedRank === 'N') return mod >= 5 ? 'Ne' : 'N';
+      if (normalizedRank === 'R') return mod >= 9 ? 'Re' : 'R';
+      if (normalizedRank === 'SR') return mod >= 13 ? 'SRe' : 'SR';
+      if (normalizedRank === 'SSR') return mod >= 17 ? 'SSRe' : 'SSR';
+      if (normalizedRank === 'UR') return mod >= 21 ? 'URe' : 'UR';
+      return normalizedRank;
+    }
+
+    function buildDisplayPresetPart(slotIndex, itemName = '', elemText = '') {
+      const cleanName = stripLeadingRankTag(itemName);
+      if (!cleanName) return '';
+
+      if (slotIndex === 2) {
+        return cleanName;
+      }
+
+      return `${cleanName}[${normalizeEquipElementText(elemText)}]`;
+    }
+
+    function buildAutoPresetNameFromSelection(source = selectedEquips) {
+      const prefix = getEnhancedPresetPrefix(source?.rank?.[0] || '', source?.mod?.[0]);
+      const weaponName = source?.name?.[0] || '';
+      const armorName = source?.name?.[1] || '';
+      const parts = [weaponName, armorName].filter(Boolean);
+
+      return `${prefix ? `[${prefix}] ` : ''}${parts.join('・')}`.trim();
+    }
+
+    function stripTrailingNecklaceSegment(name = '') {
+      const text = String(name || '').trim();
+      if (!text) return '';
+
+      const segments = text.split('・').map(s => s.trim()).filter(Boolean);
+      if (segments.length >= 3) {
+        segments.pop();
+        return segments.join('・').trim();
+      }
+
+      return text;
+    }
+
+    function applyAutoPresetNameToInput(input = equipField.querySelector('input[placeholder="プリセット名"]')) {
+      if (!input) return '';
+
+      const autoName = buildAutoPresetNameFromSelection(selectedEquips);
+      const prevAutoName = (input.dataset.autoName || '').trim();
+      const currentValue = (input.value || '').trim();
+
+      if (!currentValue || currentValue === prevAutoName) {
+        input.value = autoName;
+      }
+
+      input.dataset.autoName = autoName;
+      return autoName;
+    }
+
+    function updateSelectedEquipSummary() {
+      const label = document.querySelector('.equip-preset-selected');
+      const input = equipField.querySelector('input[placeholder="プリセット名"]');
+      const autoName = applyAutoPresetNameToInput(input);
+
+      if (label) {
+        label.textContent = autoName || selectedEquips.id.filter(Boolean).join(', ');
+      }
+    }
+
+    function buildEquipCatalog() {
+      const catalog = new Map();
+      const tables = [weaponTable, armorTable, necklaceTable];
+
+      tables.forEach((table, slotIndex) => {
+        if (!table) return;
+
+        table.querySelectorAll('tbody > tr').forEach(row => {
+          if (!row.cells?.[0]) return;
+
+          const link = row.cells[1]?.querySelector('a');
+          const id =
+            row.cells[0].dataset.id ||
+            link?.href?.replace('https://donguri.5ch.io/equip/','') ||
+            '';
+
+          if (!id) return;
+
+          const itemText = row.cells[0].textContent || '';
+          const rankMatch = itemText.match(/\[(.+?)\]/);
+          const rank = rankMatch ? rankMatch[1] : '';
+          const elem = slotIndex === 2 ? '' : normalizeEquipElementText(row.cells[6]?.textContent || '');
+          const mod = slotIndex === 0 ? getEquipModValue(row) : Number.NEGATIVE_INFINITY;
+
+          catalog.set(String(id), {
+            slotIndex,
+            rank,
+            name: buildDisplayPresetPart(slotIndex, itemText, elem),
+            mod
+          });
+        });
+      });
+
+      return catalog;
+    }
+
+    function makeUniquePresetName(baseName, usedNames) {
+      const seed = (String(baseName || '').trim() || '装備セット').substring(0, 64);
+
+      if (!usedNames.has(seed)) {
+        usedNames.add(seed);
+        return seed;
+      }
+
+      let n = 2;
+      while (usedNames.has(`${seed} (${n})`)) {
+        n++;
+      }
+
+      const uniqueName = `${seed} (${n})`.substring(0, 64);
+      usedNames.add(uniqueName);
+      return uniqueName;
+    }
+
+    function renameAllPresetNamesToAuto() {
+      const equipPresets = JSON.parse(localStorage.getItem('equipPresets')) || {};
+      const entries = Object.entries(equipPresets);
+      if (entries.length === 0) {
+        return { ok: false, message: '装備プリセットがありません' };
+      }
+
+      const catalog = buildEquipCatalog();
+      const renamed = {};
+      const nameMap = {};
+      const usedNames = new Set();
+
+      entries.forEach(([oldName, preset]) => {
+        const temp = createEmptySelectedEquips();
+        const ids = Array.isArray(preset?.id) ? preset.id.map(v => v == null ? null : String(v)) : [];
+        const ranks = Array.isArray(preset?.rank) ? [...preset.rank] : [];
+
+        ids.forEach((id, slotIndex) => {
+          if (!id) return;
+
+          const meta = catalog.get(String(id));
+          temp.id[slotIndex] = String(id);
+          temp.rank[slotIndex] = meta?.rank || ranks[slotIndex] || '';
+
+          if (meta) {
+            temp.name[slotIndex] = meta.name || '';
+            temp.mod[slotIndex] = meta.mod;
+          }
+        });
+
+        const autoName = buildAutoPresetNameFromSelection(temp);
+        const fallbackName = stripTrailingNecklaceSegment(oldName);
+        const finalName = makeUniquePresetName(autoName || fallbackName || oldName, usedNames);
+
+        renamed[finalName] = {
+          id: Array.isArray(preset?.id) ? [...preset.id] : [],
+          rank: Array.isArray(preset?.rank) ? [...preset.rank] : []
+        };
+        nameMap[oldName] = finalName;
+      });
+
+      const autoEquipItems = JSON.parse(localStorage.getItem('autoEquipItems')) || {};
+      const autoEquipItemsAutojoin = JSON.parse(localStorage.getItem('autoEquipItemsAutojoin')) || {};
+
+      const remapArray = (arr) =>
+        Array.from(new Set((Array.isArray(arr) ? arr : []).map(name => nameMap[name] || name)));
+
+      Object.keys(autoEquipItems).forEach(key => {
+        autoEquipItems[key] = remapArray(autoEquipItems[key]);
+      });
+      Object.keys(autoEquipItemsAutojoin).forEach(key => {
+        autoEquipItemsAutojoin[key] = remapArray(autoEquipItemsAutojoin[key]);
+      });
+
+      localStorage.setItem('equipPresets', JSON.stringify(sortEquipPresetsObject(renamed)));
+      localStorage.setItem('autoEquipItems', JSON.stringify(autoEquipItems));
+      localStorage.setItem('autoEquipItemsAutojoin', JSON.stringify(autoEquipItemsAutojoin));
+      showEquipPreset();
+
+      return { ok: true, message: `プリセット名を ${entries.length} 件変換しました` };
     }
 
     function getEquipModValue(row) {
@@ -1902,13 +2152,13 @@
       'なし':'#FFFFFF'
     };
 
-    const elemOrder = {
-      '火':0,
-      '氷':1,
-      '雷':2,
-      '風':3,
+　　const elemOrder = {
+      '風':0,
+      '火':1,
+      '水':2,
+      '雷':3,
       '地':4,
-      '水':5,
+      '氷':5,
       '光':6,
       '闇':7,
       'なし':8
@@ -2147,11 +2397,20 @@
                 if(!event.target.closest('td')) return;
                 const target = event.target.closest('td');
                 const itemName = target.textContent;
-                const rank = itemName.match(/\[(.+?)\]/)[1];
+                const rankMatch = itemName.match(/\[(.+?)\]/);
+                const rank = rankMatch ? rankMatch[1] : '';
                 const id = target.dataset.id;
+                const elemText = index === 2 ? '' : (row.cells[6]?.textContent || '');
+                const displayName = buildDisplayPresetPart(index, itemName, elemText);
+                const modValue = index === 0 ? getEquipModValue(row) : Number.NEGATIVE_INFINITY;
+
                 selectedEquips.id[index] = id;
                 selectedEquips.rank[index] = rank;
-                document.querySelector('.equip-preset-selected').textContent = selectedEquips.id;
+                selectedEquips.name[index] = displayName;
+                selectedEquips.elem[index] = normalizeEquipElementText(elemText);
+                selectedEquips.mod[index] = modValue;
+
+                updateSelectedEquipSummary();
               });
             });
 
@@ -2192,11 +2451,11 @@
       const prefixOrderMap = Object.fromEntries(
         presetPrefixOrder.map((prefix, index) => [prefix, index])
       );
-      const prefixMatchRegex = /^(SSRe|SRe|URe|SSR|UR|SR|Ne|Re|N|R)/;
+      const prefixMatchRegex = /^\[(SSRe|SRe|URe|SSR|UR|SR|Ne|Re|N|R)\]|^(SSRe|SRe|URe|SSR|UR|SR|Ne|Re|N|R)/;
 
       function getPresetPrefix(name) {
         const match = String(name || '').match(prefixMatchRegex);
-        return match ? match[1] : null;
+        return match ? (match[1] || match[2]) : null;
       }
 
       return { prefixOrderMap, getPresetPrefix };
@@ -2249,7 +2508,10 @@
 
     function saveEquipPreset(name, obj){
       let equipPresets = JSON.parse(localStorage.getItem('equipPresets')) || {};
-      equipPresets[name] = obj;
+      equipPresets[name] = {
+        id: Array.isArray(obj?.id) ? [...obj.id] : [],
+        rank: Array.isArray(obj?.rank) ? [...obj.rank] : []
+      };
       equipPresets = sortEquipPresetsObject(equipPresets);
       localStorage.setItem('equipPresets', JSON.stringify(equipPresets));
       showEquipPreset();
