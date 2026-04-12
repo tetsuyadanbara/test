@@ -294,33 +294,54 @@
         closeButton.addEventListener('click',()=>{
           autoJoinSettingsDialog.close();
           startAutoJoin();
-        })
+        });
 
-        const inputs = {
-          teamName: [input.cloneNode(),'チーム名'],
-          teamColor: [input.cloneNode(),'チームカラー']
-        }
-        for (const key of Object.keys(inputs)) {
+        const inputConfigs = {
+          teamName: { label: 'チーム名', type: 'text', defaultValue: '' },
+          teamColor: { label: 'チームカラー', type: 'text', defaultValue: '' },
+          autoJoinFrontShotCount: { label: '前半の撃つ回数', type: 'number', defaultValue: '2', min: '1', max: '8' },
+          autoJoinFrontShotProgresses: { label: '前半の撃つ時間(%)', type: 'text', defaultValue: '19,35' },
+          autoJoinFrontShotJitter: { label: '前半の揺らぎ(%)', type: 'number', defaultValue: '4', min: '0', max: '20' },
+          autoJoinBackShotCount: { label: '後半の撃つ回数', type: 'number', defaultValue: '2', min: '1', max: '8' },
+          autoJoinBackShotProgresses: { label: '後半の撃つ時間(%)', type: 'text', defaultValue: '69,85' },
+          autoJoinBackShotJitter: { label: '後半の揺らぎ(%)', type: 'number', defaultValue: '4', min: '0', max: '20' }
+        };
+
+        for (const [key, config] of Object.entries(inputConfigs)) {
           const label_ = label.cloneNode();
           const span_ = span.cloneNode();
           const span2_ = span2.cloneNode();
-          span_.textContent = inputs[key][1];
-          span2_.append(inputs[key][0]);
+          const input_ = input.cloneNode();
+
+          input_.type = config.type;
+          if (config.min != null) input_.min = config.min;
+          if (config.max != null) input_.max = config.max;
+          input_.value = settings[key] ?? config.defaultValue;
+
+          span_.textContent = config.label;
+          span2_.append(input_);
           label_.append(span_, span2_);
           div.append(label_);
 
-          inputs[key][0].value = settings[key] || '';
-          inputs[key][0].addEventListener('input', ()=>{
-            inputs.teamColor[0].value = inputs.teamColor[0].value.replace(/[^0-9a-fA-F]/g,'');
-            settings[key] = inputs[key][0].value;
-            localStorage.setItem('aat_settings',JSON.stringify(settings));
-          })
+          input_.addEventListener('input', ()=>{
+            if (key === 'teamColor') {
+              input_.value = input_.value.replace(/[^0-9a-fA-F]/g,'');
+            } else if (config.type === 'number') {
+              input_.value = input_.value.replace(/[^\d-]/g,'');
+            }
+            settings[key] = input_.value;
+            localStorage.setItem('aat_settings', JSON.stringify(settings));
+          });
         }
 
         const description = document.createElement('p');
         description.style.fontSize = '90%';
-        description.innerText = 'チームカラーは小文字/大文字も正確に入力してください。（自陣の隣接タイル取得に必要）\nあらかじめ装備パネルからエリートも含め各ランクの装備を登録してください。（所持していない場合は除く）\n※装備を登録していないと成功率が低下します。'
-        div.append(description,closeButton);
+        description.innerText =
+          'チームカラーは小文字/大文字も正確に入力してください。（自陣の隣接タイル取得に必要）\n' +
+          '前半/後半の「撃つ時間(%)」はカンマ区切りで入力します。例: 19,35 / 69,85\n' +
+          '「撃つ回数」は左から何個使うか、「揺らぎ(%)」はその時間に対して ± 何% ずらすかです。\n' +
+          '※装備を登録していないと成功率が低下します。';
+        div.append(description, closeButton);
         autoJoinSettingsDialog.append(div);
       })();
 
@@ -3166,6 +3187,113 @@
     let teamColor = settings.teamColor;
     let teamName = settings.teamName;
 
+    function parseAutoJoinShotCount(value, fallback = 2) {
+      const n = Number(value);
+      if (!Number.isFinite(n)) return fallback;
+      return Math.max(1, Math.min(8, Math.trunc(n)));
+    }
+
+    function clampAutoJoinPercent(value, min, max, fallback) {
+      const n = Number(value);
+      if (!Number.isFinite(n)) return fallback;
+      return Math.max(min, Math.min(max, Math.round(n)));
+    }
+
+    function parseAutoJoinProgressList(value, min, max) {
+      return Array.from(new Set(
+        String(value || '')
+          .split(/[,\s/]+/)
+          .map(v => Number(v))
+          .filter(v => Number.isFinite(v))
+          .map(v => Math.round(v))
+          .filter(v => v >= min && v <= max)
+      )).sort((a, b) => a - b);
+    }
+
+    function getNormalHalfSchedule(half) {
+      const isFront = half === 'front';
+      const min = isFront ? 1 : 51;
+      const max = isFront ? 49 : 99;
+      const defaultCount = 2;
+      const defaultProgresses = isFront ? [19, 35] : [69, 85];
+      const defaultJitter = 4;
+
+      const countKey = isFront ? 'autoJoinFrontShotCount' : 'autoJoinBackShotCount';
+      const progressKey = isFront ? 'autoJoinFrontShotProgresses' : 'autoJoinBackShotProgresses';
+      const jitterKey = isFront ? 'autoJoinFrontShotJitter' : 'autoJoinBackShotJitter';
+
+      const count = parseAutoJoinShotCount(settings[countKey], defaultCount);
+
+      let progresses = parseAutoJoinProgressList(settings[progressKey], min, max);
+      if (progresses.length === 0) {
+        progresses = [...defaultProgresses];
+      }
+
+      while (progresses.length < count) {
+        const fallbackBase = defaultProgresses[progresses.length] ??
+          clampAutoJoinPercent(
+            Math.round(min + ((max - min) * (progresses.length + 1) / (count + 1))),
+            min, max, isFront ? 19 : 69
+          );
+        progresses.push(fallbackBase);
+        progresses = Array.from(new Set(progresses)).sort((a, b) => a - b);
+      }
+
+      const jitter = clampAutoJoinPercent(settings[jitterKey], 0, 20, defaultJitter);
+
+      return {
+        half,
+        min,
+        max,
+        jitter,
+        progresses: progresses.slice(0, count)
+      };
+    }
+
+    function pickJitteredProgress(base, jitter, min, max) {
+      const delta = jitter > 0
+        ? Math.floor(Math.random() * (jitter * 2 + 1)) - jitter
+        : 0;
+      return Math.max(min, Math.min(max, Math.round(base + delta)));
+    }
+
+    function pickNextNormalProgress(progress) {
+      const p = Number(progress);
+      const front = getNormalHalfSchedule('front');
+      const back = getNormalHalfSchedule('back');
+
+      const plans = p < 50
+        ? [
+            { cfg: front, threshold: p },
+            { cfg: back,  threshold: 50 },
+            { cfg: front, threshold: 0 }
+          ]
+        : [
+            { cfg: back,  threshold: p },
+            { cfg: front, threshold: 0 },
+            { cfg: back,  threshold: 50 }
+          ];
+
+      for (const { cfg, threshold } of plans) {
+        const base =
+          cfg.progresses.find(v => v > threshold) ??
+          ((threshold <= cfg.min) ? cfg.progresses[0] : null);
+
+        if (base == null) continue;
+
+        const nextProgress = pickJitteredProgress(base, cfg.jitter, cfg.min, cfg.max);
+        return {
+          nextProgress,
+          label: `→ ${nextProgress}±${cfg.jitter}%`
+        };
+      }
+
+      const fallback = p < 50 ? 69 : 19;
+      return {
+        nextProgress: fallback,
+        label: `→ ${fallback}±0%`
+      };
+    }
 
     function logMessage(region, message, next) {
       const date = new Date();
@@ -3428,18 +3556,12 @@
                 } else {
                   nextProgress = 10;
                 }
+                next = `→ ${nextProgress}`;
               } else {
-                if (currentProgress < 25) {
-                  nextProgress = Math.floor(Math.random() * 8) + 31; // 31~38 -2~+1
-                } else if (currentProgress < 50) {
-                  nextProgress = Math.floor(Math.random() * 8) + 65; // 65~72 -2~+1
-                } else if (currentProgress < 75) {
-                  nextProgress = Math.floor(Math.random() * 8) + 81; // 81~88 -2~+1
-                } else {
-                  nextProgress = Math.floor(Math.random() * 8) + 15; // 15~22 -2~+1
-                }
+                const picked = pickNextNormalProgress(currentProgress);
+                nextProgress = picked.nextProgress;
+                next = picked.label;
               }
-              next = `→ ${nextProgress}±2%`;
               isAutoJoinRunning = false;
             } else if (processType === 'return') {
               next = '';
@@ -3501,6 +3623,7 @@
           }
         }
         if (!success && regions[cellType].length === 0) {
+            let next = '';
             if (location.href.includes('/teambattle?m=rb')) {
               if (currentProgress < 16) {
                  nextProgress = 26;
@@ -3515,20 +3638,14 @@
               } else {
                  nextProgress = 10;
               }
+              next = `→ ${nextProgress}`;
             } else {
-              if (currentProgress < 25) {
-                nextProgress = Math.floor(Math.random() * 8) + 31; // 31~38 -2~+1
-              } else if (currentProgress < 50) {
-                nextProgress = Math.floor(Math.random() * 8) + 65; // 65~72 -2~+1
-              } else if (currentProgress < 75) {
-                nextProgress = Math.floor(Math.random() * 8) + 81; // 81~88 -2~+1
-              } else {
-                nextProgress = Math.floor(Math.random() * 8) + 15; // 15~22 -2~+1
-              }
+              const picked = pickNextNormalProgress(currentProgress);
+              nextProgress = picked.nextProgress;
+              next = picked.label;
             }
-            const next = `→ ${nextProgress}±2%`;
+            logMessage(null, '[打止] 攻撃可能なタイルが見つかりませんでした。', next);
             isAutoJoinRunning = false;
-            logMessage(null, '攻撃可能なタイルが見つかりませんでした。', next);
             return;
         }
       }
