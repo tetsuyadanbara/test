@@ -3254,82 +3254,77 @@
   let autoJoinIntervalId;
   let isAutoJoinRunning = false;
   const sleep = s => new Promise(r=>setTimeout(r,s));
+
+  const RB_STAGE_CONFIGS = [
+    { key: 'rbStage1Progress', jitterKey: 'rbStage1Jitter', min: 0,  max: 16,  defaultProgress: 2,  defaultJitter: 1, label: '第1戦' },
+    { key: 'rbStage2Progress', jitterKey: 'rbStage2Jitter', min: 17, max: 33,  defaultProgress: 18, defaultJitter: 1, label: '第2戦' },
+    { key: 'rbStage3Progress', jitterKey: 'rbStage3Jitter', min: 34, max: 50,  defaultProgress: 35, defaultJitter: 1, label: '第3戦' },
+    { key: 'rbStage4Progress', jitterKey: 'rbStage4Jitter', min: 51, max: 66,  defaultProgress: 52, defaultJitter: 1, label: '第4戦' },
+    { key: 'rbStage5Progress', jitterKey: 'rbStage5Jitter', min: 67, max: 83,  defaultProgress: 68, defaultJitter: 1, label: '第5戦' },
+    { key: 'rbStage6Progress', jitterKey: 'rbStage6Jitter', min: 84, max: 100, defaultProgress: 85, defaultJitter: 1, label: '第6戦' }
+  ];
+
+  function clampNumber(value, min, max, fallback) {
+    const n = Number(value);
+    if (!Number.isFinite(n)) return fallback;
+    return Math.max(min, Math.min(max, Math.round(n)));
+  }
+
+  function getRBStageIndexByProgress(progress) {
+    const p = Number(progress);
+    if (p <= 16) return 0;
+    if (p <= 33) return 1;
+    if (p <= 50) return 2;
+    if (p <= 66) return 3;
+    if (p <= 83) return 4;
+    return 5;
+  }
+
+  function getRBStageSetting(stageIndex) {
+    const cfg = RB_STAGE_CONFIGS[stageIndex];
+    return {
+      ...cfg,
+      progress: clampNumber(settings[cfg.key], cfg.min, cfg.max, cfg.defaultProgress),
+      jitter: clampNumber(settings[cfg.jitterKey], 0, 16, cfg.defaultJitter)
+    };
+  }
+
+  function getRBStageTargetProgress(stageIndex, withJitter = true) {
+    const cfg = getRBStageSetting(stageIndex);
+    if (!withJitter || cfg.jitter <= 0) return cfg.progress;
+
+    const delta = Math.floor(Math.random() * (cfg.jitter * 2 + 1)) - cfg.jitter;
+    return clampNumber(cfg.progress + delta, cfg.min, cfg.max, cfg.progress);
+  }
+
+  function getRBNextStagePlan(currentProgress, withJitter = true) {
+    const currentStageIndex = getRBStageIndexByProgress(currentProgress);
+    const nextStageIndex = (currentStageIndex + 1) % RB_STAGE_CONFIGS.length;
+    const cfg = getRBStageSetting(nextStageIndex);
+    const nextProgress = getRBStageTargetProgress(nextStageIndex, withJitter);
+
+    return {
+      nextProgress,
+      jitter: cfg.jitter,
+      label: `→ ${nextProgress}±${cfg.jitter}%`,
+      stageLabel: cfg.label,
+      stageIndex: nextStageIndex
+    };
+  }
+
+  function getRBNextStageProjectedProgress(currentProgress) {
+    const currentStageIndex = getRBStageIndexByProgress(currentProgress);
+    const nextStageIndex = (currentStageIndex + 1) % RB_STAGE_CONFIGS.length;
+    const cfg = getRBStageSetting(nextStageIndex);
+    let projected = cfg.progress;
+
+    if (projected <= currentProgress) {
+      projected += 100;
+    }
+    return projected;
+  }
+
   async function autoJoin() {
-    const dialog = document.querySelector('.auto-join');
-
-    const logArea = dialog.querySelector('.auto-join-log');
-    const headers = { 'Content-Type': 'application/x-www-form-urlencoded' };
-    let teamColor = settings.teamColor;
-    let teamName = settings.teamName;
-
-    const RB_STAGE_CONFIGS = [
-      { key: 'rbStage1Progress', jitterKey: 'rbStage1Jitter', min: 0,  max: 16,  defaultProgress: 2,  defaultJitter: 1, label: '第1戦' },
-      { key: 'rbStage2Progress', jitterKey: 'rbStage2Jitter', min: 17, max: 33,  defaultProgress: 18, defaultJitter: 1, label: '第2戦' },
-      { key: 'rbStage3Progress', jitterKey: 'rbStage3Jitter', min: 34, max: 50,  defaultProgress: 35, defaultJitter: 1, label: '第3戦' },
-      { key: 'rbStage4Progress', jitterKey: 'rbStage4Jitter', min: 51, max: 66,  defaultProgress: 52, defaultJitter: 1, label: '第4戦' },
-      { key: 'rbStage5Progress', jitterKey: 'rbStage5Jitter', min: 67, max: 83,  defaultProgress: 68, defaultJitter: 1, label: '第5戦' },
-      { key: 'rbStage6Progress', jitterKey: 'rbStage6Jitter', min: 84, max: 100, defaultProgress: 85, defaultJitter: 1, label: '第6戦' }
-    ];
-
-    function clampNumber(value, min, max, fallback) {
-      const n = Number(value);
-      if (!Number.isFinite(n)) return fallback;
-      return Math.max(min, Math.min(max, Math.round(n)));
-    }
-
-    function getRBStageIndexByProgress(progress) {
-      const p = Number(progress);
-      if (p <= 16) return 0;
-      if (p <= 33) return 1;
-      if (p <= 50) return 2;
-      if (p <= 66) return 3;
-      if (p <= 83) return 4;
-      return 5;
-    }
-
-    function getRBStageSetting(stageIndex) {
-      const cfg = RB_STAGE_CONFIGS[stageIndex];
-      return {
-        ...cfg,
-        progress: clampNumber(settings[cfg.key], cfg.min, cfg.max, cfg.defaultProgress),
-        jitter: clampNumber(settings[cfg.jitterKey], 0, 16, cfg.defaultJitter)
-      };
-    }
-
-    function getRBStageTargetProgress(stageIndex, withJitter = true) {
-      const cfg = getRBStageSetting(stageIndex);
-      if (!withJitter || cfg.jitter <= 0) return cfg.progress;
-
-      const delta = Math.floor(Math.random() * (cfg.jitter * 2 + 1)) - cfg.jitter;
-      return clampNumber(cfg.progress + delta, cfg.min, cfg.max, cfg.progress);
-    }
-
-    function getRBNextStagePlan(currentProgress, withJitter = true) {
-      const currentStageIndex = getRBStageIndexByProgress(currentProgress);
-      const nextStageIndex = (currentStageIndex + 1) % RB_STAGE_CONFIGS.length;
-      const cfg = getRBStageSetting(nextStageIndex);
-      const nextProgress = getRBStageTargetProgress(nextStageIndex, withJitter);
-
-      return {
-        nextProgress,
-        jitter: cfg.jitter,
-        label: `→ ${nextProgress}±${cfg.jitter}%`,
-        stageLabel: cfg.label,
-        stageIndex: nextStageIndex
-      };
-    }
-
-    function getRBNextStageProjectedProgress(currentProgress) {
-      const currentStageIndex = getRBStageIndexByProgress(currentProgress);
-      const nextStageIndex = (currentStageIndex + 1) % RB_STAGE_CONFIGS.length;
-      const cfg = getRBStageSetting(nextStageIndex);
-      let projected = cfg.progress;
-
-      if (projected <= currentProgress) {
-        projected += 100;
-      }
-      return projected;
-    }
 
     function logMessage(region, message, next) {
       const date = new Date();
