@@ -1506,20 +1506,21 @@
 
       button.style.flex = '0 0 auto';
 
-      /*
       const closeButton = button.cloneNode();
       closeButton.textContent = '×';
       closeButton.style.marginLeft = 'auto';
       closeButton.style.background = 'none';
       closeButton.style.border = 'none';
-      //closeButton.style.height = '40px';
-      closeButton.style.width = '40px';
+      closeButton.style.width = '48px';
+      closeButton.style.minWidth = '48px';
+      closeButton.style.height = '42px';
       closeButton.style.fontSize = '32px';
       closeButton.style.lineHeight = '1';
+      closeButton.style.whiteSpace = 'nowrap';
+      closeButton.style.overflow = 'visible';
       closeButton.addEventListener('click', ()=>{
         panel.style.display = 'none';
-      })
-      */
+      });
 
       const addButton = button.cloneNode();
       addButton.textContent = '追加';
@@ -1764,14 +1765,20 @@
       stat.style.overflow = 'hidden';
       stat.classList.add('equip-preset-stat');
 
-      (()=>{
+      (()=> {
         const div = document.createElement('div');
         div.style.display = 'flex';
         div.style.flexWrap = 'nowrap';
         div.style.overflowX = 'auto';
         div.style.width = 'max-content';
         div.append(addButton, removeButton, equipSettingsButton, backupButton);
-        buttonsContainer.append(div);
+
+        buttonsContainer.style.display = 'flex';
+        buttonsContainer.style.alignItems = 'center';
+        buttonsContainer.style.justifyContent = 'space-between';
+        buttonsContainer.style.gap = '4px';
+
+        buttonsContainer.append(div, closeButton);
       })();
       div.append(buttonsContainer, equipSettingsDialog, backupDialog, stat);
       panel.append(div);
@@ -2014,9 +2021,10 @@
 
     function normalizeEquipElementText(text = '') {
       const raw = String(text || '').trim();
-      if (!raw) return 'なし';
-      const matched = (raw.match(/[^\d]+$/) || ['なし'])[0];
-      return matched.trim() || 'なし';
+      if (!raw) return '無';
+      const matched = (raw.match(/[^\d]+$/) || ['無'])[0];
+      const normalized = matched.trim() || '無';
+      return normalized === 'なし' ? '無' : normalized;
     }
 
     function getEnhancedPresetPrefix(rank = '', weaponMod = Number.NEGATIVE_INFINITY) {
@@ -2588,28 +2596,99 @@
 
     function showEquipPreset(){
       let equipPresets = JSON.parse(localStorage.getItem('equipPresets')) || {};
+      const autoEquipItems = JSON.parse(localStorage.getItem('autoEquipItems') || '{}');
+      const autoEquipItemsAutojoin = JSON.parse(localStorage.getItem('autoEquipItemsAutojoin') || '{}');
 
       const { prefixOrderMap, getPresetPrefix } = getPresetPrefixOrderTools();
+
+      function getHighlightedPresetSet() {
+        const set = new Set();
+
+        [autoEquipItems, autoEquipItemsAutojoin].forEach(store => {
+          Object.values(store).forEach(list => {
+            if (!Array.isArray(list)) return;
+            list.forEach(name => {
+              if (name != null && String(name).trim() !== '') {
+                set.add(String(name).trim());
+              }
+            });
+          });
+        });
+
+        return set;
+      }
+
+      function getPresetBaseRank(key, value) {
+        const prefix = getPresetPrefix(key);
+
+        if (prefix === 'N' || prefix === 'Ne') return 'N';
+        if (prefix === 'R' || prefix === 'Re') return 'R';
+        if (prefix === 'SR' || prefix === 'SRe') return 'SR';
+        if (prefix === 'SSR' || prefix === 'SSRe') return 'SSR';
+        if (prefix === 'UR' || prefix === 'URe') return 'UR';
+
+        const ranks = Array.isArray(value?.rank) ? value.rank.map(v => String(v || '').trim()) : [];
+        if (ranks.includes('ELITE') || ranks.includes('Elite') || ranks.includes('エリート')) return 'ELITE';
+
+        if (String(key || '').includes('エリート')) return 'ELITE';
+
+        return '';
+      }
+
+      function getPresetRankBackground(key, value, isAutojoinRegistered = false) {
+        const rank = getPresetBaseRank(key, value);
+
+        if (isAutojoinRegistered) {
+          switch (rank) {
+            case 'R':     return '#5e9f45';
+            case 'SR':    return '#4e7fd1';
+            case 'SSR':   return '#7a52bb';
+            case 'UR':    return '#c8792d';
+            case 'ELITE': return '#c84b4b';
+            case 'N':
+            default:      return '#6f6f6f';
+          }
+        }
+
+        switch (rank) {
+          case 'R':     return '#eeffe8';
+          case 'SR':    return '#eef6ff';
+          case 'SSR':   return '#f6eeff';
+          case 'UR':    return '#fff1e4';
+          case 'ELITE': return '#ffeaea';
+          case 'N':
+          default:      return '#ffffff';
+        }
+      }
+
+      const autojoinRegisteredSet = getHighlightedPresetSet();
+
+      presetList.style.overflowX = 'auto';
 
       const liTemplate = document.createElement('li');
       liTemplate.style.display = 'flex';
       liTemplate.style.justifyContent = 'space-between';
+      liTemplate.style.alignItems = 'center';
+      liTemplate.style.minWidth = 'max-content';
       liTemplate.style.borderBottom = 'solid 1px #000';
       liTemplate.style.color = '#428bca';
       liTemplate.style.cursor = 'pointer';
+      liTemplate.style.padding = '0 4px';
 
       const span1 = document.createElement('span');
-      span1.style.flexGrow = '1';
+      span1.style.flex = '0 0 auto';
+      span1.style.paddingRight = '12px';
       span1.style.whiteSpace = 'nowrap';
-      span1.style.overflow = 'hidden';
+      span1.style.overflow = 'visible';
 
       const span2 = document.createElement('span');
+      span2.style.flex = '0 0 auto';
       span2.style.whiteSpace = 'nowrap';
       span2.style.textAlign = 'right';
-      span2.style.overflow = 'hidden';
+      span2.style.overflow = 'visible';
       span2.style.fontSize = '90%';
 
-      liTemplate.append(span1,span2);
+      liTemplate.append(span1, span2);
 
       const fragment = document.createDocumentFragment();
 
@@ -2624,11 +2703,30 @@
         return keyA.localeCompare(keyB, 'ja', { numeric: true });
       });
 
-      sortedEntries.forEach(([key, value])=>{
+      sortedEntries.forEach(([key, value]) => {
         const li = liTemplate.cloneNode(true);
         const span = li.querySelectorAll('span');
+        const isAutojoinRegistered = autojoinRegisteredSet.has(String(key).trim());
+
         span[0].textContent = key;
         span[1].textContent = value.rank.join(',');
+        li.dataset.presetName = key;
+        li.style.backgroundColor = getPresetRankBackground(key, value, isAutojoinRegistered);
+
+        if (isAutojoinRegistered) {
+          li.style.color = '#ffffff';
+          span[0].style.color = '#ffffff';
+          span[1].style.color = '#ffffff';
+          li.style.fontWeight = '700';
+          li.style.textShadow = '0 1px 1px rgba(0,0,0,0.35)';
+        } else {
+          li.style.color = '#428bca';
+          span[0].style.color = '#428bca';
+          span[1].style.color = '#428bca';
+          li.style.fontWeight = '';
+          li.style.textShadow = '';
+        }
+
         fragment.append(li);
       });
 
@@ -2688,19 +2786,44 @@
     function selectAutoEquipItems(li, name, rank) {
       const target = autoEquipMode === 'autojoin' ? 'autoEquipItemsAutojoin' : 'autoEquipItems';
       const items = JSON.parse(localStorage.getItem(target)) || {};
+      const list = (items[rank] ||= []);
 
       if(getComputedStyle(li).color === 'rgb(66, 139, 202)') {
         li.style.color = 'rgb(202, 139, 66)';
-        (items[rank] ||= []).push(name);
+        if (!list.includes(name)) {
+          list.push(name);
+        }
       } else {
         li.style.color = 'rgb(66, 139, 202)';
-        const index = items[rank].indexOf(name);
+        const index = list.indexOf(name);
         if (index !== -1){
-          items[rank].splice(index,1);
+          list.splice(index,1);
         }
       }
 
       localStorage.setItem(target, JSON.stringify(items));
+      showEquipPreset();
+
+      if (target === 'autoEquipItemsAutojoin' && currentMode === 'auto') {
+        const registeredNames = Array.isArray(items[rank]) ? items[rank] : [];
+        for (const itemLi of presetList.querySelectorAll('li')) {
+          const itemName = itemLi.querySelector('span')?.textContent || '';
+          itemLi.style.color = registeredNames.includes(itemName)
+            ? 'rgb(202, 139, 66)'
+            : 'rgb(66, 139, 202)';
+        }
+      }
+
+      if (currentMode === 'auto') {
+        const registeredNames = Array.isArray(items[rank]) ? items[rank] : [];
+        for (const itemLi of presetList.querySelectorAll('li')) {
+          const itemName = itemLi.querySelector('span')?.textContent || '';
+          itemLi.style.color = registeredNames.includes(itemName)
+            ? 'rgb(202, 139, 66)'
+            : 'rgb(66, 139, 202)';
+        }
+      }
+
       console.log(items[rank]);
     }
   })();
