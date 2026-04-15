@@ -1276,11 +1276,13 @@
       }
     });
 
+    let buttonsContainer;
+
     (()=>{
       const div = document.createElement('div');
       div.style.marginTop = '2px';
       div.style.lineHeight = 'normal';
-      const buttonsContainer = document.createElement('div');
+      buttonsContainer = document.createElement('div');
       buttonsContainer.style.display = 'flex';
 
       button.style.flex = '0 0 auto';
@@ -1598,19 +1600,51 @@
     })
     rankSelect.addEventListener('change', ()=>{filterItemsByRank(rankSelect.value)});
     const bar = document.createElement('div');
-    bar.style.textAlign = 'center';
+    bar.style.display = 'flex';
+    bar.style.flexDirection = 'column';
+    bar.style.alignItems = 'center';
+    bar.style.gap = '4px';
+    bar.style.paddingLeft = '8px';
+    bar.style.paddingRight = '56px';
+    bar.style.boxSizing = 'border-box';
+    bar.style.width = '100%';
+
+    const barTop = document.createElement('div');
+    barTop.style.display = 'flex';
+    barTop.style.flexWrap = 'wrap';
+    barTop.style.alignItems = 'center';
+    barTop.style.justifyContent = 'center';
+    barTop.style.gap = '4px';
+    barTop.style.width = '100%';
+
+    const barBottom = document.createElement('div');
+    barBottom.style.display = 'flex';
+    barBottom.style.flexWrap = 'wrap';
+    barBottom.style.alignItems = 'center';
+    barBottom.style.justifyContent = 'center';
+    barBottom.style.gap = '4px';
+    barBottom.style.width = '100%';
+
     const p = document.createElement('p');
     p.classList.add('equip-preset-selected');
     p.style.background = '#fff';
     p.style.color = '#000';
     p.style.margin = '2px';
-    p.style.height = '28px';
+    p.style.minHeight = '28px';
+    p.style.width = 'calc(100% - 8px)';
+    p.style.maxWidth = '94vw';
+    p.style.padding = '0 4px';
+    p.style.boxSizing = 'border-box';
+    p.style.whiteSpace = 'nowrap';
+    p.style.overflowX = 'auto';
+    p.style.overflowY = 'hidden';
 
     const sortModeButton = button.cloneNode();
     sortModeButton.textContent = '名前順';
-    sortModeButton.style.width = '4em';
+    sortModeButton.style.width = '5em';
     sortModeButton.style.height = '42px';
     sortModeButton.style.fontSize = '';
+    sortModeButton.style.whiteSpace = 'nowrap';
     sortModeButton.addEventListener('click', ()=>{
       currentEquipSort = currentEquipSort === 'name' ? 'mod' : 'name';
       sortModeButton.textContent =
@@ -1618,32 +1652,46 @@
         currentEquipSort === 'header' ? '列順' :
         '名前順';
       applyEquipSort();
+      filterItemsByRank(rankSelect.value);
     });
 
-    const equipSwitchButton = button.cloneNode();
-    equipSwitchButton.textContent = '?武器';
-    equipSwitchButton.style.width = '4em';
-    equipSwitchButton.style.height = '42px';
-    equipSwitchButton.style.fontSize = '';
+    function showEquipTab(tabName) {
+      if (!weaponTable || !armorTable || !necklaceTable) return;
 
-    equipSwitchButton.style.whiteSpace = 'nowrap';
-    equipSwitchButton.addEventListener('click', (event)=>{
-      if(!weaponTable.style.display) {
-        weaponTable.style.display = 'none';
-        armorTable.style.display = '';
-        necklaceTable.style.display = 'none';
-        event.target.textContent = '?防具';
-      } else if (!armorTable.style.display) {
-        weaponTable.style.display = 'none';
-        armorTable.style.display = 'none';
-        necklaceTable.style.display = '';
-        event.target.textContent = '?首';
-      } else if (!necklaceTable.style.display) {
-        weaponTable.style.display = '';
-        armorTable.style.display = 'none';
-        necklaceTable.style.display = 'none';
-        event.target.textContent = '?武器';
-      }
+      weaponTable.style.display = (tabName === 'weapon') ? '' : 'none';
+      armorTable.style.display = (tabName === 'armor') ? '' : 'none';
+      necklaceTable.style.display = (tabName === 'necklace') ? '' : 'none';
+    }
+
+    const weaponTabButton = button.cloneNode();
+    weaponTabButton.textContent = '武器';
+    weaponTabButton.style.width = '4em';
+    weaponTabButton.style.height = '42px';
+    weaponTabButton.style.fontSize = '';
+    weaponTabButton.style.whiteSpace = 'nowrap';
+    weaponTabButton.addEventListener('click', ()=>{
+      showEquipTab('weapon');
+    });
+
+    const armorTabButton = button.cloneNode();
+    armorTabButton.textContent = '防具';
+    armorTabButton.style.width = '4em';
+    armorTabButton.style.height = '42px';
+    armorTabButton.style.fontSize = '';
+    armorTabButton.style.whiteSpace = 'nowrap';
+    armorTabButton.addEventListener('click', ()=>{
+      showEquipTab('armor');
+    });
+
+    const necklaceTabButton = button.cloneNode();
+    necklaceTabButton.textContent = 'ネックレス';
+    necklaceTabButton.style.width = '6em';
+    necklaceTabButton.style.minWidth = '6em';
+    necklaceTabButton.style.height = '42px';
+    necklaceTabButton.style.fontSize = '';
+    necklaceTabButton.style.whiteSpace = 'nowrap';
+    necklaceTabButton.addEventListener('click', ()=>{
+      showEquipTab('necklace');
     });
 
     // register
@@ -1653,10 +1701,65 @@
     registerButton.style.height = '42px';
     registerButton.style.fontSize = '';
 
+    const necklaceToolsLabel = document.createElement('span');
+    necklaceToolsLabel.textContent = 'ネックレス';
+    necklaceToolsLabel.style.display = 'inline-block';
+    necklaceToolsLabel.style.whiteSpace = 'nowrap';
+    necklaceToolsLabel.style.padding = '0 4px';
+    necklaceToolsLabel.style.fontSize = '90%';
+
+    const necklaceCandidateFilterButton = button.cloneNode();
+    necklaceCandidateFilterButton.textContent = '候補のみ';
+    necklaceCandidateFilterButton.style.width = '5.5em';
+    necklaceCandidateFilterButton.style.minWidth = '5.5em';
+    necklaceCandidateFilterButton.style.height = '42px';
+    necklaceCandidateFilterButton.style.fontSize = '';
+    necklaceCandidateFilterButton.style.whiteSpace = 'nowrap';
+    necklaceCandidateFilterButton.style.background = '#888';
+    necklaceCandidateFilterButton.style.color = '#fff';
+    necklaceCandidateFilterButton.addEventListener('click', ()=>{
+      if (!necklaceTable) {
+        alert('先に装備一覧を開いてください');
+        return;
+      }
+
+      const selectedIds = getStoredNecklaceCandidateIds();
+      if (selectedIds.size === 0) {
+        alert('先に残したいネックレスへチェックを入れてください');
+        return;
+      }
+
+      necklaceCandidateOnlyEnabled = true;
+      showEquipTab('necklace');
+      refreshNecklaceCandidateFilterButton();
+      applyNecklaceCandidateFilter();
+    });
+
+    const necklaceAllButton = button.cloneNode();
+    necklaceAllButton.textContent = '全表示';
+    necklaceAllButton.style.width = '5em';
+    necklaceAllButton.style.minWidth = '5em';
+    necklaceAllButton.style.height = '42px';
+    necklaceAllButton.style.fontSize = '';
+    necklaceAllButton.style.whiteSpace = 'nowrap';
+    necklaceAllButton.style.background = '#46f';
+    necklaceAllButton.style.color = '#fff';
+    necklaceAllButton.addEventListener('click', ()=>{
+      if (!necklaceTable) {
+        alert('先に装備一覧を開いてください');
+        return;
+      }
+
+      necklaceCandidateOnlyEnabled = false;
+      showEquipTab('necklace');
+      refreshNecklaceCandidateFilterButton();
+      applyNecklaceCandidateFilter();
+    });
+
     const applyNecklaceToAllButton = button.cloneNode();
-    applyNecklaceToAllButton.textContent = 'ネックレス変更';
-    applyNecklaceToAllButton.style.width = '9em';
-    applyNecklaceToAllButton.style.minWidth = '9em';
+    applyNecklaceToAllButton.textContent = '全ネックレス変更';
+    applyNecklaceToAllButton.style.width = '10em';
+    applyNecklaceToAllButton.style.minWidth = '10em';
     applyNecklaceToAllButton.style.height = '42px';
     applyNecklaceToAllButton.style.fontSize = '';
     applyNecklaceToAllButton.style.whiteSpace = 'nowrap';
@@ -1675,9 +1778,9 @@
     });
 
     const renameAllButton = button.cloneNode();
-    renameAllButton.textContent = '現セット変換';
-    renameAllButton.style.width = '7em';
-    renameAllButton.style.fontSize = '';
+    renameAllButton.textContent = 'リネーム';
+    renameAllButton.style.width = '6em';
+    renameAllButton.style.fontSize = '65%';
     renameAllButton.style.whiteSpace = 'nowrap';
     renameAllButton.addEventListener('click', ()=>{
       if (!weaponTable || !armorTable || !necklaceTable) {
@@ -1694,6 +1797,11 @@
       const stat = document.querySelector('.equip-preset-stat');
       if (stat) stat.textContent = result.message;
     });
+
+    const topButtonsDiv = buttonsContainer?.firstElementChild;
+    if (topButtonsDiv) {
+      topButtonsDiv.append(renameAllButton);
+    }
 
     (()=>{
       const dialog = document.createElement('dialog');
@@ -1761,13 +1869,54 @@
       });
     })();
 
-    bar.append(rankSelect, sortModeButton, equipSwitchButton, registerButton, applyNecklaceToAllButton, renameAllButton, p);
+    barTop.append(rankSelect, sortModeButton, weaponTabButton, armorTabButton, necklaceTabButton, registerButton);
+    barBottom.append(necklaceToolsLabel, necklaceCandidateFilterButton, necklaceAllButton, applyNecklaceToAllButton);
+    bar.append(barTop, barBottom, p);
     equipField.append(bar, tableContainer, closeButton);
     panel.append(equipField);
 
     let weaponTable, armorTable, necklaceTable;
     let selectedEquips = createEmptySelectedEquips();
     let currentEquipSort = 'name';
+    let necklaceCandidateOnlyEnabled = false;
+    const necklaceCandidateStorageKey = 'necklaceCandidateIds';
+
+    function getStoredNecklaceCandidateIds() {
+      const stored = JSON.parse(localStorage.getItem(necklaceCandidateStorageKey) || '[]');
+      return new Set(
+        Array.isArray(stored)
+          ? stored.map(v => String(v || '').trim()).filter(Boolean)
+          : []
+      );
+    }
+
+    function saveStoredNecklaceCandidateIds(idSet) {
+      const values = [...idSet]
+        .map(v => String(v || '').trim())
+        .filter(Boolean);
+      localStorage.setItem(necklaceCandidateStorageKey, JSON.stringify(values));
+    }
+
+    function refreshNecklaceCandidateFilterButton() {
+      necklaceCandidateFilterButton.textContent = '候補のみ';
+      necklaceCandidateFilterButton.style.background = necklaceCandidateOnlyEnabled ? '#46f' : '#888';
+      necklaceCandidateFilterButton.style.color = '#fff';
+
+      necklaceAllButton.textContent = '全表示';
+      necklaceAllButton.style.background = necklaceCandidateOnlyEnabled ? '#888' : '#46f';
+      necklaceAllButton.style.color = '#fff';
+    }
+
+    function applyNecklaceCandidateFilter() {
+      if (!necklaceTable) return;
+
+      const selectedIds = getStoredNecklaceCandidateIds();
+      necklaceTable.querySelectorAll('tbody > tr').forEach(row => {
+        const rowId = String(row.dataset.necklaceId || row.cells?.[0]?.dataset.id || '').trim();
+        const shouldShow = !necklaceCandidateOnlyEnabled || selectedIds.has(rowId);
+        row.style.display = shouldShow ? '' : 'none';
+      });
+    }
 
     function isModSortableTable(table) {
       return table && (table.id === 'weaponTable' || table.id === 'armorTable');
@@ -2243,14 +2392,47 @@
                 if(modLink) modLink.target = '_blank';
                 row.cells[9].style.display = 'none';
               } else if (index === 2) {
+                row.dataset.necklaceId = id;
                 colorizeNecklaceDebuffCell(row.cells[3]);
                 row.cells[3].style.whiteSpace = 'nowrap';
                 const ul = row.cells[3].querySelector('ul');
                 if(ul) ul.style.padding = '0';
                 row.cells[5].style.display = 'none';
+
+                const savedIds = getStoredNecklaceCandidateIds();
+                const checkbox = document.createElement('input');
+                checkbox.type = 'checkbox';
+                checkbox.classList.add('necklace-candidate-checkbox');
+                checkbox.checked = savedIds.has(String(id || '').trim());
+                checkbox.style.marginRight = '6px';
+                checkbox.style.cursor = 'pointer';
+                checkbox.title = '候補ネックレスとして残す';
+                checkbox.addEventListener('click', (event) => {
+                  event.stopPropagation();
+                });
+                checkbox.addEventListener('change', ()=>{
+                  const nextIds = getStoredNecklaceCandidateIds();
+                  const normalizedId = String(id || '').trim();
+                  if (!normalizedId) return;
+
+                  if (checkbox.checked) nextIds.add(normalizedId);
+                  else nextIds.delete(normalizedId);
+
+                  saveStoredNecklaceCandidateIds(nextIds);
+
+                  if (necklaceCandidateOnlyEnabled && nextIds.size === 0) {
+                    necklaceCandidateOnlyEnabled = false;
+                    alert('候補ネックレスが0件になったため全表示に戻します');
+                  }
+
+                  refreshNecklaceCandidateFilterButton();
+                  applyNecklaceCandidateFilter();
+                });
+                row.cells[0].prepend(checkbox);
               }
 
               row.cells[0].addEventListener('click', (event)=>{
+                if (event.target.closest('.necklace-candidate-checkbox')) return;
                 if(!event.target.closest('td')) return;
                 const target = event.target.closest('td');
                 const itemName = target.textContent;
@@ -2284,13 +2466,11 @@
         currentEquipSort === 'mod' ? 'mod順' :
         currentEquipSort === 'header' ? '列順' :
         '名前順';
-
-      equipSwitchButton.textContent = '?武器';
-      weaponTable.style.display = '';
-      armorTable.style.display = 'none';
-      necklaceTable.style.display = 'none';
+      showEquipTab('weapon');
       applyEquipSort();
       filterItemsByRank(rankSelect.value);
+      refreshNecklaceCandidateFilterButton();
+      applyNecklaceCandidateFilter();
       document.querySelector('.equip-preset-selected').textContent = '';
       equipField.showModal();
     }
