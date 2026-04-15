@@ -317,8 +317,19 @@
 
         const inputs = {
           teamName: [input.cloneNode(),'チーム名'],
-          teamColor: [input.cloneNode(),'チームカラー']
-        }
+          teamColor: [input.cloneNode(),'チームカラー'],
+          autoJoinFirstHalfStartProgress: [input.cloneNode(),'前半開始% (0-50)'],
+          autoJoinSecondHalfStartProgress: [input.cloneNode(),'後半開始% (51-100)']
+        };
+
+        inputs.autoJoinFirstHalfStartProgress[0].type = 'number';
+        inputs.autoJoinFirstHalfStartProgress[0].min = '0';
+        inputs.autoJoinFirstHalfStartProgress[0].max = '50';
+
+        inputs.autoJoinSecondHalfStartProgress[0].type = 'number';
+        inputs.autoJoinSecondHalfStartProgress[0].min = '51';
+        inputs.autoJoinSecondHalfStartProgress[0].max = '100';
+
         for (const key of Object.keys(inputs)) {
           const label_ = label.cloneNode();
           const span_ = span.cloneNode();
@@ -328,17 +339,39 @@
           label_.append(span_, span2_);
           div.append(label_);
 
-          inputs[key][0].value = settings[key] || '';
+          if (key === 'autoJoinFirstHalfStartProgress') {
+            inputs[key][0].value = settings[key] ?? '48';
+          } else if (key === 'autoJoinSecondHalfStartProgress') {
+            inputs[key][0].value = settings[key] ?? '98';
+          } else {
+            inputs[key][0].value = settings[key] || '';
+          }
+
           inputs[key][0].addEventListener('input', ()=>{
-            inputs.teamColor[0].value = inputs.teamColor[0].value.replace(/[^0-9a-fA-F]/g,'');
+            if (key === 'teamColor') {
+              inputs.teamColor[0].value = inputs.teamColor[0].value.replace(/[^0-9a-fA-F]/g,'');
+            } else if (key === 'autoJoinFirstHalfStartProgress') {
+              let v = inputs[key][0].value.replace(/[^\d]/g,'');
+              if (v !== '') v = String(Math.max(0, Math.min(50, Number(v))));
+              inputs[key][0].value = v;
+            } else if (key === 'autoJoinSecondHalfStartProgress') {
+              let v = inputs[key][0].value.replace(/[^\d]/g,'');
+              if (v !== '') v = String(Math.max(51, Math.min(100, Number(v))));
+              inputs[key][0].value = v;
+            }
             settings[key] = inputs[key][0].value;
             localStorage.setItem('aat_settings',JSON.stringify(settings));
-          })
+          });
         }
 
         const description = document.createElement('p');
         description.style.fontSize = '90%';
-        description.innerText = 'チームカラーは小文字/大文字も正確に入力してください。（自陣の隣接タイル取得に必要）\nあらかじめ装備パネルからエリートも含め各ランクの装備を登録してください。（所持していない場合は除く）\n※装備を登録していないと成功率が低下します。'
+        description.innerText =
+          '前半開始% と 後半開始% は、2発撃つ開始タイミングです。\n' +
+          '前半は 0～50%、後半は 51～100% の範囲で設定してください。\n' +
+          'チームカラーは小文字/大文字も正確に入力してください。（自陣の隣接タイル取得に必要）\n' +
+          'あらかじめ装備パネルからエリートも含め各ランクの装備を登録してください。（所持していない場合は除く）\n' +
+          '※装備を登録していないと成功率が低下します。';
         div.append(description,closeButton);
         autoJoinSettingsDialog.append(div);
       })();
@@ -3848,11 +3881,7 @@
                   nextProgress = 2;
                 }
               } else {
-                if (currentProgress < 50) {
-                  nextProgress = 98;
-                } else {
-                  nextProgress = 48;
-                }
+                nextProgress = getAutoJoinNextScheduledProgress(currentProgress);
               }
               next = `→ ${nextProgress}%`;
               isAutoJoinRunning = false;
@@ -3962,11 +3991,7 @@
                nextProgress = 2;
               }
             } else {
-              if (currentProgress < 50) {
-                nextProgress = 98;
-              } else {
-                nextProgress = 48;
-              }
+              nextProgress = getAutoJoinNextScheduledProgress(currentProgress);
             }
             const next = `→ ${nextProgress}%`;
             isAutoJoinRunning = false;
@@ -4268,9 +4293,46 @@
   }
 
   drawProgressBar();
+
+  function clampAutoJoinStartProgress(value, min, max, fallback) {
+    const n = Number(value);
+    if (!Number.isFinite(n)) return fallback;
+    return Math.max(min, Math.min(max, Math.round(n)));
+  }
+
+  function getAutoJoinHalfStartProgress(isBackHalf = false) {
+    if (isBackHalf) {
+      return clampAutoJoinStartProgress(settings.autoJoinSecondHalfStartProgress, 51, 100, 98);
+    }
+    return clampAutoJoinStartProgress(settings.autoJoinFirstHalfStartProgress, 0, 50, 48);
+  }
+
+  function getAutoJoinNextScheduledProgress(progress = currentProgress) {
+    const p = Number(progress);
+
+    if (!Number.isFinite(p)) {
+      return getAutoJoinHalfStartProgress(false);
+    }
+
+    const firstHalfStart = getAutoJoinHalfStartProgress(false);
+    const secondHalfStart = getAutoJoinHalfStartProgress(true);
+
+    if (p < firstHalfStart) return firstHalfStart;
+    if (p < 50) return secondHalfStart;
+    if (p < secondHalfStart) return secondHalfStart;
+    return firstHalfStart;
+  }
+
   function startAutoJoin() {
     clearInterval(progressBarIntervalId);
     progressBarIntervalId = null;
+
+    if (location.href.includes('/teambattle?m=rb')) {
+      autoJoin();
+      return;
+    }
+
+    nextProgress = getAutoJoinNextScheduledProgress(currentProgress);
     autoJoin();
   }
   let progressBarIntervalId = setInterval(drawProgressBar, 18000);
